@@ -124,6 +124,26 @@ class TestTheRateItMeasures:
         assert "not the whole of their history" in priced.component.population
 
     @pytest.mark.anyio
+    async def test_a_sparse_sample_is_marked_rather_than_quietly_banded(self) -> None:
+        """One coincidence out of four is not enough for a verbal band, and it says so.
+
+        A ratio built from a sample this thin is still a ratio — the arithmetic holds — but the
+        reader has to be able to see that the interval is wide enough to swallow the conclusion.
+        """
+        from chainlens.verify.likelihood import MIN_JOINT_SUCCESSES
+
+        provider = _provider(
+            _payment("tx0", when=JUNE, sats=30_000),
+            *[_payment(f"tx{n}", when=JUNE, sats=500) for n in range(1, 4)],
+        )
+        priced = await WindowCoincidenceEstimator().estimate(_elements(), provider=provider)
+        assert isinstance(priced, RateEstimate)
+        assert priced.component.successes < MIN_JOINT_SUCCESSES
+        assert priced.component.is_sparse is True
+        # And the interval is reported alongside it, so "sparse" is not just a label.
+        assert priced.component.ci_upper > priced.component.value
+
+    @pytest.mark.anyio
     async def test_the_interval_is_the_wilson_interval_of_the_counts(self) -> None:
         from chainlens.verify.likelihood import wilson_interval
 
