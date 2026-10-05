@@ -111,8 +111,34 @@ not look like a cluster that is genuinely small.
     [Forensic limits](../explanation/forensic-limits.md) explains what a cluster
     does and does not license.
 
+## Looking at it
+
+Everything above is also available as a graph on your own machine, from the console:
+
+```console
+chainlens ui serve --seed bc1q... --open     # the ledger, drawn, with the evidence on it
+```
+
+Each transaction is a node and each address is a node, and every edge is one *recorded* input or
+output — nothing is apportioned, so nothing there says that one input paid one output, because no
+ledger records that. The view says so, permanently, in the page rather than in a tooltip.
+
+The rest of the commands build documents you can commit and hand to somebody:
+
+```console
+chainlens ui export  --seed bc1q... --out graph.json          # the ledger, and its annotations
+chainlens ui derive  --claim claim.toml --out derivation.json  # the argument behind a finding
+chainlens ui extract --post post.txt --out claims/             # a post into claim records
+chainlens ui narrate --derivation derivation.json --out narrative.json
+```
+
+`ui extract` and `ui narrate` are the only two commands that call a language model, and both are
+bounded so that nothing decided comes from one: the model says what a post *says* or what a report
+*shows*, never what is true. See [Using a model](../explanation/extraction.md).
+
 ## Next steps
 
+- [The graph app](../ui/index.md) — what the view does and does not say.
 - [Writing a provider](../plugins/writing-a-provider.md) — add a chain.
 - [Forensic limits](../explanation/forensic-limits.md) — read this before you
   rely on a clustering or tracing result.

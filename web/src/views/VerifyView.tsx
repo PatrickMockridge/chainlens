@@ -20,12 +20,25 @@
 import { useMemo, useState } from "react";
 
 import { DerivationTree } from "../derive/DerivationTree";
+import { walkTree } from "../derive/tree";
 import { PriorControl, planPosterior } from "../derive/PriorControl";
 import { Narrative } from "../derive/Narrative";
 import { GraphView } from "../graph/GraphView";
-import type { LedgerEdge, LedgerNode } from "../schema/documents";
+import type { DerivationDocument, LedgerEdge, LedgerNode } from "../schema/documents";
+import { asTree } from "../schema/documents";
 import type { Store } from "../store";
 import { highlightedBranches, highlightedKeys, narrativeFor } from "../store";
+
+/**
+ * Whether a derivation holds a step, for a citation to say when it does not.
+ *
+ * The narrative's steps were checked in Python against the derivation they were written from, so a
+ * miss here means the prose and the tree are not the same pair — a narrative loaded beside a
+ * *different* derivation for the same claim. Rare, and worth showing rather than hiding.
+ */
+function holdsStep(document: DerivationDocument, stepId: string): boolean {
+  return walkTree(asTree(document.root)).some((node) => node.id === stepId);
+}
 
 export interface VerifyViewProps {
   store: Store;
@@ -190,7 +203,13 @@ export function VerifyView({
                 narrative is a view of the derivation, not part of it, so its absence is the normal
                 case rather than a missing piece.
               */}
-              {narrative !== null && <Narrative document={narrative} />}
+              {narrative !== null && (
+                <Narrative
+                  document={narrative}
+                  onSelectStep={onSelectBranch}
+                  holds={(stepId) => holdsStep(active, stepId)}
+                />
+              )}
 
               <DerivationTree
                 document={active}

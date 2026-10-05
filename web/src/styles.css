@@ -753,10 +753,38 @@ body {
 }
 
 /* Which steps of the derivation a paragraph is about, so a reader can check the prose against the
-   tree rather than taking it on trust. */
+   tree rather than taking it on trust. The chips are buttons: click one and the step opens, which
+   highlights it in the tree and its ledger keys in the graph. */
 .narrative-steps {
   color: var(--muted);
   font-size: 11px;
+}
+
+.step-chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* A step this derivation does not hold. Dashed, like an absent ledger reference and for the same
+   reason: the distinction has to survive a screenshot. */
+.step-chip.ref-absent {
+  border-style: dashed;
+  color: var(--warn);
 }
 
 .narrative-dropped {

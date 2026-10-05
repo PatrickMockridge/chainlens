@@ -1,6 +1,13 @@
 /**
  * The prose about a derivation, rendered beside the argument it describes.
  *
+ * **The citations are clickable, and that is the point of putting the prose here.** A paragraph
+ * that says "about 3 step(s): …" is making a claim about the derivation, and a reader can check it:
+ * clicking a step opens it as the current branch, which highlights it in the tree and its ledger
+ * keys in the graph — the same selection a click in the tree would make, so the panes stay one
+ * instrument rather than two. Without this the prose would be the only part of this screen a reader
+ * had to take on trust.
+ *
  * Three things this refuses to do, each of them the reason it is a component rather than a
  * paragraph of JSX:
  *
@@ -19,9 +26,13 @@ import type { NarrativeDocument } from "../schema/documents";
 
 export interface NarrativeProps {
   document: NarrativeDocument;
+  /** Open a step as the current branch: what a click in the tree does, so the two agree. */
+  onSelectStep: (stepId: string) => void;
+  /** Whether the derivation actually holds a step, so a citation can say when it does not. */
+  holds: (stepId: string) => boolean;
 }
 
-export function Narrative({ document }: NarrativeProps) {
+export function Narrative({ document, onSelectStep, holds }: NarrativeProps) {
   const who = document.model ?? "nobody";
   return (
     <section className="narrative">
@@ -48,7 +59,17 @@ export function Narrative({ document }: NarrativeProps) {
             {paragraph.steps.length > 0 && (
               <span className="narrative-steps">
                 {" "}
-                about {paragraph.steps.length} step(s): {paragraph.steps.join(", ")}
+                about {paragraph.steps.length} step(s):{" "}
+                {paragraph.steps.map((stepId) => (
+                  <button
+                    key={stepId}
+                    type="button"
+                    className="step-chip"
+                    onClick={() => onSelectStep(stepId)}
+                  >
+                    {stepId}
+                  </button>
+                ))}
               </span>
             )}
           </p>
@@ -72,8 +93,21 @@ export function Narrative({ document }: NarrativeProps) {
 
       {document.uncovered.length > 0 && (
         <p className="hint">
-          {document.uncovered.length} step(s) of the derivation have no paragraph. That is a gap in
-          the prose, not a disagreement with the argument.
+          {document.uncovered.length} step(s) of the derivation have no paragraph:{" "}
+          {/* Named and clickable, because a gap a reader can look at is a gap they can judge —
+              and a step the prose skipped is exactly the thing worth checking. */}
+          {document.uncovered.map((stepId) => (
+            <button
+              key={stepId}
+              type="button"
+              className={`step-chip${holds(stepId) ? "" : " ref-absent"}`}
+              title={holds(stepId) ? "open this step" : "not in this derivation"}
+              onClick={() => onSelectStep(stepId)}
+            >
+              {stepId}
+            </button>
+          ))}{" "}
+          That is a gap in the prose, not a disagreement with the argument.
         </p>
       )}
     </section>
