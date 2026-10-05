@@ -238,6 +238,27 @@ async def test_the_alternative_hypothesis_is_written_from_the_null_model() -> No
 
 
 @pytest.mark.anyio
+async def test_an_amount_is_carried_exactly_and_not_as_a_float() -> None:
+    """One ether is 10**18 wei, and a float cannot hold it.
+
+    The evidence node keeps the amount in its detail, where it travels as a decimal string, and
+    leaves `value` — a float — to the measured quantities. Putting an amount in a float would
+    round it, and the rounding would be invisible.
+    """
+    finding = await _finding(estimator=_Pricing())
+    document = derive_finding(finding)
+
+    transfer = next(
+        node
+        for node in _kinds(document)[DerivationKind.EVIDENCE]
+        if node.id.endswith("/transfer/0")
+    )
+    detail = {entry.key: entry.value for entry in transfer.detail}
+    assert detail["amount"] == str(finding.evidence.transfers[0].amount)
+    assert transfer.value is None
+
+
+@pytest.mark.anyio
 async def test_both_measured_quantities_are_steps_of_their_own() -> None:
     """k and p are separate from the evidence, because a measurement is a different claim.
 
@@ -263,8 +284,10 @@ async def test_p_carries_the_sample_it_was_estimated_from() -> None:
     detail = {
         entry.key: entry.value for entry in _kinds(document)[DerivationKind.QUANTITY_P][0].detail
     }
-    assert detail["successes"] == 3
-    assert detail["trials"] == 30_000
+    # Integers in a detail are decimal strings on the wire, because a browser's numbers are
+    # doubles and a detail may be an amount. See `BaseUnits` for why the rule is uniform.
+    assert detail["successes"] == "3"
+    assert detail["trials"] == "30000"
     assert detail["method"] == EstimatorMethod.EMPIRICAL_JOINT.value
     assert "is_sparse" in detail
 

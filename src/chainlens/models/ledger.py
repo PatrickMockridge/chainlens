@@ -38,6 +38,7 @@ from pydantic import AwareDatetime, Field
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Chain, Direction, FlowVia, ScriptType, TxStatus
 from chainlens.models.primitives import AssetRef
+from chainlens.models.wire import BaseUnits
 
 __all__ = [
     "ADDRESS_NODE",
@@ -232,14 +233,14 @@ class LedgerTransactionNode(LensModel):
     is_coinbase: bool = False
     is_coinjoin: bool = False
 
-    fee: int | None = Field(default=None, ge=0)
+    fee: BaseUnits | None = None
     vsize: int | None = Field(default=None, ge=0)
 
     n_inputs: int = Field(default=0, ge=0)
     n_outputs: int = Field(default=0, ge=0)
 
-    total_input_value: int | None = Field(default=None, ge=0)
-    total_output_value: int | None = Field(default=None, ge=0)
+    total_input_value: BaseUnits | None = None
+    total_output_value: BaseUnits | None = None
     value_complete: bool = True
 
     is_partial: bool = False
@@ -284,7 +285,7 @@ class LedgerAddressNode(LensModel):
     depth: int | None = Field(default=None, ge=0)
     is_seed: bool = False
     tx_count: int = Field(default=0, ge=0)
-    balance: int | None = None
+    balance: BaseUnits | None = None
 
     flags: tuple[str, ...] = ()
     annotation_ids: tuple[str, ...] = ()
@@ -313,7 +314,7 @@ class LedgerUnparsedNode(LensModel):
     txid: str
 
     edge_count: int = Field(default=0, ge=0)
-    total_value: int | None = Field(default=None, ge=0)
+    total_value: BaseUnits | None = None
 
 
 LedgerNode = Annotated[
@@ -366,7 +367,7 @@ class LedgerEdge(LensModel):
     index: int | None = Field(default=None, ge=0)
 
     asset: AssetRef | None = None
-    amount: int | None = Field(default=None, ge=0)
+    amount: BaseUnits | None = None
     amount_status: AmountStatus = AmountStatus.RECORDED
 
     via: FlowVia = FlowVia.NATIVE

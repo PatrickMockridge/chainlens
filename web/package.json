@@ -1,0 +1,35 @@
+{
+  "name": "chainlens-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The chainlens graph app: the ledger, the evidence on it, and the derivation.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "schema": "node scripts/generate-schema.mjs"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.12.0",
+    "elkjs": "^0.12.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^30.1.2",
+    "json-schema-to-zod": "^2.8.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

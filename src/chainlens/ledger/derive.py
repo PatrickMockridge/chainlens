@@ -210,8 +210,9 @@ def _evidence_node(
                     "via": movement.via.value,
                     "amount_basis": "apportioned (inferred)" if movement.ambiguous else "recorded",
                 },
-                value=float(movement.amount),
-                unit="base units",
+                # The amount is in `detail`, not in `value`: a value here is a float, and
+                # an amount in base units is neither a float nor safe as one — one ether is
+                # 10**18 wei. Counts, ratios and probabilities are what `value` is for.
                 refs=tuple(refs),
             )
         )

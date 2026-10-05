@@ -133,11 +133,16 @@ def strict_dumps(document: BaseModel) -> str:
 def document_schema(name: str) -> dict[str, Any]:
     """The JSON Schema for one of the documents, straight from its model.
 
+    ``mode="serialization"``, because a front end reads what this library *emits* rather than
+    what it accepts. The two differ wherever a field has a serializer — a base-unit amount is
+    an ``int`` in Python and a decimal string on the wire — and generating the validation schema
+    would tell a TypeScript consumer to expect an integer that never arrives.
+
     Raises:
         KeyError: the name is not a document this module knows. Named rather than swallowed,
             because a silently empty schema is a front end validating against nothing.
     """
-    return DOCUMENTS[name].model_json_schema()
+    return DOCUMENTS[name].model_json_schema(mode="serialization")
 
 
 def schema_path(name: str) -> Path:

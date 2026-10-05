@@ -24,11 +24,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import BeforeValidator, PlainSerializer
 
 from chainlens.models.base import LensModel
 
 __all__ = [
+    "BaseUnits",
     "DetailEntry",
     "DetailKind",
     "GraphRef",
@@ -39,11 +42,54 @@ __all__ = [
 ]
 
 
+def _accept_numeric_string(value: Any) -> Any:
+    """Read a decimal string back as an integer, so the encoding round-trips.
+
+    Raises:
+        ValueError: the string is not a whole number. Refused rather than coerced: a document
+            that says ``"1.5"`` where base units belong is a broken document, not a rounding
+            problem.
+    """
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(
+                f"{value!r} is not a whole number; base units are integers and travel as "
+                "decimal strings on the wire"
+            ) from exc
+    return value
+
+
+#: An integer amount in a chain's base units, encoded as a **decimal string** on the wire.
+#:
+#: This is not a stylistic choice. JSON numbers are IEEE-754 doubles in every browser, so an
+#: integer above 2^53 - 1 is not exactly representable and `JSON.parse` silently rounds it. One
+#: ether is 10^18 wei, so *every* Ethereum amount is above that bound: a document with numeric
+#: amounts would reach a reader as a slightly different number, with nothing to indicate it.
+#: Satoshi amounts happen to fit under the bound today, which is exactly why the rule is
+#: uniform rather than applied where it is currently needed — a limit that is safe for one chain
+#: is a trap for the next one.
+#:
+#: The Python side keeps an ``int`` throughout; only the wire form is a string, and it parses
+#: back exactly, so a document survives a round trip in either direction.
+BaseUnits = Annotated[
+    int,
+    BeforeValidator(_accept_numeric_string),
+    PlainSerializer(lambda value: str(value), return_type=str),
+]
+
+
 class DetailKind(StrEnum):
     """The six scalars a detail value can be.
 
     Six, not "any": a value that is none of these is refused rather than stringified,
     because stringifying is how a nested object becomes text that reads like a finding.
+
+    ``INT`` carries its value as a **decimal string**, for the reason
+    :data:`BaseUnits` sets out: a detail may be an amount, and an amount in a browser is a
+    double. A detail is free-form, so there is no field type to hang the rule on and it
+    belongs to the kind instead.
     """
 
     STRING = "string"
@@ -86,7 +132,7 @@ def _entry(key: str, value: Any) -> DetailEntry:
         # distinction the checker made.
         return DetailEntry(key=key, kind=DetailKind.BOOL, value=value)
     if isinstance(value, int):
-        return DetailEntry(key=key, kind=DetailKind.INT, value=value)
+        return DetailEntry(key=key, kind=DetailKind.INT, value=str(value))
     if isinstance(value, float):
         return DetailEntry(key=key, kind=DetailKind.FLOAT, value=value)
     if isinstance(value, str):

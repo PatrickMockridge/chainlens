@@ -24,7 +24,7 @@
                         "key": "amount",
                         "kind": "int",
                         "unit": null,
-                        "value": 30000
+                        "value": "30000"
                       },
                       {
                         "key": "amount_basis",
@@ -42,7 +42,7 @@
                         "key": "index",
                         "kind": "int",
                         "unit": null,
-                        "value": 0
+                        "value": "0"
                       },
                       {
                         "key": "src",
@@ -81,8 +81,8 @@
                     "kind": "evidence",
                     "label": "transfer 30000 in tx1\u2026",
                     "summary": "the amount is the recorded value of this movement",
-                    "unit": "base units",
-                    "value": 30000.0
+                    "unit": null,
+                    "value": null
                   },
                   {
                     "band": null,
@@ -154,7 +154,7 @@
                     "key": "matching_transfers",
                     "kind": "int",
                     "unit": null,
-                    "value": 1
+                    "value": "1"
                   },
                   {
                     "key": "priced_elements",
@@ -452,7 +452,7 @@
                             "key": "amount",
                             "kind": "int",
                             "unit": null,
-                            "value": 30000
+                            "value": "30000"
                           },
                           {
                             "key": "amount_basis",
@@ -470,7 +470,7 @@
                             "key": "index",
                             "kind": "int",
                             "unit": null,
-                            "value": 0
+                            "value": "0"
                           },
                           {
                             "key": "src",
@@ -509,8 +509,8 @@
                         "kind": "evidence",
                         "label": "transfer 30000 in tx1\u2026",
                         "summary": "the amount is the recorded value of this movement",
-                        "unit": "base units",
-                        "value": 30000.0
+                        "unit": null,
+                        "value": null
                       },
                       {
                         "band": null,
@@ -582,7 +582,7 @@
                         "key": "matching_transfers",
                         "kind": "int",
                         "unit": null,
-                        "value": 1
+                        "value": "1"
                       },
                       {
                         "key": "priced_elements",
@@ -677,7 +677,7 @@
                 "key": "candidates_considered",
                 "kind": "int",
                 "unit": null,
-                "value": 5
+                "value": "5"
               },
               {
                 "key": "is_lower_bound",
@@ -762,13 +762,13 @@
                 "key": "successes",
                 "kind": "int",
                 "unit": null,
-                "value": 3
+                "value": "3"
               },
               {
                 "key": "trials",
                 "kind": "int",
                 "unit": null,
-                "value": 30000
+                "value": "30000"
               }
             ],
             "graph_refs": [],
@@ -1335,7 +1335,7 @@
       "direction": "out",
       "edges": [
         {
-          "amount": 50000,
+          "amount": "50000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1362,7 +1362,7 @@
           "via": "utxo"
         },
         {
-          "amount": 50000,
+          "amount": "50000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1389,7 +1389,7 @@
           "via": "utxo"
         },
         {
-          "amount": 30000,
+          "amount": "30000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1416,7 +1416,7 @@
           "via": "utxo"
         },
         {
-          "amount": 19500,
+          "amount": "19500",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1443,7 +1443,7 @@
           "via": "utxo"
         },
         {
-          "amount": 20000,
+          "amount": "20000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1470,7 +1470,7 @@
           "via": "utxo"
         },
         {
-          "amount": 20000,
+          "amount": "20000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1497,7 +1497,7 @@
           "via": "utxo"
         },
         {
-          "amount": 0,
+          "amount": "0",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": null,
@@ -1517,7 +1517,7 @@
           "via": "utxo"
         },
         {
-          "amount": 5000,
+          "amount": "5000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1544,7 +1544,7 @@
           "via": "utxo"
         },
         {
-          "amount": 5000,
+          "amount": "5000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1571,7 +1571,7 @@
           "via": "utxo"
         },
         {
-          "amount": 5000,
+          "amount": "5000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1598,7 +1598,7 @@
           "via": "utxo"
         },
         {
-          "amount": 5000,
+          "amount": "5000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1625,7 +1625,7 @@
           "via": "utxo"
         },
         {
-          "amount": 5000,
+          "amount": "5000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1679,7 +1679,7 @@
           "via": "utxo"
         },
         {
-          "amount": 900,
+          "amount": "900",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -1787,8 +1787,8 @@
           "n_inputs": 0,
           "n_outputs": 1,
           "status": "confirmed",
-          "total_input_value": 0,
-          "total_output_value": 50000,
+          "total_input_value": "0",
+          "total_output_value": "50000",
           "txid": "cb0",
           "value_complete": true,
           "vsize": null
@@ -1799,7 +1799,7 @@
           "block_time": null,
           "chain": "bitcoin",
           "depth": 0,
-          "fee": 500,
+          "fee": "500",
           "flags": [],
           "is_coinbase": false,
           "is_coinjoin": false,
@@ -1810,8 +1810,8 @@
           "n_inputs": 1,
           "n_outputs": 2,
           "status": "confirmed",
-          "total_input_value": 50000,
-          "total_output_value": 49500,
+          "total_input_value": "50000",
+          "total_output_value": "49500",
           "txid": "tx1",
           "value_complete": true,
           "vsize": null
@@ -1833,8 +1833,8 @@
           "n_inputs": 1,
           "n_outputs": 2,
           "status": "confirmed",
-          "total_input_value": 20000,
-          "total_output_value": 20000,
+          "total_input_value": "20000",
+          "total_output_value": "20000",
           "txid": "tx2",
           "value_complete": true,
           "vsize": null
@@ -1856,8 +1856,8 @@
           "n_inputs": 3,
           "n_outputs": 3,
           "status": "confirmed",
-          "total_input_value": 15000,
-          "total_output_value": 15000,
+          "total_input_value": "15000",
+          "total_output_value": "15000",
           "txid": "tx3",
           "value_complete": true,
           "vsize": null
@@ -1880,7 +1880,7 @@
           "n_outputs": 1,
           "status": "confirmed",
           "total_input_value": null,
-          "total_output_value": 900,
+          "total_output_value": "900",
           "txid": "tx4",
           "value_complete": false,
           "vsize": null
@@ -1890,7 +1890,7 @@
           "edge_count": 1,
           "key": "unparsed:bitcoin:tx2",
           "kind": "unparsed",
-          "total_value": 0,
+          "total_value": "0",
           "txid": "tx2"
         },
         {
@@ -1898,7 +1898,7 @@
           "edge_count": 1,
           "key": "unparsed:bitcoin:tx3",
           "kind": "unparsed",
-          "total_value": 5000,
+          "total_value": "5000",
           "txid": "tx3"
         }
       ],
@@ -1999,7 +1999,7 @@
       "direction": "out",
       "edges": [
         {
-          "amount": 1000000000000021000,
+          "amount": "1000000000000021000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2026,7 +2026,7 @@
           "via": "native"
         },
         {
-          "amount": 100000000000000000,
+          "amount": "100000000000000000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2053,7 +2053,7 @@
           "via": "internal"
         },
         {
-          "amount": 1000000000000000000,
+          "amount": "1000000000000000000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2080,7 +2080,7 @@
           "via": "native"
         },
         {
-          "amount": 500,
+          "amount": "500",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2168,7 +2168,7 @@
           "block_time": null,
           "chain": "ethereum",
           "depth": 0,
-          "fee": 21000,
+          "fee": "21000",
           "flags": [],
           "is_coinbase": false,
           "is_coinjoin": false,
@@ -2179,8 +2179,8 @@
           "n_inputs": 1,
           "n_outputs": 1,
           "status": "confirmed",
-          "total_input_value": 1000000000000021000,
-          "total_output_value": 1000000000000000000,
+          "total_input_value": "1000000000000021000",
+          "total_output_value": "1000000000000000000",
           "txid": "0xe1",
           "value_complete": true,
           "vsize": null
@@ -2226,7 +2226,7 @@
       "direction": "out",
       "edges": [
         {
-          "amount": 50000,
+          "amount": "50000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2253,7 +2253,7 @@
           "via": "utxo"
         },
         {
-          "amount": 30000,
+          "amount": "30000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2280,7 +2280,7 @@
           "via": "utxo"
         },
         {
-          "amount": 19500,
+          "amount": "19500",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2307,7 +2307,7 @@
           "via": "utxo"
         },
         {
-          "amount": 20000,
+          "amount": "20000",
           "amount_status": "recorded",
           "annotation_ids": [],
           "asset": {
@@ -2380,7 +2380,7 @@
           "block_time": null,
           "chain": "bitcoin",
           "depth": 0,
-          "fee": 500,
+          "fee": "500",
           "flags": [],
           "is_coinbase": false,
           "is_coinjoin": false,
@@ -2391,8 +2391,8 @@
           "n_inputs": 1,
           "n_outputs": 2,
           "status": "confirmed",
-          "total_input_value": 50000,
-          "total_output_value": 49500,
+          "total_input_value": "50000",
+          "total_output_value": "49500",
           "txid": "tx1",
           "value_complete": true,
           "vsize": null
@@ -2414,8 +2414,8 @@
           "n_inputs": 1,
           "n_outputs": 2,
           "status": "confirmed",
-          "total_input_value": 20000,
-          "total_output_value": 20000,
+          "total_input_value": "20000",
+          "total_output_value": "20000",
           "txid": "tx2",
           "value_complete": true,
           "vsize": null
@@ -2425,7 +2425,7 @@
           "edge_count": 1,
           "key": "unparsed:bitcoin:tx2",
           "kind": "unparsed",
-          "total_value": 0,
+          "total_value": "0",
           "txid": "tx2"
         }
       ],
@@ -2712,7 +2712,7 @@
                 "key": "address_count",
                 "kind": "int",
                 "unit": null,
-                "value": 2
+                "value": "2"
               },
               {
                 "key": "confidence",
@@ -2926,7 +2926,7 @@
                 "key": "address_count",
                 "kind": "int",
                 "unit": null,
-                "value": 2
+                "value": "2"
               },
               {
                 "key": "confidence",

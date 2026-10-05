@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ingest verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check ingest verify case-study-check build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -67,6 +67,26 @@ SCHEMA_DIR.mkdir(parents=True, exist_ok=True); \
 print('wrote', *sorted(p.name for p in SCHEMA_DIR.glob('*.json')))"
 
 	uv run python tests/ledger/fixtures.py
+	# The zod schemas are generated from the JSON Schema, so they follow it. Regenerating them
+	# needs Node, and a Python-only contributor should not have to install a JS toolchain to run
+	# `make check` -- so a missing node_modules is reported rather than treated as a failure.
+	@if [ -d web/node_modules ]; then \
+		npm --prefix web run --silent schema; \
+	else \
+		echo "note: web/node_modules is absent, so the zod schemas were not regenerated"; \
+	fi
+
+ui:  ## Build the front-end bundle into the package
+	# The output lands in src/chainlens/ui/static/, which is inside the wheel's package root --
+	# committing it there is what makes `pip install` work without Node.
+	cd web && npm run build
+
+ui-check:  ## Typecheck, test and build the front end, and fail on a stale bundle
+	cd web && npm run build
+	@git diff --exit-code -- src/chainlens/ui/static || { \
+		echo "the committed bundle is out of date; run \`make ui\` and commit the result"; \
+		exit 1; \
+	}
 
 ingest:  ## Digest everything dropped in case-study/inbox (ARGS="--dry-run" to preview)
 	# Never part of `check`: it consumes whatever a person put in the inbox.

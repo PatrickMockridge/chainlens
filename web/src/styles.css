@@ -1,0 +1,432 @@
+/*
+ * The app's own styles. React Flow's stylesheet is imported separately, in `App.tsx`.
+ *
+ * Two rules here are load-bearing rather than cosmetic: a declared assertion is styled apart from
+ * computed evidence, and change edges are dashed rather than hidden. Both are the kind of
+ * distinction that survives a screenshot only if it is visual.
+ */
+
+:root {
+  --bg: #10141a;
+  --panel: #171d26;
+  --ink: #e6ebf2;
+  --muted: #8b97a8;
+  --line: #2a3441;
+  --accent: #6aa9ff;
+  --input: #4a86c8;
+  --output: #5bb98c;
+  --token: #c08adf;
+  --internal: #d9a441;
+  --warn: #e2a33a;
+  --declared: #d97757;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body,
+html,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.header h1 {
+  font-size: 15px;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.tagline {
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.mode {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.mode[data-mode="live"] {
+  color: var(--output);
+  border-color: color-mix(in srgb, var(--output) 40%, var(--line));
+}
+
+.mode[data-mode="static"] {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+}
+
+.caveat {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  margin: 0;
+  padding: 8px 16px;
+}
+
+.layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 1fr 380px;
+  min-height: 0;
+}
+
+.canvas {
+  min-height: 0;
+  position: relative;
+}
+
+.canvas-loading,
+.canvas-refusal,
+.empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.canvas-refusal h2,
+.empty h2 {
+  color: var(--ink);
+  font-size: 14px;
+  margin: 0;
+}
+
+.panel {
+  border-left: 1px solid var(--line);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.panel-inner {
+  padding: 12px 16px 32px;
+}
+
+.panel h2 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.panel h3 {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin: 18px 0 6px;
+  text-transform: uppercase;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+/* -- nodes ---------------------------------------------------------------- */
+
+.node {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  height: 100%;
+  padding: 6px 9px;
+  width: 100%;
+}
+
+.node-address {
+  border-radius: 14px;
+}
+
+.node-unparsed {
+  border-style: dotted;
+  color: var(--muted);
+}
+
+.node.highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.node-title {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.node-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.node-meta-warn {
+  color: var(--warn);
+}
+
+.node-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.badge {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+.badge-minted {
+  color: var(--internal);
+}
+
+.badge-coinjoin {
+  color: var(--warn);
+}
+
+.badge-partial {
+  color: var(--warn);
+}
+
+.badge-evidence {
+  color: var(--accent);
+}
+
+.badge-declared {
+  color: var(--declared);
+}
+
+.handle {
+  background: var(--line);
+  border: 0;
+}
+
+/* -- edges ---------------------------------------------------------------- */
+
+.react-flow__edge.edge-change .react-flow__edge-path {
+  stroke-dasharray: 5 3;
+}
+
+.react-flow__edge.edge-unknown .react-flow__edge-path {
+  stroke-dasharray: 1 3;
+}
+
+.edge-input .react-flow__edge-path,
+.react-flow__edge.edge-input .react-flow__edge-path {
+  stroke: var(--input);
+}
+
+.react-flow__edge.edge-output .react-flow__edge-path {
+  stroke: var(--output);
+}
+
+.react-flow__edge.edge-token .react-flow__edge-path {
+  stroke: var(--token);
+}
+
+.react-flow__edge.edge-internal .react-flow__edge-path {
+  stroke: var(--internal);
+}
+
+/* -- panel detail --------------------------------------------------------- */
+
+.detail {
+  display: grid;
+  gap: 3px;
+  margin: 0 0 8px;
+}
+
+.detail-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 108px 1fr;
+}
+
+.detail dt {
+  color: var(--muted);
+}
+
+.detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.evidence-item {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+
+/* A declared assertion looks different from anything the library computed, at a glance. */
+.evidence-annotation {
+  border-left-color: var(--declared);
+  border-style: dashed;
+}
+
+.evidence-finding {
+  border-left-color: var(--accent);
+}
+
+.evidence-label {
+  border-left-color: var(--output);
+}
+
+.evidence-entity {
+  border-left-color: var(--internal);
+}
+
+.evidence-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.evidence-kind {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evidence-summary {
+  margin: 4px 0;
+}
+
+.unresolved-note,
+.note {
+  color: var(--warn);
+}
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.claims,
+.missing {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.missing code {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.limitations {
+  background: color-mix(in srgb, var(--line) 35%, transparent);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.tree,
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 10px;
+}
+
+.tree-node {
+  border-left: 1px solid var(--line);
+  padding: 2px 0 2px 8px;
+}
+
+.tree-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tree-kind {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tree-summary {
+  color: var(--muted);
+  margin: 0;
+}
+
+.band {
+  color: var(--accent);
+}
+
+/* -- notices -------------------------------------------------------------- */
+
+.notices {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 16px;
+}
+
+.notices p {
+  margin: 2px 0;
+}
+
+.notices .warning {
+  color: var(--warn);
+}

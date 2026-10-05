@@ -59,7 +59,7 @@
       "type": "object"
     },
     "DetailKind": {
-      "description": "The six scalars a detail value can be.\n\nSix, not \"any\": a value that is none of these is refused rather than stringified,\nbecause stringifying is how a nested object becomes text that reads like a finding.",
+      "description": "The six scalars a detail value can be.\n\nSix, not \"any\": a value that is none of these is refused rather than stringified,\nbecause stringifying is how a nested object becomes text that reads like a finding.\n\n``INT`` carries its value as a **decimal string**, for the reason\n:data:`BaseUnits` sets out: a detail may be an amount, and an amount in a browser is a\ndouble. A detail is free-form, so there is no field type to hang the rule on and it\nbelongs to the kind instead.",
       "enum": [
         "string",
         "int",

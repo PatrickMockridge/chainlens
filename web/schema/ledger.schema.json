@@ -144,7 +144,7 @@
         "balance": {
           "anyOf": [
             {
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -214,8 +214,7 @@
         "amount": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -535,8 +534,7 @@
         "fee": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -609,8 +607,7 @@
         "total_input_value": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -622,8 +619,7 @@
         "total_output_value": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
@@ -689,8 +685,7 @@
         "total_value": {
           "anyOf": [
             {
-              "minimum": 0,
-              "type": "integer"
+              "type": "string"
             },
             {
               "type": "null"
