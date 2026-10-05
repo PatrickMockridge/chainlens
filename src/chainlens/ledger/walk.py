@@ -35,6 +35,8 @@ from collections import deque
 from collections.abc import AsyncIterator, Iterable, Sequence
 from dataclasses import dataclass, field
 
+from pydantic import AwareDatetime
+
 from chainlens.analysis.heuristics.common_input import looks_like_coinjoin
 from chainlens.exceptions import CapabilityError, NotFoundError
 from chainlens.models.base import utcnow
@@ -53,7 +55,7 @@ from chainlens.models.ledger import (
     transaction_node_key,
     unparsed_node_key,
 )
-from chainlens.models.primitives import AssetRef, Transaction, TxInput, TxOutput
+from chainlens.models.primitives import AssetRef, Transaction, Transfer, TxInput, TxOutput
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.tracing.tracer import (
@@ -178,6 +180,12 @@ class _Walk:
     #: The seed address, when the walk started from one, so a self-edge can be skipped
     #: by identity rather than by parsing a key back apart.
     seed_address: str | None = None
+
+    def depths_from(self, address: str | None) -> int:
+        """The depth to record for a node discovered from ``address``."""
+        if address is None:
+            return 0
+        return self.degrees.get(address_node_key(self.chain, address), 0) + 1
 
     def nodes_remaining(self) -> int:
         """How many more nodes the policy will admit."""
@@ -356,7 +364,7 @@ async def walk_ledger(
             continue
         if not walk.admit_transaction(transaction, depth=0):
             break
-        _record(walk, transaction, depth=0, exempt=True)
+        _record(walk, transaction, depth=0, exempt=True, expanded=None)
 
     if seed_address:
         await _expand(walk, provider, seed_address, started)
@@ -398,6 +406,19 @@ async def _expand(walk: _Walk, provider: Provider, seed_address: str, started: f
                 walk.deferred.append(address_node_key(walk.chain, address))
                 continue
 
+            for movement in await _fetch_tokens(walk, provider, address):
+                far = _movement_edge(
+                    walk,
+                    movement,
+                    role=LedgerEdgeRole.TOKEN,
+                    expanded=address,
+                    txid=movement.txid,
+                    block_height=None,
+                    block_time=None,
+                )
+                if far is not None and far not in expanded:
+                    frontier.append((far, depth + 1))
+
             transactions = await _fetch(walk, provider, address)
             for transaction in transactions:
                 if transaction.txid in seen_txids:
@@ -413,7 +434,9 @@ async def _expand(walk: _Walk, provider: Provider, seed_address: str, started: f
                     continue
                 if not walk.admit_transaction(transaction, depth=depth):
                     return
-                for neighbour in _record(walk, transaction, depth=depth, exempt=False):
+                for neighbour in _record(
+                    walk, transaction, depth=depth, exempt=False, expanded=address
+                ):
                     if neighbour not in expanded:
                         frontier.append((neighbour, depth + 1))
 
@@ -454,8 +477,15 @@ async def _fetch(walk: _Walk, provider: Provider, address: str) -> tuple[Transac
     return tuple(sorted(collected, key=lambda item: item.txid))
 
 
-def _record(walk: _Walk, transaction: Transaction, *, depth: int, exempt: bool) -> tuple[str, ...]:
-    """Record a transaction's edges, returning the addresses worth expanding next."""
+def _record(
+    walk: _Walk, transaction: Transaction, *, depth: int, exempt: bool, expanded: str | None
+) -> tuple[str, ...]:
+    """Record a transaction's edges, returning the addresses worth expanding next.
+
+    ``expanded`` is the address this fetch came from, which decides which end of an
+    internal movement is the far one. It is ``None`` for a transaction the caller named
+    directly, where there is no anchored end to walk away from.
+    """
     tx_key = transaction_node_key(walk.chain, transaction.txid)
     next_depth = depth + 1
     senders = set(transaction.input_addresses)
@@ -498,6 +528,22 @@ def _record(walk: _Walk, transaction: Transaction, *, depth: int, exempt: bool) 
         )
         if address is not None and walk.direction in (Direction.OUT, Direction.BOTH):
             _reach(walk, discovered, address, next_depth)
+
+    # Movements *inside* the transaction: value a contract moved, which never appears in
+    # the top-level input or output view. They arrive on the transaction itself, so they
+    # cost nothing extra to read.
+    for movement in sorted(transaction.internal_transfers, key=lambda item: item.index or 0):
+        far = _movement_edge(
+            walk,
+            movement,
+            role=LedgerEdgeRole.INTERNAL,
+            expanded=expanded,
+            txid=transaction.txid,
+            block_height=transaction.block_height,
+            block_time=transaction.block_time,
+        )
+        if far is not None:
+            _reach(walk, discovered, far, next_depth)
 
     return tuple(discovered)
 
@@ -586,6 +632,124 @@ def _edge(
     # address that *funded* this transaction, which is the frontier's business only when
     # the walk is going that way, and the direction check has already happened.
     return address
+
+
+def _movement_edge(
+    walk: _Walk,
+    movement: Transfer,
+    *,
+    role: LedgerEdgeRole,
+    expanded: str | None,
+    txid: str,
+    block_height: int | None,
+    block_time: AwareDatetime | None,
+) -> str | None:
+    """Record a direct address-to-address movement, returning the far end to expand to.
+
+    **This is the one place the ledger view draws an address-to-address edge**, and it is
+    justified rather than convenient. A native UTXO movement goes through a transaction
+    node because no ledger records which input funded which output — the junction is what
+    stops the picture asserting a link the chain never made. A token ``Transfer`` event
+    and an EVM internal transfer are the opposite case: both *name* a sender and a
+    recipient, so the ledger has already made the statement and drawing it directly
+    repeats the ledger rather than inventing anything.
+
+    The consequence to keep in mind is that such an edge does not touch a transaction
+    node even when one is in the graph. It carries its ``txid``, so a reader can still
+    attribute it; it simply does not pretend the movement passed through a junction the
+    ledger never described.
+    """
+    if movement.src is None and movement.dst is None:
+        return None
+
+    src_key = (
+        walk.unparsed(txid, value=movement.amount)
+        if movement.src is None
+        else walk.add_address(movement.src, depth=walk.depths_from(expanded))
+    )
+    dst_key = (
+        walk.unparsed(txid, value=movement.amount)
+        if movement.dst is None
+        else walk.add_address(movement.dst, depth=walk.depths_from(expanded))
+    )
+
+    # A total on nothing but a token movement never passes through a transaction node, so
+    # the transaction's own counts are left alone. `amount` is always recorded here: the
+    # event states it, and unlike a UTXO input there is no provider that omits it.
+    edge = LedgerEdge(
+        key=f"{txid}:{'tok' if role is LedgerEdgeRole.TOKEN else 'int'}:{movement.index}",
+        src=src_key,
+        dst=dst_key,
+        chain=walk.chain,
+        txid=txid,
+        role=role,
+        index=movement.index,
+        asset=movement.asset,
+        amount=movement.amount,
+        amount_status=AmountStatus.RECORDED,
+        via=movement.via,
+        is_change=movement.is_change,
+        block_height=movement.block_height or block_height,
+        block_time=movement.timestamp or block_time,
+    )
+    if not walk.link(edge):
+        return None
+    contractless_token = (
+        role is LedgerEdgeRole.TOKEN
+        and movement.asset is not None
+        and movement.asset.contract is None
+    )
+    if contractless_token:
+        # Two tokens between the same endpoints are indistinguishable without a contract,
+        # and the tracer's aggregation key drops exactly this — a caveat the ledger view
+        # must not inherit silently.
+        walk.warnings.append(
+            f"{txid} moves a token whose asset carries no contract, so it cannot be told "
+            "apart from another token between the same addresses"
+        )
+
+    if expanded is None:
+        return None
+    if movement.src == expanded:
+        return movement.dst
+    if movement.dst == expanded:
+        return movement.src
+    return None
+
+
+async def _fetch_tokens(walk: _Walk, provider: Provider, address: str) -> tuple[Transfer, ...]:
+    """One address's token movements, capped and ordered.
+
+    Capped like the native fetch, with the same one-past-the-limit trick so "that was all
+    of them" is observed rather than assumed.
+    """
+    if not walk.policy.include_tokens or not provider.supports(Capability.TOKEN_TRANSFERS):
+        return ()
+
+    remaining = walk.nodes_remaining()
+    if remaining <= 0:
+        walk.refuse(BUDGET_NODES)
+        return ()
+
+    limit = min(remaining + 1, MAX_TRANSACTIONS_PER_ADDRESS)
+    collected: list[Transfer] = []
+    stream = provider.get_token_transfers(address, limit=limit)
+    try:
+        async for movement in stream:
+            if len(collected) >= limit - 1:
+                walk.refuse(
+                    PER_ADDRESS_LIMIT if limit == MAX_TRANSACTIONS_PER_ADDRESS else BUDGET_NODES
+                )
+                break
+            collected.append(movement)
+    except NotFoundError:
+        return ()
+    finally:
+        close = getattr(stream, "aclose", None)
+        if close is not None:
+            await close()
+
+    return tuple(sorted(collected, key=lambda item: (item.txid, item.index or 0)))
 
 
 def _finish(

@@ -18,7 +18,7 @@ from chainlens.models.enums import Chain
 from chainlens.models.primitives import Block, Transaction
 from chainlens.providers.capabilities import Capability
 from chainlens.testing import InMemoryProvider
-from chainlens.testing.factories import btc_transaction, eth_transaction, inp, out
+from chainlens.testing.factories import btc_transaction, eth_transaction, inp, out, transfer
 
 T1 = datetime(2024, 1, 1, tzinfo=UTC)
 T2 = datetime(2024, 1, 2, tzinfo=UTC)
@@ -205,12 +205,61 @@ async def test_since_and_until_filter_by_time() -> None:
 # --------------------------------------------------------------------------- #
 # Capability honesty and fault injection
 # --------------------------------------------------------------------------- #
-def test_absent_capabilities_raise_rather_than_return_empty() -> None:
-    """A silent empty result would look like 'no transfers', which is a lie."""
+@pytest.mark.anyio
+async def test_absent_capabilities_raise_rather_than_return_empty() -> None:
+    """A silent empty result would look like 'no data', which is a lie.
+
+    ``get_metrics`` is the stand-in: token transfers used to serve this purpose, until
+    the ledger view needed them and the provider grew them.
+    """
     provider = _provider()
-    assert not provider.supports(Capability.TOKEN_TRANSFERS)
+    assert not provider.supports(Capability.METRICS)
     with pytest.raises(CapabilityError):
-        provider.get_token_transfers("alice")
+        await provider.get_metrics("marketcap", asset="BTC")
+
+
+def _token_provider(*transfers) -> InMemoryProvider:  # type: ignore[no-untyped-def]
+    return InMemoryProvider(chain=Chain.ETHEREUM, token_transfers=transfers)
+
+
+def test_token_transfers_are_only_advertised_when_there_are_some() -> None:
+    """A fixture that can serve none must not claim it can.
+
+    An empty iterator is indistinguishable from "this address moved no tokens", which is
+    the same lie the capability guard exists to prevent for every other method.
+    """
+    assert not InMemoryProvider(chain=Chain.ETHEREUM).supports(Capability.TOKEN_TRANSFERS)
+    assert _token_provider(transfer("alice", "bob", 1, txid="t1", index=0)).supports(
+        Capability.TOKEN_TRANSFERS
+    )
+
+
+@pytest.mark.anyio
+async def test_token_transfers_are_served_for_each_endpoint() -> None:
+    """A real index returns a movement for both of its addresses, and so does this.
+
+    Serving it once would make a walker look correct while hiding the deduplication it
+    will need against a live provider.
+    """
+    provider = _token_provider(transfer("alice", "bob", 100, txid="t1", index=0))
+
+    for address in ("alice", "bob"):
+        served = [item async for item in provider.get_token_transfers(address)]
+        assert [item.txid for item in served] == ["t1"]
+    assert [item async for item in provider.get_token_transfers("carol")] == []
+
+
+@pytest.mark.anyio
+async def test_token_transfers_honour_a_limit_and_a_cursor() -> None:
+    provider = _token_provider(
+        *[transfer("alice", f"peer{n}", 100, txid=f"t{n}", index=0) for n in range(3)]
+    )
+
+    assert len([item async for item in provider.get_token_transfers("alice", limit=2)]) == 2
+    rest = [item async for item in provider.get_token_transfers("alice", cursor="t0:0")]
+    assert [item.txid for item in rest] == ["t1", "t2"]
+    with pytest.raises(ValueError, match="unknown cursor"):
+        _ = [item async for item in provider.get_token_transfers("alice", cursor="nope")]
 
 
 @pytest.mark.anyio

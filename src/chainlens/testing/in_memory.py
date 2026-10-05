@@ -10,9 +10,11 @@ package rather than under ``tests/``:
    provider they are tested with **no network, no cassettes, and no I/O** -- in
    milliseconds.
 
-It deliberately does *not* advertise ``TOKEN_TRANSFERS`` or ``METRICS``, so a
-caller that asks for them gets a :class:`~chainlens.exceptions.CapabilityError`
-rather than a silent empty result. That asymmetry is worth testing.
+It advertises only what its fixture data can actually serve, so a caller that asks for
+``METRICS``, ``SQL_QUERY`` or ``LABELS`` gets a
+:class:`~chainlens.exceptions.CapabilityError` rather than a silent empty result. That
+asymmetry is worth testing, and it is why a capability is declared by decorating the
+method that implements it rather than by listing it by hand.
 """
 
 from __future__ import annotations
@@ -29,11 +31,20 @@ from chainlens.config import Settings
 from chainlens.exceptions import NotFoundError, SchemaError
 from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import Chain
-from chainlens.models.primitives import Address, AssetRef, Balance, Block, Transaction
+from chainlens.models.primitives import Address, AssetRef, Balance, Block, Transaction, Transfer
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import Capability, provides
 
 __all__ = ["InMemoryProvider"]
+
+
+def _transfer_cursor(transfer: Transfer) -> str:
+    """A stable continuation token for a token movement.
+
+    Derived from the movement rather than from its position, so a cursor means the
+    same thing across calls the way a provider's opaque token does.
+    """
+    return f"{transfer.txid}:{transfer.index}"
 
 
 class InMemoryProvider(BaseProvider):
@@ -46,6 +57,10 @@ class InMemoryProvider(BaseProvider):
         addresses: optional pre-built address summaries. A missing address is
             synthesized from the transactions that reference it.
         blocks: optional block headers.
+        token_transfers: token movements to serve. Each is returned for **both** of its
+            addresses, the way a real index does, so a caller that walks both sides sees
+            it twice and has to dedupe by its own key — which is the bug a fixture that
+            served it once would hide.
         latency: seconds to ``await`` before every call. Useful for exercising
             concurrency and rate-limit behaviour.
         fail_with: maps a method name (e.g. ``"get_transaction"``) to the
@@ -65,6 +80,7 @@ class InMemoryProvider(BaseProvider):
         transactions: Iterable[Transaction] = (),
         addresses: Iterable[Address] = (),
         blocks: Iterable[Block] = (),
+        token_transfers: Iterable[Transfer] = (),
         settings: Settings | None = None,
         latency: float = 0.0,
         fail_with: Mapping[str, BaseException] | None = None,
@@ -81,6 +97,15 @@ class InMemoryProvider(BaseProvider):
         self._addresses: dict[str, Address] = {a.address: a for a in addresses}
         self._blocks_by_hash: dict[str, Block] = {b.hash: b for b in blocks}
         self._blocks_by_height: dict[int, Block] = {b.height: b for b in blocks}
+        self._token_transfers: tuple[Transfer, ...] = tuple(token_transfers)
+        if not self._token_transfers:
+            # Withhold rather than answer emptily. The class declares `TOKEN_TRANSFERS`
+            # by decorating the method, but a fixture with no token movements cannot serve
+            # one, and an empty result is indistinguishable from "this address moved no
+            # tokens" — the lie the capability guard exists to prevent. The instance set is
+            # what `supports` reads, the same way `CompositeProvider` decides its own at
+            # construction because only then does it know what it aggregates.
+            self.capabilities = self.capabilities - {Capability.TOKEN_TRANSFERS}
         self._by_address: dict[str, list[str]] = self._build_address_index()
 
     @classmethod
@@ -229,6 +254,38 @@ class InMemoryProvider(BaseProvider):
             amount=amount,
             provenance=self._provenance(f"balance/{address}"),
         )
+
+    @provides(Capability.TOKEN_TRANSFERS)
+    async def get_token_transfers(
+        self,
+        address: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        """Yield the token movements this address takes part in.
+
+        A movement is returned for **each** of its endpoints, the way a real index does,
+        so a caller that walks both sides of a transfer sees it twice and has to dedupe
+        by its own key. Serving it once would make the walk look correct while hiding the
+        deduplication bug it will hit against a live provider.
+        """
+        self._check_failure("get_token_transfers")
+        await self._delay()
+        ordered = sorted(
+            (t for t in self._token_transfers if address in (t.src, t.dst)),
+            key=lambda transfer: (transfer.txid, transfer.index or 0),
+        )
+        if cursor is not None:
+            cursors = [_transfer_cursor(transfer) for transfer in ordered]
+            if cursor not in cursors:
+                raise ValueError(f"unknown cursor {cursor!r} for address {address!r}")
+            ordered = ordered[cursors.index(cursor) + 1 :]
+
+        for position, transfer in enumerate(ordered):
+            if limit is not None and position >= limit:
+                return
+            yield transfer
 
     def _native_balance(self, address: str) -> int:
         """Sum outputs to minus inputs from an address.

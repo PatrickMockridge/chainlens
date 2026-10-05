@@ -130,6 +130,7 @@ def transfer(
     asset: AssetRef | None = None,
     timestamp: datetime | None = None,
     is_change: bool = False,
+    index: int | None = None,
 ) -> Transfer:
     """Build a single value movement."""
     return Transfer(
@@ -142,6 +143,7 @@ def transfer(
         asset=asset or AssetRef.native(chain),
         timestamp=timestamp,
         is_change=is_change,
+        index=index,
     )
 
 

@@ -23,7 +23,7 @@ from chainlens.ledger.walk import (
     POLICY_MIN_VALUE,
     walk_ledger,
 )
-from chainlens.models.enums import Chain, Direction
+from chainlens.models.enums import AssetKind, Chain, Direction, FlowVia
 from chainlens.models.ledger import (
     AmountStatus,
     LedgerAddressNode,
@@ -36,9 +36,9 @@ from chainlens.models.ledger import (
     transaction_node_key,
     unparsed_node_key,
 )
-from chainlens.models.primitives import Transaction
+from chainlens.models.primitives import AssetRef, Transaction, Transfer
 from chainlens.providers.capabilities import Capability
-from chainlens.testing.factories import btc_transaction, inp, out
+from chainlens.testing.factories import btc_transaction, eth_transaction, inp, out, transfer
 from chainlens.testing.in_memory import InMemoryProvider
 
 ALICE, BOB, CAROL = "alice", "bob", "carol"
@@ -426,6 +426,197 @@ async def test_a_seed_transaction_that_does_not_exist_is_reported() -> None:
     graph = await walk_ledger(_provider(), seed_txids=("nope",))
     assert graph.is_empty
     assert any("no transaction" in warning for warning in graph.warnings)
+
+
+# --------------------------------------------------------------------------- #
+# Token movements on an EVM chain
+# --------------------------------------------------------------------------- #
+DAI = AssetRef(
+    chain=Chain.ETHEREUM,
+    kind=AssetKind.ERC20,
+    symbol="DAI",
+    decimals=18,
+    contract="0x6b175474e89094c44da98b954eedeac495271d0f",
+)
+USDC = AssetRef(
+    chain=Chain.ETHEREUM,
+    kind=AssetKind.ERC20,
+    symbol="USDC",
+    decimals=6,
+    contract="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+)
+ALICE_E, BOB_E, CAROL_E = "0xaaa", "0xbbb", "0xccc"
+
+
+def _evm(*transfers: Transfer, transactions: tuple[Transaction, ...] = ()) -> InMemoryProvider:
+    return InMemoryProvider(
+        chain=Chain.ETHEREUM, transactions=transactions, token_transfers=transfers
+    )
+
+
+def _tok(
+    src: str | None,
+    dst: str | None,
+    *,
+    txid: str = "0xt1",
+    index: int = 0,
+    asset: AssetRef = DAI,
+    amount: int = 500,
+) -> Transfer:
+    return transfer(
+        src,
+        dst,
+        amount,
+        txid=txid,
+        chain=Chain.ETHEREUM,
+        via=FlowVia.ERC20,
+        asset=asset,
+        index=index,
+    )
+
+
+@pytest.mark.anyio
+async def test_a_token_movement_is_an_edge_carrying_its_contract() -> None:
+    provider = _evm(_tok(ALICE_E, CAROL_E))
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+
+    tokens = [edge for edge in graph.edges if edge.role is LedgerEdgeRole.TOKEN]
+    assert len(tokens) == 1
+    assert tokens[0].asset is not None
+    assert tokens[0].asset.contract == DAI.contract
+    assert tokens[0].asset.symbol == "DAI"
+
+
+@pytest.mark.anyio
+async def test_two_tokens_between_the_same_endpoints_do_not_collapse() -> None:
+    """The one thing a token edge must carry is its contract.
+
+    The tracer's aggregation key uses ``asset.kind`` alone, so two ERC-20s between the
+    same addresses become a single indistinguishable edge. That is a caveat the ledger
+    view must not inherit, and with the contract present it does not.
+    """
+    provider = _evm(
+        _tok(ALICE_E, CAROL_E, index=0, asset=DAI, amount=500),
+        _tok(ALICE_E, CAROL_E, index=1, asset=USDC, amount=700),
+    )
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+
+    tokens = [edge for edge in graph.edges if edge.role is LedgerEdgeRole.TOKEN]
+    assert len(tokens) == 2
+    assert {(edge.asset.symbol, edge.amount) for edge in tokens if edge.asset} == {
+        ("DAI", 500),
+        ("USDC", 700),
+    }
+
+
+@pytest.mark.anyio
+async def test_a_token_edge_is_not_drawn_through_a_transaction_node() -> None:
+    """A token event *names* a sender and a recipient, so the ledger already linked them.
+
+    This is the one place an address-to-address edge is drawn, and it is the opposite of
+    the UTXO case: there the junction is what stops the picture asserting a link no
+    ledger recorded.
+    """
+    provider = _evm(_tok(ALICE_E, CAROL_E))
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+
+    token = next(edge for edge in graph.edges if edge.role is LedgerEdgeRole.TOKEN)
+    assert token.src == address_node_key(Chain.ETHEREUM, ALICE_E)
+    assert token.dst == address_node_key(Chain.ETHEREUM, CAROL_E)
+    assert token.txid == "0xt1", "the edge still says which transaction it happened in"
+
+
+@pytest.mark.anyio
+async def test_the_same_movement_returned_for_both_endpoints_is_one_edge() -> None:
+    """A real index returns a transfer for each of its addresses.
+
+    The provider double does the same deliberately: serving it once would hide the
+    deduplication a walker needs against a live provider.
+    """
+    provider = _evm(_tok(ALICE_E, CAROL_E))
+    graph = await walk_ledger(
+        provider, seed_address=CAROL_E, direction=Direction.IN, policy=LedgerPolicy(max_depth=2)
+    )
+    tokens = [edge for edge in graph.edges if edge.role is LedgerEdgeRole.TOKEN]
+    assert len(tokens) == 1
+
+
+@pytest.mark.anyio
+async def test_a_minted_token_has_no_address_to_come_from() -> None:
+    """A token mint has no sender, and inventing one would be a fabrication."""
+    provider = _evm(_tok(None, CAROL_E))
+    graph = await walk_ledger(provider, seed_address=CAROL_E, policy=LedgerPolicy(max_depth=1))
+
+    token = next(edge for edge in graph.edges if edge.role is LedgerEdgeRole.TOKEN)
+    assert token.src == unparsed_node_key(Chain.ETHEREUM, "0xt1")
+    node = graph.node(token.src)
+    assert isinstance(node, LedgerUnparsedNode)
+
+
+@pytest.mark.anyio
+async def test_a_token_with_no_contract_is_warned_about_rather_than_silently_ambiguous() -> None:
+    anonymous = AssetRef(chain=Chain.ETHEREUM, kind=AssetKind.ERC20, symbol="???")
+    provider = _evm(_tok(ALICE_E, CAROL_E, asset=anonymous))
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+
+    assert any("no contract" in warning for warning in graph.warnings)
+
+
+@pytest.mark.anyio
+async def test_tokens_can_be_turned_off() -> None:
+    provider = _evm(_tok(ALICE_E, CAROL_E))
+    graph = await walk_ledger(
+        provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1, include_tokens=False)
+    )
+    assert not any(edge.role is LedgerEdgeRole.TOKEN for edge in graph.edges)
+
+
+@pytest.mark.anyio
+async def test_a_bitcoin_walk_is_unchanged_by_the_token_path() -> None:
+    """The capability is what gates it, so a UTXO provider is never asked."""
+    provider = _provider(
+        btc_transaction("tx1", [out(0, BOB, 60)], [inp(0, ALICE, 60)], block_height=1)
+    )
+    assert not provider.supports(Capability.TOKEN_TRANSFERS)
+
+    graph = await _walk(provider, policy=LedgerPolicy(max_depth=1))
+    assert {edge.role for edge in graph.edges} == {LedgerEdgeRole.INPUT, LedgerEdgeRole.OUTPUT}
+
+
+@pytest.mark.anyio
+async def test_a_transaction_is_not_created_just_to_anchor_a_token_movement() -> None:
+    """Stubbing one would have marked it minted: no inputs read means no inputs, here."""
+    provider = _evm(_tok(ALICE_E, CAROL_E))
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+
+    assert graph.transaction_count == 0
+    assert graph.address_count == 2
+
+
+# --------------------------------------------------------------------------- #
+# Value moved inside a transaction
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_an_internal_transfer_is_an_edge_of_its_own() -> None:
+    """A contract moving native value never appears in the top-level input/output view."""
+    moved = transfer(
+        "0xcontract",
+        CAROL_E,
+        10**17,
+        txid="0xt2",
+        chain=Chain.ETHEREUM,
+        via=FlowVia.INTERNAL,
+        index=0,
+    )
+    transaction = eth_transaction("0xt2", ALICE_E, "0xcontract", value=10**18, block_height=1)
+    provider = _evm(transactions=(transaction.model_copy(update={"internal_transfers": (moved,)}),))
+
+    graph = await walk_ledger(provider, seed_address=ALICE_E, policy=LedgerPolicy(max_depth=1))
+    internal = [edge for edge in graph.edges if edge.role is LedgerEdgeRole.INTERNAL]
+
+    assert len(internal) == 1
+    assert internal[0].via is FlowVia.INTERNAL
+    assert internal[0].amount == 10**17
 
 
 # --------------------------------------------------------------------------- #
