@@ -31,7 +31,10 @@ __all__ = [
     "normalize_address",
 ]
 
-_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+#: The ``0x`` prefix is accepted case-insensitively. EIP-55 only defines the
+#: lowercase spelling, but when parsing third-party payloads a ``0X`` from some
+#: tool is not worth rejecting the address over. Anything we *emit* is lowercase.
+_ADDRESS_RE = re.compile(r"^0[xX][0-9a-fA-F]{40}$")
 
 
 class AddressChecksumError(ValueError):

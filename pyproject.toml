@@ -66,6 +66,8 @@ Changelog = "https://github.com/PatrickMockridge/chainlens/blob/main/CHANGELOG.m
 [project.entry-points."chainlens.providers"]
 esplora-mempool = "chainlens.adapters.mempool_space:MempoolSpaceProvider"
 esplora-blockstream = "chainlens.adapters.blockstream:BlockstreamProvider"
+jsonrpc-eth = "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"
+etherscan = "chainlens.adapters.etherscan:EtherscanProvider"
 
 [dependency-groups]
 dev = [

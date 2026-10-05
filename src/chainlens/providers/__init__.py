@@ -14,6 +14,7 @@ from chainlens.providers.capabilities import (
     declared_by,
     provides,
 )
+from chainlens.providers.composite import CompositeProvider
 from chainlens.providers.registry import (
     PROVIDER_ENTRY_POINT_GROUP,
     ProviderInfo,
@@ -26,6 +27,7 @@ __all__ = [
     "PROVIDER_ENTRY_POINT_GROUP",
     "BaseProvider",
     "Capability",
+    "CompositeProvider",
     "Provider",
     "ProviderInfo",
     "ProviderRegistry",

@@ -41,6 +41,7 @@ class InMemoryProvider(BaseProvider):
 
     Args:
         chain: which chain the fixture data represents.
+        name: overrides the provider name, to tell two of these apart.
         transactions: the transactions this provider knows about.
         addresses: optional pre-built address summaries. A missing address is
             synthesized from the transactions that reference it.
@@ -60,6 +61,7 @@ class InMemoryProvider(BaseProvider):
         self,
         *,
         chain: Chain = Chain.BITCOIN,
+        name: str | None = None,
         transactions: Iterable[Transaction] = (),
         addresses: Iterable[Address] = (),
         blocks: Iterable[Block] = (),
@@ -69,6 +71,10 @@ class InMemoryProvider(BaseProvider):
     ) -> None:
         super().__init__(settings=settings)
         self.chain = chain
+        if name is not None:
+            # Lets a test distinguish two in-memory providers, and lets a composite
+            # report which part served a request.
+            self.name = name
         self._latency = latency
         self._fail_with: dict[str, BaseException] = dict(fail_with or {})
         self._transactions: dict[str, Transaction] = {tx.txid: tx for tx in transactions}

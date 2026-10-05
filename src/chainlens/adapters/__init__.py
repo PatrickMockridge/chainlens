@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from chainlens.adapters.blockstream import BlockstreamProvider
 from chainlens.adapters.esplora import EsploraProvider
+from chainlens.adapters.etherscan import EtherscanProvider
+from chainlens.adapters.jsonrpc_eth import JsonRpcEthProvider
 from chainlens.adapters.mempool_space import (
     MempoolSpaceProvider,
     MempoolSpaceTestnetProvider,
@@ -22,6 +24,8 @@ from chainlens.adapters.mempool_space import (
 __all__ = [
     "BlockstreamProvider",
     "EsploraProvider",
+    "EtherscanProvider",
+    "JsonRpcEthProvider",
     "MempoolSpaceProvider",
     "MempoolSpaceTestnetProvider",
 ]

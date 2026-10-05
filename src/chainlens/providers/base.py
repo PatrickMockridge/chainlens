@@ -135,9 +135,15 @@ class BaseProvider(ABC):
 
     # -- capability handling -------------------------------------------------
 
+    # Every access below reads ``self.capabilities`` rather than
+    # ``type(self).capabilities``. For a normal provider the two are the same, but a
+    # provider that aggregates others (see CompositeProvider) can only know its
+    # capability set at instance construction, and reading from the type would
+    # silently advertise nothing.
+
     def supports(self, capability: Capability) -> bool:
         """Whether this provider advertises ``capability``."""
-        return capability in type(self).capabilities
+        return capability in self.capabilities
 
     def _require(self, capability: Capability) -> None:
         """Raise :class:`CapabilityError` unless ``capability`` is advertised."""
@@ -145,28 +151,28 @@ class BaseProvider(ABC):
             raise CapabilityError(
                 self.name,
                 capability.value,
-                (c.value for c in type(self).capabilities),
+                (c.value for c in self.capabilities),
             )
 
     @property
     def is_address_provider(self) -> bool:
         """Whether this provider answers address-shaped questions."""
-        return bool(type(self).capabilities & ADDRESS_CAPABILITIES)
+        return bool(self.capabilities & ADDRESS_CAPABILITIES)
 
     @property
     def is_metrics_provider(self) -> bool:
         """Whether this provider serves network-level metrics only."""
-        return bool(type(self).capabilities & METRICS_CAPABILITIES)
+        return bool(self.capabilities & METRICS_CAPABILITIES)
 
     @property
     def is_query_provider(self) -> bool:
         """Whether this provider is query-shaped rather than address-shaped."""
-        return bool(type(self).capabilities & QUERY_CAPABILITIES)
+        return bool(self.capabilities & QUERY_CAPABILITIES)
 
     @property
     def is_label_provider(self) -> bool:
         """Whether this provider supplies attribution labels."""
-        return bool(type(self).capabilities & LABEL_CAPABILITIES)
+        return bool(self.capabilities & LABEL_CAPABILITIES)
 
     # -- lifecycle -----------------------------------------------------------
 

@@ -26,7 +26,7 @@ from typing import Any, cast
 from pydantic import Field
 
 from chainlens.config import Settings, get_settings
-from chainlens.exceptions import PluginLoadError, ProviderError
+from chainlens.exceptions import ConfigurationError, PluginLoadError, ProviderError
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Chain
 from chainlens.providers.base import Provider
@@ -49,6 +49,8 @@ PROVIDER_ENTRY_POINT_GROUP = "chainlens.providers"
 _BUILTIN_PROVIDERS: tuple[tuple[str, str], ...] = (
     ("esplora-mempool", "chainlens.adapters.mempool_space:MempoolSpaceProvider"),
     ("esplora-blockstream", "chainlens.adapters.blockstream:BlockstreamProvider"),
+    ("jsonrpc-eth", "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"),
+    ("etherscan", "chainlens.adapters.etherscan:EtherscanProvider"),
 )
 
 #: Preference order when choosing a default provider for a chain. Free providers
@@ -242,7 +244,13 @@ class ProviderRegistry:
         *,
         key: str | None = None,
     ) -> Provider:
-        """Instantiate a provider class, preferring a ``settings=`` constructor."""
+        """Instantiate a provider class, preferring a ``settings=`` constructor.
+
+        ``ConfigurationError`` is re-raised untouched rather than wrapped as a
+        plugin load failure. A provider that needs an API key which is not
+        configured is a configuration problem, and reporting it as a broken plugin
+        sends the reader looking in the wrong place.
+        """
         try:
             return cast("Provider", factory(settings=self._settings, **kwargs))
         except TypeError:
@@ -250,8 +258,12 @@ class ProviderRegistry:
             # is still legitimate -- fall back to a bare construction.
             try:
                 return cast("Provider", factory(**kwargs))
+            except ConfigurationError:
+                raise
             except Exception as exc:
                 raise self._record_error(key, factory, exc) from exc
+        except ConfigurationError:
+            raise
         except Exception as exc:
             raise self._record_error(key, factory, exc) from exc
 
@@ -279,14 +291,16 @@ class ProviderRegistry:
         """Providers matching a chain and capability filter.
 
         Providers that fail to load are skipped and recorded in
-        :attr:`load_errors` rather than aborting the listing.
+        :attr:`load_errors` rather than aborting the listing. A provider missing
+        its credentials is skipped too: one unconfigured provider must not make it
+        impossible to ask what else is available.
         """
         needed = frozenset(require)
         found: dict[str, ProviderInfo] = {}
         for key in self.keys():
             try:
                 provider = self.get(key)
-            except (PluginLoadError, ProviderError):
+            except (PluginLoadError, ProviderError, ConfigurationError):
                 continue
             if chain is not None and provider.chain != chain:
                 continue

@@ -54,6 +54,12 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=True,
         frozen=True,
+        # Every field has a validation_alias, because the env var names are not
+        # uniformly prefixed (api keys are bare ETHERSCAN_API_KEY, behaviour
+        # settings are CHAINLENS_*). Without populate_by_name the field name is not
+        # accepted as a keyword, so Settings(etherscan_api_key="...") would silently
+        # produce None rather than the value — a footgun with no error to notice.
+        populate_by_name=True,
     )
 
     # --- BYO-key providers. All optional: free providers need none of these. ---

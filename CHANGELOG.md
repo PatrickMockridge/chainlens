@@ -26,6 +26,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   mapping.
 - Bitcoin adapters: `MempoolSpaceProvider`, `BlockstreamProvider` and a testnet
   variant, over the shared Esplora schema.
+- Ethereum adapters: `EtherscanProvider` (API V2, one key across 50+ EVM chains
+  via `chainid`) and `JsonRpcEthProvider` (raw JSON-RPC, no `web3.py` needed).
+- `CompositeProvider`, which routes each capability to the first sub-provider that
+  advertises it — so an address history goes to an indexer while a balance can be
+  answered by a node.
+- ERC-20 transfer parsing from both Etherscan's `tokentx` and `eth_getLogs`.
 - Docs site: MkDocs Material with an API reference generated from the source tree.
 
 ### Notes
@@ -33,5 +39,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The `replay` cache mode was dropped before release. Against a store-then-serve
   cache it is indistinguishable from `offline`, and shipping two names for one
   behaviour invites confusion. `CHAINLENS_CACHE_MODE` accepts `live` and `offline`.
+- `JsonRpcEthProvider` deliberately does **not** advertise `ADDRESS_TXS`: a node
+  keeps no index, so it cannot list an address's transactions. Claiming the
+  capability would return a partial list indistinguishable from a complete one.
 
 [Unreleased]: https://github.com/PatrickMockridge/chainlens/commits/main

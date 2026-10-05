@@ -94,12 +94,26 @@ and commit the cassettes — but only if the source's terms permit it. See
 Providers fall into one of four lanes, determined by the capabilities they
 declare. This matters because the shapes genuinely differ:
 
-| Lane | Capabilities | Examples |
+| Lane | Capabilities | Built-in adapters |
 |---|---|---|
-| Address | `ADDRESS`, `TX`, `BLOCK`, `BALANCE`, `TOKEN_TRANSFERS`, `LOGS` | Esplora, Etherscan, JSON-RPC |
-| Metrics | `METRICS` | Glassnode |
-| Query | `SQL_QUERY` | Dune |
-| Label | `LABELS` | Nansen |
+| Address | `ADDRESS`, `ADDRESS_TXS`, `TX`, `BLOCK`, `BALANCE`, `TOKEN_TRANSFERS`, `LOGS` | `MempoolSpaceProvider`, `BlockstreamProvider`, `EtherscanProvider`, `JsonRpcEthProvider` |
+| Metrics | `METRICS` | *(planned: Glassnode)* |
+| Query | `SQL_QUERY` | *(planned: Dune)* |
+| Label | `LABELS` | *(planned: Nansen)* |
+
+Advertise only what you can actually do. `JsonRpcEthProvider` is the worked
+example: it implements `ADDRESS`, `TX`, `BLOCK`, `BALANCE` and
+`TOKEN_TRANSFERS`, and deliberately **omits `ADDRESS_TXS`** — a node keeps no
+index, so listing an address's transactions would mean scanning blocks. The
+capability is not claimed, and `chainlens` routes that question elsewhere instead
+of returning a partial list that looks complete:
+
+```python
+from chainlens.providers.composite import CompositeProvider
+
+# Etherscan answers what a node cannot, and vice versa.
+client = CompositeProvider([etherscan, node])
+```
 
 A **metrics** provider serves network-wide aggregates, not per-address data —
 Glassnode's `addresses.active_count` counts active addresses across the whole

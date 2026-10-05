@@ -93,6 +93,13 @@ def test_non_string_is_rejected() -> None:
     assert not is_valid_address(12345)  # type: ignore[arg-type]
 
 
+def test_uppercase_prefix_is_tolerated_but_normalised() -> None:
+    """`0X` is non-standard but appears in the wild; we accept it and emit `0x`."""
+    upper = "0X" + EIP55_VECTORS[0][2:].lower()
+    assert normalize_address(upper) == EIP55_VECTORS[0].lower()
+    assert normalize_address(upper).startswith("0x")
+
+
 def test_checksum_preserves_the_value() -> None:
     """Checksumming must only change letter case, never the underlying value."""
     for vector in EIP55_VECTORS:

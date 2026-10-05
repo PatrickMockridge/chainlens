@@ -293,6 +293,26 @@ class Transport:
         response = await self.request("GET", path, params=params, **kwargs)
         return response.text
 
+    async def post_json(
+        self,
+        path: str,
+        *,
+        payload: Any = None,
+        params: Mapping[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """POST a JSON body and parse the JSON response.
+
+        Used for JSON-RPC. Note that the HTTP cache does not apply here: caching a
+        POST by URL alone would be incorrect, because the body selects the method
+        being called, so two different calls to the same endpoint would collide.
+        """
+        response = await self.request("POST", path, json=payload, params=params, **kwargs)
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise SchemaError(self._name, f"response was not valid JSON: {exc}") from exc
+
     async def aclose(self) -> None:
         """Close the underlying client and its connection pool."""
         await self._client.aclose()
