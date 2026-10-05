@@ -321,6 +321,31 @@ def test_nothing_naming_an_account_reaches_the_manifest(sandbox: Path) -> None:
     assert "<redacted>" in text
 
 
+def test_nothing_naming_an_account_reaches_the_console_either(sandbox: Path) -> None:
+    """Terminal output gets pasted into issues, so the redaction cannot stop at the file.
+
+    The consequence of getting this wrong is not a bad artifact, it is a handle in a
+    bug report — which is exactly the leak the whole redaction exists to prevent.
+    """
+    (sandbox / "inbox" / "tweet.pdf").write_bytes(minimal_pdf(TWEET))
+    outcomes = ingest_tool.ingest_all(sandbox / "inbox")
+
+    assert "somebody" not in outcomes[0].detail
+    assert "<redacted>" in outcomes[0].detail
+
+
+def test_a_dry_run_reports_the_same_thing_a_real_run_would(sandbox: Path) -> None:
+    """A preview that reported less than the run would not be a preview."""
+    (sandbox / "inbox" / "tweet.pdf").write_bytes(minimal_pdf(TWEET))
+    previewed = ingest_tool.ingest_all(sandbox / "inbox", dry_run=True)
+    (sandbox / "inbox" / "tweet.pdf").write_bytes(minimal_pdf(TWEET))
+    real = ingest_tool.ingest_all(sandbox / "inbox")
+
+    assert previewed[0].detail.replace("would capture ", "") == real[0].detail.replace(
+        "captured ", ""
+    )
+
+
 def test_the_manifest_keeps_its_explanatory_comments(sandbox: Path) -> None:
     (sandbox / "inbox" / "tweet.pdf").write_bytes(minimal_pdf(TWEET))
     ingest_tool.ingest_all(sandbox / "inbox")

@@ -44,7 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from capture import _IMAGE_TYPES, write_capture
+from capture import _IMAGE_TYPES, redact_url, write_capture
 from pypdf import PdfReader
 
 INBOX_NAME = "inbox"
@@ -133,8 +133,14 @@ class Prepared:
 
     @property
     def summary(self) -> str:
-        """One line for the operator: what was captured, and whether we know where from."""
-        return f"{self.digest[:16]}… — {self.url or 'no URL found on the page'}"
+        """One line for the operator: what was captured, and whether we know where from.
+
+        The URL is redacted even here, where nothing is committed. Terminal output
+        gets pasted into issues and chat logs, and a handle that escapes that way has
+        escaped — the redaction is worth nothing if it stops at the file boundary.
+        """
+        where = redact_url(self.url) if self.url else "no URL found on the page"
+        return f"{self.digest[:16]}… — {where}"
 
 
 def _prepared(path: Path, data: bytes, **kwargs: Any) -> Prepared:
@@ -267,12 +273,19 @@ def main(argv: list[str] | None = None) -> int:
         marker = "ok  " if outcome.captured else "SKIP"
         print(f"{marker} {outcome.path.name:<{width}}  {outcome.detail}")
 
-    captured = sum(1 for outcome in outcomes if outcome.captured)
-    failed = len(outcomes) - captured
-    print(f"\n{captured} captured, {failed} left in the inbox")
+    reached = sum(1 for outcome in outcomes if outcome.captured)
+    failed = len(outcomes) - reached
+    verb = "would be captured" if args.dry_run else "captured"
+    if args.dry_run:
+        # Nothing has moved, so the inbox still holds all of it — saying otherwise
+        # would report a run that did not happen.
+        print(f"\n{reached} {verb}, {failed} would be left in the inbox")
+        print("dry run: nothing was written and nothing was removed")
+    else:
+        print(f"\n{reached} {verb}, {failed} left in the inbox")
     if failed:
         print(
-            "The files above marked SKIP are still there. A PDF with no text layer needs "
+            "The files marked SKIP are still in the inbox. A PDF with no text layer needs "
             "printing again or transcribing by hand.",
             file=sys.stderr,
         )

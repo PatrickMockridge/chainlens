@@ -43,13 +43,28 @@ test-cov:  ## Run tests with coverage, enforcing the CI floor
 
 check: lint typecheck test-cov  ## Everything CI gates on
 
-ingest:  ## Digest everything dropped in case-study/inbox (PDFs, screenshots, text)
+# Flags reach the tool through ARGS, not through `--`: `make ingest -- --dry-run`
+# would pass `--dry-run` to make as a second *goal*, running the ingest for real
+# before complaining that no rule builds `--dry-run`. These targets refuse that
+# form up front rather than after the fact.
+define refuse_stray_goals
+	@extra="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -n "$$extra" ]; then \
+		echo "make $@: unexpected argument(s): $$extra" >&2; \
+		echo 'to pass flags to the tool, use ARGS="..." — e.g. make $@ ARGS="--dry-run"' >&2; \
+		exit 2; \
+	fi
+endef
+
+ingest:  ## Digest everything dropped in case-study/inbox (ARGS="--dry-run" to preview)
 	# Never part of `check`: it consumes whatever a person put in the inbox.
+	$(refuse_stray_goals)
 	uv run python case-study/tools/ingest.py $(ARGS)
 
 verify:  ## Re-run every case-study claim record and check the verdicts reproduce
 	# Deliberately not part of `check`: it reaches the network, and it needs the
 	# corpus, which is gitignored. See case-study/README.md.
+	$(refuse_stray_goals)
 	uv run python case-study/tools/verify.py $(ARGS)
 
 case-study-check:  ## The case study's static guardrails, no network needed

@@ -41,9 +41,14 @@ post pages are the recommended form, and screenshots or plain text work too. The
 is digested into the corpus, recorded in the manifest, and removed from the inbox.
 
 ```bash
-make ingest -- --dry-run     # say what would happen first, if you like
-make ingest
+make ingest                      # digest it
+make ingest ARGS="--dry-run"     # say what would happen, change nothing
 ```
+
+Flags go through `ARGS=`, not `--`: `make ingest -- --dry-run` would hand
+`--dry-run` to make as a second *target*, running the ingest for real before
+complaining that nothing builds a target of that name. The targets refuse that form
+up front, so the mistake costs a sentence rather than a corpus.
 
 A printout is the best of the hand-supplied paths because it keeps the page's own
 text layer: the text is not transcribed by a person and not flattened by a
