@@ -31,13 +31,14 @@ from urllib.parse import quote
 from chainlens.codec.btc_script import classify_script
 from chainlens.exceptions import SchemaError
 from chainlens.models.base import Provenance, utcnow
-from chainlens.models.enums import Chain, ScriptType, TxStatus
+from chainlens.models.enums import Chain, FlowVia, ScriptType, TxStatus
 from chainlens.models.primitives import (
     Address,
     AssetRef,
     Balance,
     Block,
     Transaction,
+    Transfer,
     TxInput,
     TxOutput,
 )
@@ -109,6 +110,11 @@ class EsploraProvider(BaseProvider):
 
     #: Esplora pages `/address/{a}/txs/chain` at 25 transactions.
     _chain_page_size = 25
+
+    #: How many pages a movement scan will read before stopping. A rate limit in spirit rather
+    #: than in practice: it is what keeps a sample request from becoming a crawl of an exchange's
+    #: history, and the ceiling is why the estimate it feeds has to describe its own bound.
+    _max_transfer_pages = 40
 
     def __init__(
         self,
@@ -366,6 +372,111 @@ class EsploraProvider(BaseProvider):
                 return  # defensive: refuse to loop on a server that repeats a page
             previous_last = last_txid
             path = f"address/{encoded}/txs/chain/{last_txid}"
+
+    @provides(Capability.WINDOW_TRANSFERS)
+    async def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        """The movements involving one address, newest first, from the transactions it appears in.
+
+        **Esplora has no ranged address scan**, so this is a bounded walk: page the address's
+        transactions newest-first and project each one. The consequences are stated rather than
+        discovered:
+
+        * **the cost is proportional to how far back the caller wants to look**, not to the size
+          of the answer. A ``since`` bound stops the paging early, which is the only reason a busy
+          address is affordable at all — a caller sampling the *outside* of a window has to page
+          past it, and pays for every page in between.
+        * **a caller that asks for more than ``max_pages`` gets what the ceiling allowed** and is
+          told, by the paging behaviour itself rather than by a silently short list: the iterator
+          ends, and the provider cannot know whether the history was exhausted. Callers that need
+          to know must count what they got.
+
+        Movements are read from the ledger's own fields: an output the address funded, and an
+        output that paid it. Nothing is apportioned — a share of a co-funded output belongs to the
+        coin-selection question, not to what moved.
+        """
+        encoded = quote(address, safe="")
+        path = (
+            f"address/{encoded}/txs" if cursor is None else f"address/{encoded}/txs/chain/{cursor}"
+        )
+        yielded = 0
+        pages = 0
+        previous_last: str | None = None
+        seen: set[str] = set()
+
+        while pages < self._max_transfer_pages:
+            batch = await self._transport.get_json(path)
+            if not isinstance(batch, list) or not batch:
+                return
+            pages += 1
+            for raw in batch:
+                if not isinstance(raw, Mapping):
+                    continue
+                transaction = self._parse_transaction(raw)
+                if transaction.txid in seen:
+                    continue
+                seen.add(transaction.txid)
+                if (
+                    since is not None
+                    and transaction.block_time is not None
+                    and transaction.block_time < since
+                ):
+                    # Descending order: everything after this is older than the bound.
+                    return
+                for movement in self._movements(transaction, address):
+                    if (
+                        until is not None
+                        and movement.timestamp is not None
+                        and movement.timestamp > until
+                    ):
+                        continue
+                    if limit is not None and yielded >= limit:
+                        return
+                    yielded += 1
+                    yield movement
+
+            last_txid = str(batch[-1].get("txid", ""))
+            if not last_txid or last_txid == previous_last:
+                return
+            previous_last = last_txid
+            path = f"address/{encoded}/txs/chain/{last_txid}"
+
+    def _movements(self, transaction: Transaction, address: str) -> tuple[Transfer, ...]:
+        """What one transaction recorded moving from or to ``address``."""
+        funded = address in transaction.input_addresses
+        movements: list[Transfer] = []
+        for output in transaction.outputs:
+            if not output.value:
+                continue
+            pays_address = address in output.all_addresses
+            if not (funded or pays_address):
+                continue
+            movements.append(
+                Transfer(
+                    chain=self.chain,
+                    asset=output.asset or self._native_asset(),
+                    amount=output.value,
+                    txid=transaction.txid,
+                    # Funded takes precedence, so an address that funded a transaction paying
+                    # itself is one movement rather than two halves of one.
+                    src=address if funded else None,
+                    dst=address if pays_address else output.address,
+                    index=output.index,
+                    block_height=transaction.block_height,
+                    timestamp=transaction.block_time,
+                    via=FlowVia.UTXO,
+                    is_change=pays_address,
+                    provenance=transaction.provenance,
+                )
+            )
+        return tuple(movements)
 
     async def aclose(self) -> None:
         await self._transport.aclose()

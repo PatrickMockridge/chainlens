@@ -38,6 +38,7 @@ from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
 from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.estimators import estimator_for
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import ClaimRecord, RecordError
 from chainlens.verify.records import load_records as _load_records
@@ -109,9 +110,13 @@ async def check(
         chain_of_record = elements.chain if elements is not None else Chain.BITCOIN
 
         provider = _provider_for(chain_of_record, provider_name, providers)
-        report = await VerificationEngine(provider).verify_post(
-            record.post, Extraction(claims=(record.claim,))
-        )
+        # The estimator is attached where the provider can supply one, which changes nothing about
+        # the verdict — a ratio is never promoted into one — and adds a likelihood ratio where its
+        # preconditions hold. A recorded claim whose *document* changes because a ratio appeared
+        # needs an amendment rather than an edited expectation; the verdict it pre-registered is
+        # what this function compares, and that is unchanged.
+        engine = VerificationEngine(provider, estimator=estimator_for(provider))
+        report = await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
         checked += 1
 
         if not report.findings:

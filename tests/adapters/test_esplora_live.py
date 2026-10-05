@@ -24,7 +24,7 @@ from __future__ import annotations
 import pytest
 
 from chainlens.adapters.mempool_space import MempoolSpaceProvider
-from chainlens.models.enums import Chain, ChainModel, ScriptType, TxStatus
+from chainlens.models.enums import Chain, ChainModel, FlowVia, ScriptType, TxStatus
 from chainlens.providers.ratelimit import RateLimit
 from chainlens.providers.transport import Transport
 
@@ -143,3 +143,39 @@ async def test_live_unknown_transaction_is_a_404_not_a_crash() -> None:
             await provider.get_transaction("ff" * 32)
     finally:
         await provider.aclose()
+
+
+@pytest.mark.vcr
+@pytest.mark.anyio
+async def test_live_genesis_address_movements_parse() -> None:
+    """The movement scan against a recorded response, which is a different thing from a mock.
+
+    Hand-written fixtures encode *our* idea of the schema; the whole point of recording is to
+    exercise the parse against the shapes mempool.space actually sends. The genesis address is
+    the anchor for the same reason the other fixtures use it: it was paid the first coinbase
+    reward and has been paid by miners ever since, so its movements are a fixed fact rather than
+    a snapshot that ages.
+
+    This is also the path a likelihood ratio rests on — a coincidence rate is counted over
+    movements, and if this parse is wrong the rate is counted over the wrong thing.
+    """
+    provider = _provider()
+    try:
+        movements = [
+            movement async for movement in provider.get_window_transfers(GENESIS_ADDRESS, limit=3)
+        ]
+    finally:
+        await provider.aclose()
+
+    assert 1 <= len(movements) <= 3
+    for movement in movements:
+        assert movement.txid
+        assert movement.amount > 0
+        assert movement.via is FlowVia.UTXO
+        # Every movement is traceable to the fetch that produced it, which is what makes an
+        # estimate drawn from these auditable rather than merely plausible.
+        assert movement.provenance is not None
+        assert movement.provenance.provider == provider.name
+    # At least one of them pays the address: the first page of its history is what it received,
+    # and a movement with no destination would be one nothing could ever be a coincidence with.
+    assert any(movement.dst == GENESIS_ADDRESS for movement in movements)
