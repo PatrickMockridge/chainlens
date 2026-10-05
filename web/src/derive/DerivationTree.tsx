@@ -19,7 +19,7 @@
  *   turned into a sentence is how a nested object starts reading like a finding.
  * * **The limitations text is rendered verbatim** and sits above the tree rather than behind a
  *   disclosure, because a ratio shown without its caveats is the artifact this library exists to
- *   prevent.
+ *   prevent. It can be *replaced* — see `limitations` — but never edited or summarised.
  */
 import type { DerivationDocument, DerivationNode } from "../schema/documents";
 import { asTree } from "../schema/documents";
@@ -37,6 +37,27 @@ export interface DerivationTreeProps {
   onSelectRef: (key: string) => void;
   /** Whether a key is in the loaded graph, so a ref that is not can say so. */
   resolves: (key: string) => boolean;
+  /**
+   * Steps this view computed, attached under the step they belong beneath.
+   *
+   * The posterior is the case this exists for: the document has none — the library reports none
+   * — and the reader supplies a prior, so the resulting step belongs *under the ratio*, where the
+   * arithmetic puts it. Rendering it beside the tree instead would draw a posterior that does not
+   * visibly depend on the prior it came from, which is the reading the library's own limitations
+   * text spends three paragraphs refusing.
+   */
+  extraChildren?: ReadonlyMap<string, DerivationNode[]>;
+  /** Identifiers of steps the reader supplied, so they are never mistaken for the library's. */
+  readerSteps?: ReadonlySet<string>;
+  /**
+   * The caveats to render, replacing the document's own.
+   *
+   * A swap rather than an addition, because the document's standing text says a ratio "is not the
+   * probability that the claim is true" — which beside a rendered posterior reads as denying it.
+   * Leaving both would make the artifact contradict itself and leave the reader to decide which
+   * half to believe.
+   */
+  limitations?: string;
 }
 
 function formatValue(node: DerivationNode): string | null {
@@ -57,19 +78,21 @@ function Step({
   const { selectedBranch, highlighted, onSelectBranch, onSelectRef, resolves } = props;
   const selected = selectedBranch === node.id;
   const emphasised = highlighted.has(node.id);
+  const reader = props.readerSteps?.has(node.id) === true;
   const refs = node.graph_refs ?? [];
   // `exists === false` is the library saying it looked and did not find it. `null` means nobody
   // looked, which is a different thing — the graph here *is* the thing it was joined against, so
   // a key absent from it is absent from this view either way.
   const absent = refs.filter((ref) => ref.exists === false || !resolves(ref.key));
   const value = formatValue(node);
-  const children = node.children ?? [];
+  const children = [...(node.children ?? []), ...(props.extraChildren?.get(node.id) ?? [])];
 
   const className = [
     "tree-node",
     `tree-${node.kind}`,
     selected ? "selected" : "",
     emphasised ? "highlighted" : "",
+    reader ? "reader" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -86,6 +109,9 @@ function Step({
         <span className="tree-text">{node.label}</span>
         {value !== null && <span className="tree-value">{value}</span>}
         {node.band && <span className="band">{node.band}</span>}
+        {/* A step the reader supplied says so in words, not only in styling — the same rule the
+            evidence panel applies to a declared annotation, for the same reason. */}
+        {reader && <span className="badge badge-declared">your prior</span>}
       </button>
 
       {node.summary && <p className="tree-summary">{node.summary}</p>}
@@ -156,11 +182,11 @@ export function DerivationTree(props: DerivationTreeProps) {
     <section className="derivation">
       {/*
         The limitations text is carried on the document and rendered verbatim, never summarised.
-        It is swapped by the document itself when a posterior is present, because the standard text
-        says the library reports no posterior and a rendered posterior beside it would make the
-        artifact contradict itself.
+        When a posterior is drawn for a document that has none, the caller passes the replacement
+        text instead — see `limitations` on the props — so the screen never denies what it is
+        showing.
       */}
-      <p className="limitations">{document.limitations}</p>
+      <p className="limitations">{props.limitations ?? document.limitations}</p>
       <ul className="tree">
         <Step node={asTree(document.root)} depth={0} props={props} />
       </ul>

@@ -50,6 +50,11 @@ site/
 web/node_modules/
 web/dist/
 web/coverage/
+# Not prefixed with `web/`, because a tool run from the repository root rather than from `web/`
+# creates exactly this directory here — a cache, not a dependency tree — and it would otherwise
+# be staged by the next `git add -A`.
+node_modules/
+.vite/
 
 # --- Editors / OS ---
 .vscode/

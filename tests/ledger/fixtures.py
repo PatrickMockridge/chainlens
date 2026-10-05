@@ -246,6 +246,18 @@ async def _with_ratio_derivation() -> DerivationDocument:
     return derive_finding(report.findings[0], prior=1 / 1000, prior_supplied_by="the fixture")
 
 
+async def _ratio_without_prior_derivation() -> DerivationDocument:
+    """A ratio with no prior, which is what the library produces by default.
+
+    The shape the app's own prior control exists for: the ratio is complete and the posterior
+    is absent, so the reader can supply one in the browser. Without a fixture in this state
+    that control would be reachable only by hand-building a document.
+    """
+    engine = VerificationEngine(_bitcoin_provider(), estimator=_Pricing())
+    report = await engine.verify_post(_claim_post(), _claim_extraction())
+    return derive_finding(report.findings[0])
+
+
 #: The claim the derivation fixtures adjudicate, and it is about a transfer the ledger
 #: fixture actually contains — carol paying alice in ``tx1``. A claim nothing matches would
 #: teach the fixture nothing about the shape a verdict-producing derivation takes.
@@ -279,6 +291,7 @@ def _claim_extraction() -> Extraction:
 #: Derivations, keyed the way the fixture file keys them.
 DERIVATIONS: dict[str, Any] = {
     "no_ratio": _no_ratio_derivation,
+    "ratio_without_prior": _ratio_without_prior_derivation,
     "with_ratio": _with_ratio_derivation,
 }
 

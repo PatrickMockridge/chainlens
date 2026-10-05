@@ -37,6 +37,31 @@ export function branchesTouching(root: DerivationNode, key: string): DerivationN
   );
 }
 
+/** The step carrying the likelihood ratio, or `null` in the no-ratio shape. */
+export function findRatio(root: DerivationNode): DerivationNode | null {
+  return walkTree(root).find((node) => node.kind === "likelihood_ratio") ?? null;
+}
+
+/** One labelled fact from a step's detail, as the wire wrote it. */
+export function detailValue(
+  node: DerivationNode,
+  key: string,
+): string | number | boolean | string[] | null | undefined {
+  return node.detail?.find((entry) => entry.key === key)?.value;
+}
+
+/**
+ * A step's detail as a number, or `null` when it is anything else.
+ *
+ * The wire writes an unbounded ratio as an absent `log10_lr` plus `lr_at_least: true`, so
+ * "missing" here is a fact the library stated rather than a field nobody filled in — which is why
+ * the callers of this treat `null` as a refusal to compute rather than as a zero.
+ */
+export function detailNumber(node: DerivationNode, key: string): number | null {
+  const value = detailValue(node, key);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 /**
  * The ledger keys a branch rests on, including its descendants'.
  *

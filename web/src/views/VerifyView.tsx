@@ -17,9 +17,10 @@
  * arrives on the document. Re-deriving any of it in TypeScript would let the browser and the report
  * disagree about the same finding, and the report is the one that gets quoted.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { DerivationTree } from "../derive/DerivationTree";
+import { PriorControl, planPosterior } from "../derive/PriorControl";
 import { GraphView } from "../graph/GraphView";
 import type { LedgerEdge, LedgerNode } from "../schema/documents";
 import type { Store } from "../store";
@@ -53,6 +54,15 @@ export function VerifyView({
   const activeClaimId =
     selectedClaim ?? pinned ?? store.derivations[0]?.claim_id ?? null;
   const active = store.derivations.find((item) => item.claim_id === activeClaimId) ?? null;
+
+  // The prior is the reader's, so it lives here and nowhere else: not in the store (which mirrors
+  // documents), not on the server, and not on a document. `null` means "there is no prior", which
+  // is the state the library ships in.
+  const [priorLogOdds, setPriorLogOdds] = useState<number | null>(null);
+  const plan = useMemo(
+    () => (active === null ? null : planPosterior(active, priorLogOdds)),
+    [active, priorLogOdds],
+  );
 
   const highlighted = highlightedKeys(store);
   const branches = highlightedBranches(store);
@@ -169,6 +179,10 @@ export function VerifyView({
                 )}
               </div>
 
+              {plan !== null && (
+                <PriorControl plan={plan} logOdds={priorLogOdds} onChange={setPriorLogOdds} />
+              )}
+
               <DerivationTree
                 document={active}
                 selectedBranch={store.branch}
@@ -182,6 +196,9 @@ export function VerifyView({
                   )
                 }
                 resolves={(key) => store.nodes.has(key) || store.edges.has(key)}
+                extraChildren={plan?.extraChildren}
+                readerSteps={plan?.readerSteps}
+                limitations={plan?.limitations}
               />
             </>
           )}

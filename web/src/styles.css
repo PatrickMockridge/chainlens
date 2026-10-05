@@ -181,6 +181,66 @@ body {
   margin: 0;
 }
 
+/* -- the prior, and the step it produces ---------------------------------- */
+
+.prior {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+}
+
+.prior h3 {
+  margin: 0 0 6px;
+}
+
+.prior-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.prior-label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.prior-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.prior-readout {
+  margin: 6px 0 0;
+}
+
+.prior button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  padding: 3px 10px;
+}
+
+.prior button.link {
+  border: 0;
+  color: var(--muted);
+  margin-top: 4px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/*
+ * A step the reader supplied. Dashed like a change edge and like a declared annotation, because it
+ * is the same distinction: this is an assumption somebody made, not something anything measured.
+ */
+.tree-node.reader {
+  border-left-style: dashed;
+  border-left-color: var(--declared);
+}
+
 .canvas {
   min-height: 0;
   position: relative;

@@ -42,10 +42,12 @@ __all__ = ["PRIOR_LIMITATIONS", "claim_id", "derive_finding", "finding_refs"]
 
 #: What replaces the standard limitations when a posterior is rendered.
 #:
-#: The standard text says the library supplies no prior and reports no posterior, so
-#: showing a posterior beside it would make the artifact contradict itself in the same
-#: breath. This says the same things while accounting for the number on screen — and names
-#: whose assumption the prior is, because that is the whole point of the division of labour.
+#: The standard text says a ratio "is not the probability that the claim is true". Beside a
+#: rendered posterior that sentence reads as denying the number on the screen, because a
+#: posterior *is* a probability of the claim — under a stated prior, which is exactly what
+#: the sentence leaves out. This says the same things while accounting for that number, and
+#: names whose assumption the prior is, because that is the whole point of the division of
+#: labour.
 PRIOR_LIMITATIONS = """\
 A posterior probability is shown, and it is **not** the library's. The likelihood ratio is
 the weight of the evidence; the prior is an assumption supplied by the reader, and the

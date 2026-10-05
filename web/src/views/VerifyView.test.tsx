@@ -20,7 +20,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DerivationDocument, LedgerDocument, OverlayDocument } from "../schema/documents";
 import { asTree } from "../schema/documents";
-import { walkTree } from "../derive/tree";
+import { posteriorProbability } from "../derive/posterior";
+import { detailValue, findRatio, walkTree } from "../derive/tree";
 import {
   addDerivation,
   addLedger,
@@ -42,6 +43,7 @@ const fixtures = JSON.parse(
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
 const noRatio = fixtures.derivations["no_ratio"]!;
+const ratioNoPrior = fixtures.derivations["ratio_without_prior"]!;
 const withRatio = fixtures.derivations["with_ratio"]!;
 
 /** The graph and one derivation, as a reader who dropped both files would have them. */
@@ -202,6 +204,87 @@ describe("opening a step", () => {
     const chip = within(step(container, TRANSFER_STEP)).getByRole("button", { name: "tx1:out:0" });
     fireEvent.click(chip);
     expect(onSelect).toHaveBeenCalledWith("tx1:out:0");
+  });
+});
+
+/**
+ * The prior, end to end through the view.
+ *
+ * The arithmetic is pinned elsewhere; what is asserted here is that the control is wired to the
+ * *tree* — that a prior supplied in the browser lands as a step under the ratio, marked as the
+ * reader's, with the caveats swapped to match — because that wiring is the whole reason the prior
+ * is a view parameter rather than a document field.
+ */
+describe("the prior, supplied in the browser", () => {
+  it("draws nothing until the reader supplies one", () => {
+    const { container } = draw(loaded(ratioNoPrior));
+    expect(container.querySelectorAll(".tree-node.reader").length).toBe(0);
+    // The document's own caveats stand, unswapped.
+    expect(container.querySelector(".limitations")!.textContent).toBe(ratioNoPrior.limitations);
+    expect(screen.getByRole("button", { name: "Supply a prior" })).toBeInTheDocument();
+  });
+
+  it("attaches the posterior beneath the ratio, marked as the reader's", () => {
+    const { container } = draw(loaded(ratioNoPrior));
+    fireEvent.click(screen.getByRole("button", { name: "Supply a prior" }));
+
+    const readers = container.querySelectorAll(".tree-node.reader");
+    expect(readers.length).toBe(1);
+    expect(readers[0]!.className).toContain("tree-posterior");
+    // Marked in words, not only in styling, so it survives a screenshot.
+    expect(within(readers[0] as HTMLElement).getByText("your prior")).toBeInTheDocument();
+    // And beneath the ratio rather than beside the tree: the posterior has to visibly depend on
+    // the evidence it was computed from.
+    const ratio = container.querySelector(".tree-likelihood_ratio")!;
+    expect(ratio.contains(readers[0]!)).toBe(true);
+  });
+
+  it("swaps the caveats the moment a posterior is drawn", () => {
+    const { container } = draw(loaded(ratioNoPrior));
+    fireEvent.click(screen.getByRole("button", { name: "Supply a prior" }));
+    const limitations = container.querySelector(".limitations")!.textContent ?? "";
+    expect(limitations).not.toBe(ratioNoPrior.limitations);
+    expect(limitations).toMatch(/not the library's/);
+    expect(limitations).toMatch(/not saved/);
+  });
+
+  it("moves the posterior with the slider, using the pinned transform", () => {
+    const ratio = findRatio(asTree(ratioNoPrior.root))!;
+    const log10Lr = detailValue(ratio, "log10_lr") as number;
+    const { container } = draw(loaded(ratioNoPrior));
+    fireEvent.click(screen.getByRole("button", { name: "Supply a prior" }));
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "0" } });
+
+    const expected = posteriorProbability(0.5, log10Lr);
+    const drawn = container.querySelector(".tree-node.reader")!;
+    expect(drawn.textContent).toContain(expected.toPrecision(4));
+  });
+
+  it("takes the posterior back out when the prior is cleared", () => {
+    const { container } = draw(loaded(ratioNoPrior));
+    fireEvent.click(screen.getByRole("button", { name: "Supply a prior" }));
+    fireEvent.click(screen.getByRole("button", { name: "clear it" }));
+    expect(container.querySelectorAll(".tree-node.reader").length).toBe(0);
+    expect(container.querySelector(".limitations")!.textContent).toBe(ratioNoPrior.limitations);
+  });
+
+  it("offers no control when the document already names a prior", () => {
+    const { container } = draw(loaded(withRatio));
+    expect(screen.queryByRole("button", { name: "Supply a prior" })).toBeNull();
+    expect(screen.queryByRole("slider")).toBeNull();
+    // The posteriors on screen are the document's own, so the caveats are the document's too.
+    expect(container.querySelectorAll(".tree-node.reader").length).toBe(0);
+    expect(container.querySelector(".limitations")!.textContent).toBe(withRatio.limitations);
+    // The control names the supplier. Scoped to the control, because the document's own posterior
+    // step carries the same name as a detail row — and both saying it is the point.
+    const control = container.querySelector(".prior")!;
+    expect(within(control as HTMLElement).getByText("the fixture")).toBeInTheDocument();
+  });
+
+  it("says a finding with no ratio has nothing for a prior to update", () => {
+    draw(loaded(noRatio));
+    expect(screen.getByText(/reports no likelihood ratio/)).toBeInTheDocument();
+    expect(screen.queryByRole("slider")).toBeNull();
   });
 });
 
