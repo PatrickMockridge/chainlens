@@ -14,14 +14,17 @@ __all__ = [
     "AssetKind",
     "Chain",
     "ChainModel",
+    "ClaimVerdict",
     "Confidence",
     "Direction",
     "EntityKind",
     "FlowDirection",
     "FlowVia",
     "LabelSource",
+    "Proposition",
     "ScriptType",
     "TxStatus",
+    "VerbalScale",
 ]
 
 
@@ -211,3 +214,80 @@ class LabelSource(StrEnum):
     USER = "user"
     HEURISTIC = "heuristic"
     IMPORTED = "imported"
+
+
+class ClaimVerdict(StrEnum):
+    """The categorical finding about a claim.
+
+    Deliberately about the *match structure* rather than about probability. The
+    likelihood ratio is a separate quantity attached alongside; deriving a verdict
+    from it would conflate "what the chain shows" with "how much that is worth",
+    which the verification layer keeps strictly apart.
+    """
+
+    #: Chain data is consistent with the claim.
+    SUPPORTED = "supported"
+    #: Chain data contradicts it, including an unparseable identifier.
+    CONTRADICTED = "contradicted"
+    #: No chain-data provider could ever answer this -- an ownership assertion, a
+    #: private fact. Terminal: no amount of data or budget changes it.
+    UNVERIFIABLE = "unverifiable"
+    #: Checkable in principle, but not with what is configured or reachable now.
+    #: Actionable: add a provider, widen the window, raise the budget.
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
+class Proposition(StrEnum):
+    """Which of two competing propositions a likelihood ratio supports."""
+
+    #: The claim is true -- the observed transfer is the specific payment asserted.
+    FIRST = "first"
+    #: The claim is false -- the match arose by coincidence, or by something other
+    #: than the asserted payment.
+    ALTERNATIVE = "alternative"
+    #: LR of 1: the evidence does not distinguish the two at all.
+    NEITHER = "neither"
+
+
+class VerbalScale(StrEnum):
+    """Belief in a proposition, on the ENFSI verbal scale.
+
+    Taken from the appendix of the *ENFSI Guideline for Evaluative Reporting in
+    Forensic Science* (2015). The guideline treats the verbal scale as optional
+    and jurisdiction-dependent and prefers the numeric ratio where one can be
+    given, so the boundaries behind these bands are configurable -- see
+    :class:`~chainlens.verify.scale.VerbalThresholds` -- and these labels are the
+    default rather than a universal standard.
+    """
+
+    #: The findings do not distinguish the propositions (LR exactly 1).
+    NONE = "none"
+    #: 1 < LR <= 10. The guideline's "slight / limited support".
+    SLIGHT = "slight"
+    #: 10 < LR <= 100.
+    MODERATE = "moderate"
+    #: 100 < LR <= 1000.
+    MODERATELY_STRONG = "moderately strong"
+    #: 1000 < LR <= 10000.
+    STRONG = "strong"
+    #: LR > 10000.
+    VERY_STRONG = "very strong"
+
+    @property
+    def rank(self) -> int:
+        """Position on the scale, for comparison and for spanning checks.
+
+        ``NONE`` is 0, so an interval whose bands span a range can be compared by
+        rank without string manipulation.
+        """
+        return _VERBAL_ORDER.index(self)
+
+
+_VERBAL_ORDER: tuple[VerbalScale, ...] = (
+    VerbalScale.NONE,
+    VerbalScale.SLIGHT,
+    VerbalScale.MODERATE,
+    VerbalScale.MODERATELY_STRONG,
+    VerbalScale.STRONG,
+    VerbalScale.VERY_STRONG,
+)
