@@ -43,9 +43,13 @@ __all__ = [
 PROVIDER_ENTRY_POINT_GROUP = "chainlens.providers"
 
 #: Built-in providers, registered from code rather than discovered, so that a
-#: source checkout (no installed distribution) still resolves them.
-#: Entries land here as adapters are implemented: ``(key, "module:Attr")``.
-_BUILTIN_PROVIDERS: tuple[tuple[str, str], ...] = ()
+#: source checkout (no installed distribution) still resolves them. They are also
+#: declared as ``chainlens.providers`` entry points, so third-party packages can
+#: follow the identical pattern.
+_BUILTIN_PROVIDERS: tuple[tuple[str, str], ...] = (
+    ("esplora-mempool", "chainlens.adapters.mempool_space:MempoolSpaceProvider"),
+    ("esplora-blockstream", "chainlens.adapters.blockstream:BlockstreamProvider"),
+)
 
 #: Preference order when choosing a default provider for a chain. Free providers
 #: come first; anything not listed sorts after, alphabetically.
@@ -87,8 +91,9 @@ class ProviderRegistry:
     """A resolvable set of providers.
 
     Not a singleton by construction: tests build their own with
-    ``discover=False`` so a developer's installed plugins cannot influence an
-    assertion.
+    ``discover=False``, which yields a registry containing **only** what is
+    registered explicitly — no built-ins and no third-party entry points — so an
+    assertion cannot be influenced by the ambient environment.
     """
 
     def __init__(self, *, discover: bool = True, settings: Settings | None = None) -> None:
@@ -99,11 +104,11 @@ class ProviderRegistry:
         self._lazy_specs: dict[str, str] = {}
         self._load_errors: list[PluginLoadError] = []
 
-        for key, spec in _BUILTIN_PROVIDERS:
-            self._lazy_specs[key] = spec
-
-        if discover and not self._settings.disable_plugins:
-            self.discover()
+        if discover:
+            for key, spec in _BUILTIN_PROVIDERS:
+                self._lazy_specs[key] = spec
+            if not self._settings.disable_plugins:
+                self.discover()
 
     # -- registration --------------------------------------------------------
 

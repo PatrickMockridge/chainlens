@@ -1,0 +1,40 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - mempool.space
+      user-agent:
+      - chainlens (+https://github.com/PatrickMockridge/chainlens)
+    method: GET
+    uri: https://mempool.space/api/tx/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+  response:
+    body:
+      string: Transaction not found
+    headers:
+      access-control-allow-origin:
+      - '*'
+      connection:
+      - keep-alive
+      content-length:
+      - '21'
+      content-type:
+      - text/plain
+      date:
+      - Mon, 05 Oct 2026 08:59:48 GMT
+      server:
+      - nginx
+      x-bitcoin-version:
+      - /Satoshi:30.0.0(@wiz)/
+      x-powered-by:
+      - mempool-electrs 3.4.0-dev-bf622e5
+    status:
+      code: 404
+      message: Not Found
+version: 1

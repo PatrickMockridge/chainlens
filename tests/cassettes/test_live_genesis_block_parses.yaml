@@ -1,0 +1,110 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - mempool.space
+      user-agent:
+      - chainlens (+https://github.com/PatrickMockridge/chainlens)
+    method: GET
+    uri: https://mempool.space/api/block-height/0
+  response:
+    body:
+      string: 000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
+    headers:
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - max-age=1
+      - public
+      connection:
+      - keep-alive
+      content-length:
+      - '64'
+      content-security-policy:
+      - frame-ancestors 'self'
+      content-type:
+      - text/plain
+      date:
+      - Mon, 05 Oct 2026 09:00:11 GMT
+      expires:
+      - Mon, 05 Oct 2026 09:00:12 GMT
+      onion-location:
+      - http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/api/block-height/0
+      pragma:
+      - public
+      server:
+      - nginx
+      strict-transport-security:
+      - max-age=63072000; includeSubDomains; preload
+      vary:
+      - Accept-Language
+      - Cookie
+      x-bitcoin-version:
+      - /Satoshi:30.0.0(@wiz)/
+      x-powered-by:
+      - mempool-electrs 3.4.0-dev-bf622e5
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - mempool.space
+      user-agent:
+      - chainlens (+https://github.com/PatrickMockridge/chainlens)
+    method: GET
+    uri: https://mempool.space/api/block/000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
+  response:
+    body:
+      string: '{"id":"000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f","height":0,"version":1,"timestamp":1231006505,"tx_count":1,"size":285,"weight":1140,"merkle_root":"4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b","previousblockhash":null,"mediantime":1231006505,"nonce":2083236893,"bits":486604799,"difficulty":1.0}'
+    headers:
+      access-control-allow-origin:
+      - '*'
+      cache-control:
+      - max-age=2592000
+      - public
+      connection:
+      - keep-alive
+      content-length:
+      - '340'
+      content-security-policy:
+      - frame-ancestors 'self'
+      content-type:
+      - application/json
+      date:
+      - Mon, 05 Oct 2026 09:00:11 GMT
+      expires:
+      - Wed, 04 Nov 2026 09:00:11 GMT
+      onion-location:
+      - http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/api/block/000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f
+      pragma:
+      - public
+      server:
+      - nginx
+      strict-transport-security:
+      - max-age=63072000; includeSubDomains; preload
+      vary:
+      - Accept-Language
+      - Cookie
+      x-bitcoin-version:
+      - /Satoshi:30.0.0(@wiz)/
+      x-powered-by:
+      - mempool-electrs 3.4.0-dev-bf622e5
+    status:
+      code: 200
+      message: OK
+version: 1

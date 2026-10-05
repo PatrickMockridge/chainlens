@@ -141,7 +141,7 @@ class InMemoryProvider(BaseProvider):
     # -- capability-guarded API ---------------------------------------------
 
     @provides(Capability.ADDRESS)
-    async def get_address(self, address: str, *, include_transactions: bool = False) -> Address:
+    async def get_address(self, address: str) -> Address:
         self._check_failure("get_address")
         await self._delay()
         self._require_known_address(address)

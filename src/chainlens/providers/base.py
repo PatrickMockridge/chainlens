@@ -58,7 +58,7 @@ class Provider(Protocol):
 
     def supports(self, capability: Capability) -> bool: ...
 
-    async def get_address(self, address: str, *, include_transactions: bool = False) -> Address: ...
+    async def get_address(self, address: str) -> Address: ...
 
     def get_address_transactions(
         self,
@@ -187,7 +187,7 @@ class BaseProvider(ABC):
     # iteration. Raising at call time fails fast instead of midway through an
     # investigation, and it keeps the type checker honest.
 
-    async def get_address(self, address: str, *, include_transactions: bool = False) -> Address:
+    async def get_address(self, address: str) -> Address:
         self._require(Capability.ADDRESS)
         raise NotImplementedError(
             f"{type(self).__name__} advertises {Capability.ADDRESS.value!r} "

@@ -58,6 +58,9 @@ and conditional revalidation work as the providers intend. The cache lives under
 
 | Mode | Effect |
 |---|---|
-| `live` | Normal. Cache is used but may be revalidated. |
-| `replay` | Serve from cache; never contact the network for a cached request. |
-| `offline` | Never contact the network at all. A cache miss is an error. |
+| `live` | Normal. The cache is used, and revalidated against the network when the entry is stale. |
+| `offline` | Never touch the network. Anything cached is served; a cache miss raises `TransportError`. |
+
+Offline mode is enforced by a transport that refuses to reach the network, placed
+*beneath* the cache. It cannot fall through to a live request by accident, which
+makes it safe for reproducible analysis and for tests.

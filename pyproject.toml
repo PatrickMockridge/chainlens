@@ -36,7 +36,10 @@ classifiers = [
 dependencies = [
   # Hard upper bound: httpx 1.0.dev exists and will be breaking. See docs/explanation.
   "httpx>=0.28,<1.0",
-  "hishel>=1.4",              # RFC 9111 HTTP caching for httpx
+  # The [async] extra pulls anysqlite, required by hishel's AsyncSqliteStorage.
+  # There is no dependency-free async disk store in hishel; the only alternatives
+  # are a sync store (wrong for our event loop) or Redis (a server).
+  "hishel[async]>=1.4",       # RFC 9111 HTTP caching for httpx
   "tenacity>=9.1",
   "pydantic>=2.9,<3",
   "pydantic-settings>=2.4",
@@ -57,10 +60,12 @@ Repository = "https://github.com/PatrickMockridge/chainlens"
 Documentation = "https://github.com/PatrickMockridge/chainlens#readme"
 Changelog = "https://github.com/PatrickMockridge/chainlens/blob/main/CHANGELOG.md"
 
-# Provider/heuristic entry points are added in M2/M4 as their targets land. They are
-# deliberately omitted here so every declared entry point resolves.
-#   [project.entry-points."chainlens.providers"]
-#   [project.entry-points."chainlens.heuristics"]
+# Built-in providers are also declared as entry points, so the plugin mechanism is
+# exercised by our own code rather than only by third parties. Heuristic entry
+# points are added in M4.
+[project.entry-points."chainlens.providers"]
+esplora-mempool = "chainlens.adapters.mempool_space:MempoolSpaceProvider"
+esplora-blockstream = "chainlens.adapters.blockstream:BlockstreamProvider"
 
 [dependency-groups]
 dev = [
@@ -75,6 +80,7 @@ dev = [
   "mypy>=1.13",
   "pre-commit>=4.0",
   "pycoin>=0.92",             # dev-only cross-validation oracle for the BTC codec
+  "types-PyYAML>=6.0",        # stubs for parsing cassettes in tests
 ]
 docs = [
   "mkdocs-material>=9.6",

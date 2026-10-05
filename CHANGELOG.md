@@ -12,5 +12,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Project skeleton: packaging (`pyproject.toml`, hatchling + hatch-vcs), MIT license,
   CI (lint / typecheck / test on 3.11–3.13), pre-commit hooks.
 - Exception hierarchy rooted at `chainlens.ChainlensError`.
+- `chainlens.codec`: dependency-free Base58/Base58Check, Bech32/Bech32m, Bitcoin
+  script classification and address conversion, exact satoshi<->BTC conversion, and
+  EIP-55 address checksumming over a pure-Python Keccak-256.
+- `chainlens.models`: the unified model set that serves both UTXO and account chains,
+  value-flow graph vocabulary, cluster/evidence/label types, and pagination.
+- `chainlens.providers`: the `Provider` protocol, `@provides` capability derivation,
+  and a registry with lazy entry-point discovery.
+- `chainlens.testing`: a public in-memory provider and model factories, so analysis
+  code is testable with no network and no fixtures on disk.
+- `chainlens.providers.transport` and `ratelimit`: the single chokepoint that owns
+  HTTP caching (RFC 9111 via hishel), retries, timeouts, rate limiting and error
+  mapping.
+- Bitcoin adapters: `MempoolSpaceProvider`, `BlockstreamProvider` and a testnet
+  variant, over the shared Esplora schema.
+- Docs site: MkDocs Material with an API reference generated from the source tree.
+
+### Notes
+
+- The `replay` cache mode was dropped before release. Against a store-then-serve
+  cache it is indistinguishable from `offline`, and shipping two names for one
+  behaviour invites confusion. `CHAINLENS_CACHE_MODE` accepts `live` and `offline`.
 
 [Unreleased]: https://github.com/PatrickMockridge/chainlens/commits/main

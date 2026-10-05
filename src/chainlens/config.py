@@ -24,7 +24,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 __all__ = ["CacheMode", "Settings", "get_settings", "reset_settings_cache"]
 
-CacheMode = Literal["live", "replay", "offline"]
+#: ``live`` uses the HTTP cache per RFC 9111 and may revalidate against the
+#: network. ``offline`` refuses to touch the network at all: anything cached is
+#: served, anything else raises. There is no separate "replay" mode because with
+#: a store-then-serve cache it would be indistinguishable from ``offline``.
+CacheMode = Literal["live", "offline"]
 
 _DEFAULT_ETH_RPC_URL = "https://eth.llamarpc.com"
 _DEFAULT_USER_AGENT = "chainlens (+https://github.com/PatrickMockridge/chainlens)"
