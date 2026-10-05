@@ -537,3 +537,102 @@ async def test_the_infinite_ratio_case_is_stated_rather_than_written_as_a_number
 def test_an_undeclared_scale_is_not_invented() -> None:
     """The band is whatever the library read off the ratio, including ``very strong``."""
     assert VerbalScale.STRONG.value == "strong"
+
+
+# --------------------------------------------------------------------------- #
+# The two figures, when they disagree
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_a_co_funded_match_shows_the_inferred_share_beside_the_recorded_value() -> None:
+    """An inference is rendered next to the figure it disagrees with, never instead of it.
+
+    Carol and Dave co-fund a 40,000 output to Bob: the recorded value is 40,000 and Carol's
+    apportioned share of it is 30,000. The claim says 40,000, so the recorded value is what
+    matched — and the share is carried, labelled, because a reader who has the other number in
+    mind needs to see which one the ledger wrote down.
+    """
+    provider = InMemoryProvider(
+        chain=Chain.BITCOIN,
+        transactions=[
+            btc_transaction(
+                "tx1",
+                [out(0, BOB, 4_000_000)],
+                [
+                    inp(0, ALICE, 3_000_000),
+                    inp(1, "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", 1_000_000),
+                ],
+                block_height=1,
+                block_time=WHEN,
+            )
+        ],
+    )
+    claim = Claim(
+        type=ClaimType.TRANSFER,
+        quote="the post",
+        addresses=(ALICE, BOB),
+        amount_text="~4,000,000 sats",
+    )
+    report = await VerificationEngine(provider).verify_post(_post(), Extraction(claims=(claim,)))
+    finding = report.findings[0]
+    assert finding.verdict is ClaimVerdict.SUPPORTED
+    assert finding.evidence.apportioned_shares == {"tx1:out:0": 3_000_000}
+
+    document = derive_finding(finding)
+    move = _kinds(document)[DerivationKind.EVIDENCE][1]
+    detail = {entry.key: entry.value for entry in move.detail}
+    # Base-unit amounts are decimal strings on the wire, so a JavaScript reader cannot round
+    # them: one ether is 10**18 wei, which is past what a double holds exactly.
+    assert detail["amount"] == "4000000"
+    assert detail["amount_basis"] == "recorded"
+    assert detail["apportioned_share"] == "3000000"
+    assert move.summary is not None
+    assert "would be 3000000" in move.summary
+
+
+@pytest.mark.anyio
+async def test_a_refusal_renders_the_near_miss_so_the_number_is_not_invisible() -> None:
+    """The claim that matches a *contribution* rather than a payment.
+
+    Nothing matched, so there is no transfer node to hang the share on — which is precisely why
+    the near-miss needs a node of its own. Without it the reader is told "no match" while the
+    figure they had in mind appears nowhere in the document.
+    """
+    provider = InMemoryProvider(
+        chain=Chain.BITCOIN,
+        transactions=[
+            btc_transaction(
+                "tx1",
+                [out(0, BOB, 4_000_000)],
+                [
+                    inp(0, ALICE, 3_000_000),
+                    inp(1, "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", 1_000_000),
+                ],
+                block_height=1,
+                block_time=WHEN,
+            )
+        ],
+    )
+    claim = Claim(
+        type=ClaimType.TRANSFER,
+        quote="the post",
+        addresses=(ALICE, BOB),
+        amount_text="~3,000,000 sats",
+    )
+    report = await VerificationEngine(provider).verify_post(_post(), Extraction(claims=(claim,)))
+    finding = report.findings[0]
+    assert finding.verdict is ClaimVerdict.CONTRADICTED
+
+    document = derive_finding(finding)
+    inferred = [
+        node
+        for node in document.root.walk()
+        if "inferred" in node.id and node.kind is DerivationKind.EVIDENCE
+    ]
+    assert len(inferred) == 1
+    node = inferred[0]
+    detail = {entry.key: entry.value for entry in node.detail}
+    assert detail["apportioned_share"] == "3000000"
+    assert detail["amount_basis"] == "apportioned (inferred)"
+    assert "not a value the ledger recorded" in (node.summary or "")
+    # And it points at the output it is about, so a reader can go and look.
+    assert [ref.key for ref in node.graph_refs] == ["tx1:out:0"]

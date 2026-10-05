@@ -172,6 +172,16 @@ def _chain(finding: VerificationFinding) -> Chain | None:
     return finding.elements.chain if finding.elements is not None else None
 
 
+def _edge_ref_from_key(key: str) -> GraphRef:
+    """The reference an edge key names, spelled the way :func:`as_edge_ref` spells keys.
+
+    An edge key is ``{txid}:{role}:{index}``, and the txid is hex, so the last two colons are the
+    separators — which is why this splits from the right rather than parsing three parts.
+    """
+    txid, role, index = key.rsplit(":", 2)
+    return as_edge_ref(txid, int(index), role)
+
+
 def _evidence_node(
     identifier: str, evidence: ClaimEvidence, finding: VerificationFinding
 ) -> DerivationNode:
@@ -186,23 +196,42 @@ def _evidence_node(
     """
     children: list[DerivationNode] = []
     chain = _chain(finding)
+    matched: set[str] = set()
 
     for position, movement in enumerate(evidence.transfers):
         role = _EDGE_ROLE.get(movement.via.value, "out")
-        refs = [as_edge_ref(movement.txid, movement.index, role)]
+        edge = as_edge_ref(movement.txid, movement.index, role)
+        matched.add(edge.key)
+        refs = [edge]
         if chain is not None:
             refs.append(as_node_ref(transaction_node_key(chain, movement.txid)))
+        # The share the *apportioned* projection would have attributed to the sender, when it
+        # differs from what the ledger recorded. It is carried here rather than used: the verdict
+        # rests on the recorded value, and an inference belongs beside the figure it disagrees
+        # with, labelled, so a reader can see both — and see which one the match rested on.
+        share = evidence.apportioned_shares.get(edge.key)
+        if movement.ambiguous:
+            basis = "apportioned (inferred)"
+            summary = (
+                "the amount is an apportioned share of the transaction's outputs, "
+                "not a recorded value"
+            )
+        elif share is not None:
+            basis = "recorded"
+            summary = (
+                f"the amount is the recorded value of this movement; the sender's apportioned "
+                f"share of a co-funded transaction would be {share}, which is an inference across "
+                "its inputs and is not what this match rests on"
+            )
+        else:
+            basis = "recorded"
+            summary = "the amount is the recorded value of this movement"
         children.append(
             _node(
                 f"{identifier}/transfer/{position}",
                 DerivationKind.EVIDENCE,
                 f"transfer {movement.amount} in {movement.txid[:12]}…",
-                summary=(
-                    "the amount is an apportioned share of the transaction's outputs, "
-                    "not a recorded value"
-                    if movement.ambiguous
-                    else "the amount is the recorded value of this movement"
-                ),
+                summary=summary,
                 detail={
                     "txid": movement.txid,
                     "amount": movement.amount,
@@ -210,12 +239,41 @@ def _evidence_node(
                     "src": movement.src,
                     "dst": movement.dst,
                     "via": movement.via.value,
-                    "amount_basis": "apportioned (inferred)" if movement.ambiguous else "recorded",
+                    "amount_basis": basis,
+                    **({"apportioned_share": share} if share is not None else {}),
                 },
                 # The amount is in `detail`, not in `value`: a value here is a float, and
                 # an amount in base units is neither a float nor safe as one — one ether is
                 # 10**18 wei. Counts, ratios and probabilities are what `value` is for.
                 refs=tuple(refs),
+            )
+        )
+
+    # The inferred shares that decided nothing but explain a lot. Where a match was found, they
+    # are the shares of the outputs above, already rendered beside each transfer. Where none was,
+    # they are the *near misses* of the refusal: the sender's contribution to a co-funded output
+    # whose recorded value is not what the claim states — the likeliest reason a reader's
+    # expectation differs from the verdict, and otherwise invisible.
+    near_misses = sorted(
+        (key, value) for key, value in evidence.apportioned_shares.items() if key not in matched
+    )
+    for position, (key, share) in enumerate(near_misses):
+        children.append(
+            _node(
+                f"{identifier}/inferred/{position}",
+                DerivationKind.EVIDENCE,
+                f"the sender's inferred share of {key} is {share}",
+                summary=(
+                    "an inference across the transaction's co-funding inputs, and not a value the "
+                    "ledger recorded; it is inside the claim's tolerance while the recorded value "
+                    "is not, which is why the claim as stated is contradicted"
+                ),
+                detail={
+                    "edge": key,
+                    "apportioned_share": share,
+                    "amount_basis": "apportioned (inferred)",
+                },
+                refs=(_edge_ref_from_key(key),),
             )
         )
 

@@ -25,11 +25,13 @@ from __future__ import annotations
 
 from chainlens.exceptions import NotFoundError
 from chainlens.models.base import Provenance, utcnow
-from chainlens.models.enums import ClaimVerdict
+from chainlens.models.enums import ChainModel, ClaimVerdict, FlowVia
 from chainlens.models.flows import transfers_from_transaction
-from chainlens.models.primitives import Transaction, Transfer
+from chainlens.models.primitives import AssetRef, Transaction, Transfer
+from chainlens.models.wire import as_edge_ref
 from chainlens.providers.capabilities import Capability
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome, drain
+from chainlens.verify.claims import ClaimElements
 from chainlens.verify.verdicts import ClaimEvidence
 
 __all__ = ["CHECKER", "check_transfer"]
@@ -69,14 +71,131 @@ def _matching(transfers: tuple[Transfer, ...], context: CheckContext) -> tuple[T
     return tuple(found)
 
 
-def _transfers_for(transactions: tuple[Transaction, ...], sender: str) -> tuple[Transfer, ...]:
-    """Every movement out of ``sender`` that those transactions represent."""
-    return tuple(
-        transfer
-        for transaction in transactions
+def _utxo_movements(
+    transaction: Transaction,
+    sender: str,
+    recipient: str | None,
+    apportioned: dict[str, int],
+) -> list[Transfer]:
+    """What one UTXO transaction recorded moving out of ``sender``, exactly.
+
+    **The amount is the value the ledger recorded for that output, not a share of it.** Nothing
+    on chain says which input funded which output, so the projection in
+    :mod:`chainlens.models.flows` splits each output across its co-funding inputs — an inference,
+    and the reason that projection marks its transfers ``ambiguous``. Testing a claim's amount
+    against such a share would put an inference underneath a verdict.
+
+    The link to the sender is structural and is all the chain supports: the sender must be one of
+    the transaction's inputs. Which input paid *this* output is not recorded, so the finding says
+    the recipient received this amount in a transaction the sender funded — no more.
+
+    Args:
+        transaction: the transaction being read.
+        sender: the address the claim attributes the transfer to.
+        recipient: the address the claim says received it, when it names one.
+        apportioned: filled with the share the apportioned projection *would* have attributed to
+            the sender, keyed by edge key, for every output where that differs from the recorded
+            value. Reported beside the recorded figure, never used to decide the match.
+    """
+    if sender not in transaction.input_addresses:
+        return []
+    shares = {
+        transfer.index: transfer.amount
         for transfer in transfers_from_transaction(transaction)
         if transfer.src == sender
-    )
+    }
+
+    movements: list[Transfer] = []
+    for output in transaction.outputs:
+        if not output.value:
+            # Neither an unrecorded value nor a zero is a movement of value: the first is unknown
+            # rather than zero, and a zero-value output (an OP_RETURN) has no value to move.
+            continue
+        payable = output.all_addresses
+        movements.append(
+            Transfer(
+                chain=transaction.chain,
+                asset=output.asset or AssetRef.native(transaction.chain),
+                amount=output.value,
+                txid=transaction.txid,
+                src=sender,
+                # The claimed recipient when the output pays it, so the movement names the
+                # counterparty the claim is about; otherwise the output's own first address,
+                # spelled the way the ledger walk spells it.
+                dst=(
+                    recipient
+                    if recipient is not None and recipient in payable
+                    else output.address or next(iter(payable), None)
+                ),
+                index=output.index,
+                block_height=transaction.block_height,
+                timestamp=transaction.block_time,
+                via=FlowVia.UTXO,
+                is_change=sender in payable,
+                # Not ambiguous: a recorded output value is exact *per output*, which is the
+                # guarantee `transfers_from_transaction` documents. Only the per-sender split is
+                # approximate, and no split is used here.
+                ambiguous=False,
+                provenance=transaction.provenance,
+            )
+        )
+        share = shares.get(output.index)
+        if share is not None and share != output.value:
+            apportioned[as_edge_ref(transaction.txid, output.index, "out").key] = share
+    return movements
+
+
+def _movements(
+    transactions: tuple[Transaction, ...], elements: ClaimElements
+) -> tuple[tuple[Transfer, ...], dict[str, int]]:
+    """Every movement out of the sender, and the inferred shares that disagree with it.
+
+    Two paths, because only one chain model infers anything. An **account** chain names its
+    sender and recipient and records the value, so the existing projection is already exact and
+    is used unchanged. A **UTXO** chain records inputs and outputs and no attribution, so every
+    movement is read from the outputs themselves.
+    """
+    sender = elements.sender
+    movements: list[Transfer] = []
+    apportioned: dict[str, int] = {}
+
+    for transaction in transactions:
+        if transaction.chain_model is ChainModel.ACCOUNT:
+            movements.extend(
+                transfer
+                for transfer in transfers_from_transaction(transaction)
+                if transfer.src == sender
+            )
+            continue
+        movements.extend(_utxo_movements(transaction, sender, elements.recipient, apportioned))
+
+    return tuple(movements), apportioned
+
+
+def _inferred_matches(
+    movements: tuple[Transfer, ...], apportioned: dict[str, int], elements: ClaimElements
+) -> dict[str, int]:
+    """The apportioned shares that would satisfy the claim where the recorded value does not.
+
+    This is the diagnostic for the case a reader is most likely to be looking at: a claim whose
+    amount matches the sender's *contribution* to a co-funded payment rather than what the
+    recipient received. The recorded value decides the verdict — an inferred share is not a
+    record — but a refusal that said only "no match" would leave the reader to guess why the
+    number they had in mind was not the number the chain wrote down.
+
+    Returned keyed by edge key, so the inference can be shown beside the output it disagrees with.
+    """
+    found: dict[str, int] = {}
+    for movement in movements:
+        share = apportioned.get(as_edge_ref(movement.txid, movement.index, "out").key)
+        if share is None:
+            continue
+        if elements.recipient is not None and movement.dst != elements.recipient:
+            continue
+        if elements.band is not None and not elements.band.contains(share):
+            continue
+        found[as_edge_ref(movement.txid, movement.index, "out").key] = share
+    return found
 
 
 async def check_transfer(context: CheckContext) -> CheckOutcome:
@@ -130,7 +249,7 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
         for transaction in transactions
         if elements.window is None or elements.window.contains(transaction.block_time)
     )
-    movements = _transfers_for(in_window, elements.sender)
+    movements, apportioned = _movements(in_window, elements)
     matches = _matching(movements, context)
 
     provenance = (Provenance(provider=provider.name, fetched_at=utcnow(), endpoint="address"),)
@@ -152,10 +271,37 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
 
     if matches:
         recorded = matches[: context.transfer_limit]
+        # Only the shares of the movements this finding actually shows: a share for something the
+        # finding does not rest on is noise, and the point of carrying it is to sit beside the
+        # figure it disagrees with.
+        matched = {as_edge_ref(transfer.txid, transfer.index, "out").key for transfer in matches}
+        shown = {key: value for key, value in apportioned.items() if key in matched}
+
+        caveats = [
+            "a match shows the chain is consistent with the claim; it does not show "
+            "the post is honest, and it does not show the sender is who the post says",
+        ]
+        if any(transfer.via is FlowVia.UTXO for transfer in matches):
+            # The one thing a UTXO match does *not* establish, said plainly. The sender funded the
+            # transaction; which input paid this output is not recorded anywhere, and a reader who
+            # takes "carol moved 30,000 to alice" as established by this has read a linkage the
+            # ledger never made.
+            caveats.append(
+                "the chain recorded this amount leaving the transaction to the recipient, and the "
+                "sender among its inputs; which input funded which output is not recorded, so this "
+                "does not show the sender paid this output"
+            )
+        if shown:
+            caveats.append(
+                "the sender's apportioned share of a co-funded transaction is an inference across "
+                "its inputs, reported beside the recorded value and not used to decide the match"
+            )
+
         evidence = shared.model_copy(
             update={
                 "txids": tuple(dict.fromkeys(transfer.txid for transfer in matches)),
                 "transfers": recorded,
+                "apportioned_shares": shown,
                 "transfers_truncated": len(matches) > len(recorded),
                 "detail": {
                     "matching_transfers": len(matches),
@@ -168,20 +314,13 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
             method=METHOD,
             evidence=evidence,
             assumptions=(
-                "the sender's transfers in the window were walked, which is what licenses "
+                "the sender's movements in the window were walked, which is what licenses "
                 "the claim's own transfer being among them",
                 "the walk was cut short at the scan limit"
                 if truncated
                 else "the sender's whole transaction history was walked",
             ),
-            caveats=(
-                "a match shows the chain is consistent with the claim; it does not show "
-                "the post is honest, and it does not show the sender is who the post says",
-                (
-                    "amounts apportioned across several co-funding inputs are an inference, "
-                    "so an attributed share may be off by up to one base unit per output"
-                ),
-            ),
+            caveats=tuple(caveats),
         )
 
     if truncated:
@@ -198,23 +337,50 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
             ),
         )
 
+    # The near-miss, when there is one: the amount matches the sender's *inferred share* of a
+    # co-funded output, and no output records it. Reported because it is the likeliest reason a
+    # reader's expectation differs from the verdict, and because "no match" alone would leave
+    # them to work out which of the two numbers the chain actually wrote down.
+    inferred = _inferred_matches(movements, apportioned, elements)
+    near_miss = (
+        f"; the sender's inferred share of {len(inferred)} co-funded output(s) falls inside the "
+        "claim's tolerance, but an inferred share is not a value the ledger recorded"
+        if inferred
+        else ""
+    )
+
+    caveats = [
+        "a provider may be incomplete, an address may have been misread in the post, "
+        "and the claim may describe a transfer this library failed to extract; absence "
+        "is reported as a contradiction of the claim *as parsed* and never as a ratio",
+    ]
+    if inferred:
+        caveats.append(
+            "the share reported here is an inference across a transaction's co-funding inputs and "
+            "would be off by up to one base unit per output; it is shown so the disagreement is "
+            "visible, and it is not evidence that the payment happened"
+        )
+
     return CheckOutcome(
         verdict=ClaimVerdict.CONTRADICTED,
         method=METHOD,
         evidence=shared.model_copy(
-            update={"detail": {"matching_transfers": 0, "transactions_in_window": len(in_window)}}
+            update={
+                "apportioned_shares": inferred,
+                "detail": {
+                    "matching_transfers": 0,
+                    "transactions_in_window": len(in_window),
+                },
+            }
         ),
         reason=(
             f"the sender's history was exhausted and none of the "
-            f"{len(movements)} transfers in the window matches the claim as stated"
+            f"{len(movements)} movements it recorded in the window matches the claim as stated"
+            f"{near_miss}"
             if in_window
             else "the sender made no transfers at all in the window the claim names"
         ),
-        caveats=(
-            "a provider may be incomplete, an address may have been misread in the post, "
-            "and the claim may describe a transfer this library failed to extract; absence "
-            "is reported as a contradiction of the claim *as parsed* and never as a ratio",
-        ),
+        caveats=tuple(caveats),
     )
 
 

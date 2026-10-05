@@ -100,6 +100,12 @@ class ClaimEvidence(LensModel):
         scan_complete: whether the scan that produced ``k`` was exhausted. ``None``
             when no scan was involved. A ``False`` here is what forbids a ratio:
             an under-counted ``k`` inflates it.
+        apportioned_shares: the inferred shares that matter to this outcome, keyed by
+            edge key, and only where they disagree with a value the ledger recorded.
+            On a match, the share of each matched output; on a contradiction, the
+            shares that would have satisfied the claim when no recorded value did —
+            the near-miss, reported so a reader can see which of two figures the
+            chain wrote down. Never used to decide the verdict.
         detail: checker-specific facts a reviewer would want and no general field
             fits — a balance observed, a label asserted, a cluster size.
         provenance: one record per fetch, so a run can be replayed or audited.
@@ -112,6 +118,7 @@ class ClaimEvidence(LensModel):
     txids: tuple[str, ...] = ()
     transfers: tuple[Transfer, ...] = ()
     transfers_truncated: bool = False
+    apportioned_shares: Mapping[str, int] = Field(default_factory=dict)
 
     candidates_considered: int | None = Field(default=None, ge=0)
     scan_complete: bool | None = None

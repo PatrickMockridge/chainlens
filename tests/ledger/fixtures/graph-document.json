@@ -251,13 +251,13 @@
                 "key": "assumption",
                 "kind": "string",
                 "unit": null,
-                "value": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them"
+                "value": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/assumption/0",
             "kind": "assumption",
-            "label": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them",
+            "label": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them",
             "summary": null,
             "unit": null,
             "value": null
@@ -327,13 +327,13 @@
                 "key": "caveat",
                 "kind": "string",
                 "unit": null,
-                "value": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output"
+                "value": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/caveat/1",
             "kind": "caveat",
-            "label": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output",
+            "label": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output",
             "summary": null,
             "unit": null,
             "value": null
@@ -1126,13 +1126,13 @@
                 "key": "assumption",
                 "kind": "string",
                 "unit": null,
-                "value": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them"
+                "value": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/assumption/0",
             "kind": "assumption",
-            "label": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them",
+            "label": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them",
             "summary": null,
             "unit": null,
             "value": null
@@ -1202,13 +1202,13 @@
                 "key": "caveat",
                 "kind": "string",
                 "unit": null,
-                "value": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output"
+                "value": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/caveat/1",
             "kind": "caveat",
-            "label": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output",
+            "label": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output",
             "summary": null,
             "unit": null,
             "value": null
@@ -2038,13 +2038,13 @@
                 "key": "assumption",
                 "kind": "string",
                 "unit": null,
-                "value": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them"
+                "value": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/assumption/0",
             "kind": "assumption",
-            "label": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them",
+            "label": "the sender's movements in the window were walked, which is what licenses the claim's own transfer being among them",
             "summary": null,
             "unit": null,
             "value": null
@@ -2114,13 +2114,13 @@
                 "key": "caveat",
                 "kind": "string",
                 "unit": null,
-                "value": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output"
+                "value": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output"
               }
             ],
             "graph_refs": [],
             "id": "claim:b6da67668bf55249/caveat/1",
             "kind": "caveat",
-            "label": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output",
+            "label": "the chain recorded this amount leaving the transaction to the recipient, and the sender among its inputs; which input funded which output is not recorded, so this does not show the sender paid this output",
             "summary": null,
             "unit": null,
             "value": null
