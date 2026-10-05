@@ -1,4 +1,4 @@
-"""Value-flow graph vocabulary.
+"""Value-flow graph vocabulary, and the derivation of flows from transactions.
 
 A :class:`ValueFlow` endpoint is a :data:`NodeRef`, which is *either* a raw
 address or an entity (a cluster of addresses believed to share a controller).
@@ -8,20 +8,33 @@ entity" instead of pretending they are still separate actors.
 
 ``NodeRef`` is a discriminated union on the ``kind`` literal, so pydantic round
 trips it without a caller having to guess which arm a dict represents.
+
+Everything here is pure data plus pure functions over it. The graph algorithms and
+serialisers live in :mod:`chainlens.graph`, so the backend can change without
+touching this module.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field
 
 from chainlens.models.base import LensModel, Provenance
-from chainlens.models.enums import Chain, FlowDirection, FlowVia
-from chainlens.models.primitives import AssetRef, _to_decimal
+from chainlens.models.enums import Chain, ChainModel, FlowDirection, FlowVia
+from chainlens.models.primitives import AssetRef, Transaction, Transfer, _to_decimal
 
-__all__ = ["AddressRef", "EntityRef", "NodeRef", "ValueFlow"]
+__all__ = [
+    "AddressRef",
+    "EntityRef",
+    "FlowGraph",
+    "NodeRef",
+    "ValueFlow",
+    "largest_remainder_split",
+    "transfers_from_transaction",
+]
 
 
 class AddressRef(LensModel):
@@ -109,3 +122,246 @@ class ValueFlow(LensModel):
     def is_self_loop(self) -> bool:
         """Whether both endpoints are the same node (a change output, typically)."""
         return self.src.node_key == self.dst.node_key
+
+
+def largest_remainder_split(total: int, weights: Sequence[int]) -> list[int]:
+    """Split ``total`` across ``weights`` proportionally, summing back to ``total``.
+
+    Integer apportionment that neither loses nor invents a unit: take the floors,
+    then hand the remaining units to the largest fractional parts, breaking ties by
+    index so the result is deterministic.
+
+    Plain rounding would not sum to the total, and a tracer that does not conserve
+    value is worse than no tracer at all. Falls back to an equal split when the
+    weights carry no information (all zero), and raises on an empty weight list
+    rather than returning something meaningless.
+    """
+    count = len(weights)
+    if count == 0:
+        raise ValueError("cannot split a value across zero weights")
+
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        weights = [1] * count
+        total_weight = count
+
+    exact = [total * weight / total_weight for weight in weights]
+    shares = [int(value) for value in exact]
+    shortfall = total - sum(shares)
+    order = sorted(range(count), key=lambda index: (-(exact[index] - shares[index]), index))
+    for index in order[:shortfall]:
+        shares[index] += 1
+    return shares
+
+
+def _contributions(transaction: Transaction, senders: Sequence[str]) -> dict[str, int]:
+    """Sum each distinct sender's contributed input value.
+
+    All-or-nothing: if *any* of a sender's inputs reports no value, every sender
+    gets zero and the caller falls back to an equal split. A partial sum would
+    silently under-weight that sender, which is a quiet way to get the attribution
+    wrong rather than an obvious way to fail.
+    """
+    totals: dict[str, int] = {}
+    complete: dict[str, bool] = {}
+    for tx_input in transaction.inputs:
+        for address in tx_input.all_addresses:
+            totals.setdefault(address, 0)
+            complete.setdefault(address, True)
+            if tx_input.value is None:
+                complete[address] = False
+            else:
+                totals[address] += tx_input.value
+
+    if not all(complete.get(address, False) for address in senders):
+        return dict.fromkeys(senders, 0)
+    return {address: totals.get(address, 0) for address in senders}
+
+
+def _account_transfers(transaction: Transaction) -> tuple[Transfer, ...]:
+    """Native value plus any internal transfers an adapter recorded."""
+    transfers: list[Transfer] = []
+    sender = transaction.from_address
+    recipient = transaction.to_address
+    value = transaction.value
+    if sender is not None and recipient is not None and value:
+        transfers.append(
+            Transfer(
+                chain=transaction.chain,
+                asset=transaction.fee_asset or AssetRef.native(transaction.chain),
+                amount=value,
+                txid=transaction.txid,
+                src=sender,
+                dst=recipient,
+                block_height=transaction.block_height,
+                timestamp=transaction.block_time,
+                via=FlowVia.NATIVE,
+                provenance=transaction.provenance,
+            )
+        )
+    transfers.extend(transaction.internal_transfers)
+    return tuple(transfers)
+
+
+def _utxo_transfers(
+    transaction: Transaction, change_indexes: frozenset[int]
+) -> tuple[Transfer, ...]:
+    outputs = [output for output in transaction.outputs if output.value]
+    if not outputs:
+        return ()
+
+    senders = transaction.input_addresses
+    if not senders:
+        # Minted. There is no sender, and inventing one would be a fabrication, so
+        # ``src`` stays None and the edge is marked as a coinbase.
+        return tuple(
+            Transfer(
+                chain=transaction.chain,
+                asset=output.asset or AssetRef.native(transaction.chain),
+                amount=output.value or 0,
+                txid=transaction.txid,
+                src=None,
+                dst=output.address,
+                index=output.index,
+                block_height=transaction.block_height,
+                timestamp=transaction.block_time,
+                via=FlowVia.COINBASE,
+                provenance=transaction.provenance,
+            )
+            for output in outputs
+        )
+
+    contributions = _contributions(transaction, senders)
+    known = sum(contributions.values())
+    ambiguous = len(senders) > 1 or known <= 0
+    weights = [contributions[address] for address in senders] if known > 0 else [1] * len(senders)
+
+    transfers: list[Transfer] = []
+    for output in outputs:
+        shares = largest_remainder_split(output.value or 0, weights)
+        for address, share in zip(senders, shares, strict=True):
+            if share <= 0:
+                continue
+            transfers.append(
+                Transfer(
+                    chain=transaction.chain,
+                    asset=output.asset or AssetRef.native(transaction.chain),
+                    amount=share,
+                    txid=transaction.txid,
+                    src=address,
+                    dst=output.address,
+                    index=output.index,
+                    block_height=transaction.block_height,
+                    timestamp=transaction.block_time,
+                    via=FlowVia.UTXO,
+                    is_change=output.index in change_indexes or address == output.address,
+                    ambiguous=ambiguous,
+                    provenance=transaction.provenance,
+                )
+            )
+    return tuple(transfers)
+
+
+def transfers_from_transaction(
+    transaction: Transaction,
+    *,
+    change_indexes: frozenset[int] = frozenset(),
+) -> tuple[Transfer, ...]:
+    """Derive the value movements a transaction represents.
+
+    This is where the two ledger models converge onto the one edge type the tracer,
+    the graph and the reporter all consume.
+
+    **UTXO attribution is an apportionment, not a reading.** Nothing on chain says
+    which input funded which output. When several addresses co-fund a transaction,
+    each output's value is split across them in proportion to what they put in,
+    using integer largest-remainder rounding.
+
+    The guarantee is exact **per output**: every output's value is fully
+    attributed, so "how much did this address receive" is precise to the base unit.
+    The margin **per sender** is approximate. Rounding each output independently
+    means a sender's shares can drift by up to one base unit per output — with two
+    senders and two outputs, an address that put in 100 may be credited 101. This
+    is stated rather than hidden because it is a real bound on what these figures
+    support, and because eliminating it would need a two-dimensional rounding whose
+    extra complexity the tracer does not need: it follows outgoing value, so the
+    recipient margin is the one that matters.
+
+    The resulting transfers are marked
+    :attr:`~chainlens.models.primitives.Transfer.ambiguous`, because a reader is
+    entitled to know that the split is our inference and not the ledger's.
+
+    Args:
+        change_indexes: output indexes already identified as change, so the edge
+            can be flagged as value returning to its sender.
+
+    Returns:
+        The transfers, possibly empty. ERC-20 movements are **not** derived here:
+        they come from logs, which adapters expose through ``get_token_transfers``.
+    """
+    if transaction.chain_model is ChainModel.ACCOUNT:
+        return _account_transfers(transaction)
+    return _utxo_transfers(transaction, change_indexes)
+
+
+class FlowGraph(LensModel):
+    """The result of a trace: nodes, aggregated edges, and how the run ended.
+
+    Pure data, so the graph backend and serialisers can change independently.
+
+    ``truncated`` and ``stop_reasons`` exist because a partial graph that *looks*
+    complete is the most misleading artifact this library can produce. A caller
+    must be able to tell "there is nothing more here" from "we stopped looking".
+    """
+
+    chain: Chain
+    seed: NodeRef
+
+    nodes: tuple[NodeRef, ...] = ()
+    edges: tuple[ValueFlow, ...] = ()
+
+    depth_reached: int = 0
+    expanded_addresses: int = 0
+    truncated: bool = False
+    stop_reasons: Mapping[str, int] = Field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
+    elapsed_seconds: float | None = None
+
+    @property
+    def node_count(self) -> int:
+        return len(self.nodes)
+
+    @property
+    def edge_count(self) -> int:
+        return len(self.edges)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.edges
+
+    def outgoing(self, node_key: str) -> tuple[ValueFlow, ...]:
+        """Edges leaving ``node_key``."""
+        return tuple(edge for edge in self.edges if edge.src.node_key == node_key)
+
+    def incoming(self, node_key: str) -> tuple[ValueFlow, ...]:
+        """Edges arriving at ``node_key``."""
+        return tuple(edge for edge in self.edges if edge.dst.node_key == node_key)
+
+    def neighbours(self, node_key: str) -> tuple[str, ...]:
+        """Distinct node keys reachable from ``node_key``, sorted for stability."""
+        return tuple(sorted({edge.dst.node_key for edge in self.outgoing(node_key)}))
+
+    def total_value(self) -> int:
+        """Sum of every edge's amount, in base units.
+
+        Meaningful only within one asset; a graph mixing BTC and an ERC-20 would
+        add different units together, which is why the report groups by asset.
+        """
+        return sum(edge.amount for edge in self.edges)
+
+    def assets(self) -> tuple[AssetRef, ...]:
+        """The distinct assets appearing on any edge."""
+        seen: dict[tuple[str, str | None], AssetRef] = {}
+        for edge in self.edges:
+            seen.setdefault((str(edge.asset.kind), edge.asset.contract), edge.asset)
+        return tuple(seen.values())

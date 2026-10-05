@@ -76,6 +76,26 @@ class NotFoundError(ProviderError):
     """The requested entity does not exist upstream (address/tx/block unknown)."""
 
 
+class BadRequestError(ProviderError):
+    """The provider rejected the request itself, and will reject it again.
+
+    A malformed query, an unsupported parameter, a page size outside the allowed
+    range — anything where the response is a verdict on the *request* rather than a
+    statement about the network.
+
+    Deliberately **not** a :class:`TransportError`, because that type is the retry
+    signal: a rejected request is deterministic, so retrying costs the provider's
+    quota and our wall clock to be told the same thing four more times. This is
+    distinct from :class:`ConfigurationError` (a credential or entitlement problem)
+    and from :class:`SchemaError` (a well-formed request whose *response* was
+    unexpected).
+    """
+
+    def __init__(self, provider: str, message: str, *, status_code: int | None = None) -> None:
+        self.status_code = status_code
+        super().__init__(provider, message)
+
+
 class SchemaError(ProviderError):
     """The upstream payload did not match the shape we know how to parse.
 

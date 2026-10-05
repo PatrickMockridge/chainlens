@@ -33,6 +33,8 @@ from tenacity.wait import wait_base
 
 from chainlens.config import Settings, get_settings
 from chainlens.exceptions import (
+    BadRequestError,
+    ConfigurationError,
     NotFoundError,
     RateLimitError,
     SchemaError,
@@ -195,8 +197,12 @@ class Transport:
 
         Raises:
             RateLimitError: upstream returned 429 and the retries were exhausted.
-            TransportError: connection, timeout, or 5xx/4xx after retries.
+            TransportError: connection failure, timeout, 408, or 5xx after retries.
             NotFoundError: upstream returned 404. Never retried.
+            ConfigurationError: 401/403 — the credential or entitlement is wrong,
+                so the same request will be refused identically. Never retried.
+            BadRequestError: any other 4xx. The request itself was rejected, so
+                retrying only spends the provider's quota. Never retried.
             SchemaError: the response body was not valid JSON.
         """
         normalized = self._normalize(path)
@@ -236,10 +242,20 @@ class Transport:
         return response
 
     def _check_status(self, response: httpx.Response) -> None:
+        """Map an HTTP status onto the exception tree, preserving retryability.
+
+        The distinction that matters is whether the *same request* could succeed
+        later. Only :class:`RateLimitError` and :class:`TransportError` are in the
+        retry set, so anything deterministic must be some other type -- treating a
+        400 as a transport error means paying for five attempts and ~10s of backoff
+        to be told the same thing again, on every malformed request.
+        """
         status = response.status_code
         if status < 400:
             return
         url = response.request.url
+        detail = response.text[:_TRUNCATED_BODY]
+
         if status == 429:
             retry_after = parse_retry_after(response.headers.get("Retry-After"))
             if self._limiter is not None and retry_after is not None:
@@ -251,11 +267,22 @@ class Transport:
             )
         if status == 404:
             raise NotFoundError(self._name, f"not found: {url}")
+        if status in (401, 403):
+            # A credential problem, or an entitlement that does not cover this
+            # endpoint (a free tier asking for an archive search). Never retried:
+            # the same token will be refused identically.
+            raise ConfigurationError(
+                f"[{self._name}] upstream refused the credentials or entitlement "
+                f"({status}) for {url}: {detail}"
+            )
+        if status == 408:
+            raise TransportError(self._name, f"upstream reported a timeout ({status}) for {url}")
         if status >= 500:
             raise TransportError(self._name, f"upstream server error {status} ({url})")
-        raise TransportError(
+        raise BadRequestError(
             self._name,
-            f"unexpected status {status} ({url}): {response.text[:_TRUNCATED_BODY]}",
+            f"request rejected ({status}) at {url}: {detail}",
+            status_code=status,
         )
 
     async def get_json(

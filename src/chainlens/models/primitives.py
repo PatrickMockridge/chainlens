@@ -208,6 +208,13 @@ class Transfer(LensModel):
     src: str | None = None
     dst: str | None = None
 
+    #: True when the source attribution is uncertain within the transaction --
+    #: typically because several addresses co-funded it under UTXO, where nothing
+    #: on chain says which input paid which output. The amount is then an
+    #: *apportioned* share, not a recorded one. ``src`` is ``None`` when the value
+    #: was minted (a coinbase) or when no sender could be determined at all.
+    ambiguous: bool = False
+
     index: int | None = None
     block_height: int | None = None
     timestamp: AwareDatetime | None = None

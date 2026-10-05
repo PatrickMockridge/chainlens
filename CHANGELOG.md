@@ -41,6 +41,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `address-reuse` (observations only) and `eth-deposit-address`.
 - Docs site: MkDocs Material with an API reference generated from the source tree.
 
+### Fixed
+
+- `Transport` no longer retries deterministic 4xx responses. A 400/422 raised a
+  `TransportError`, which is in the retry set, so a malformed request cost five
+  attempts and roughly ten seconds of backoff to be refused identically each time.
+  A rejected request now raises `BadRequestError`, and 401/403 raise
+  `ConfigurationError` — neither is retried, because the same request with the same
+  credential will get the same answer. `TransportError` keeps its documented
+  meaning: connection failures, timeouts, 408 and 5xx.
+
 ### Notes
 
 - The `replay` cache mode was dropped before release. Against a store-then-serve

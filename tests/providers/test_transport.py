@@ -14,7 +14,14 @@ import httpx
 import pytest
 
 from chainlens.config import Settings
-from chainlens.exceptions import NotFoundError, RateLimitError, SchemaError, TransportError
+from chainlens.exceptions import (
+    BadRequestError,
+    ConfigurationError,
+    NotFoundError,
+    RateLimitError,
+    SchemaError,
+    TransportError,
+)
 from chainlens.providers.ratelimit import RateLimit
 from chainlens.providers.transport import Transport
 
@@ -178,12 +185,75 @@ async def test_repeated_5xx_is_retried_then_reraised() -> None:
 
 
 @pytest.mark.anyio
-async def test_unexpected_4xx_is_a_transport_error_including_a_body_excerpt() -> None:
+async def test_a_rejected_request_is_not_a_transport_error() -> None:
+    """A 4xx is a verdict on the request, not a transient failure.
+
+    Regression: this used to raise ``TransportError``, which is in the retry set,
+    so a malformed request cost five attempts and ~10s of backoff to be refused
+    identically every time. Harmless-looking for the chain adapters, ruinous once a
+    provider that returns real 400s constantly (X on an over-long query) is added.
+    """
     transport = _transport(_constant(httpx.Response(400, text="bad request detail")))
-    with pytest.raises(TransportError, match="400") as caught:
+    with pytest.raises(BadRequestError, match="400") as caught:
         await transport.get_json("x")
     await transport.aclose()
+    assert caught.value.status_code == 400
     assert "bad request detail" in str(caught.value)
+    assert not isinstance(caught.value, TransportError)
+
+
+@pytest.mark.anyio
+async def test_a_rejected_request_is_attempted_exactly_once() -> None:
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        return httpx.Response(422, text="max_results out of range")
+
+    transport = _transport(handler, max_attempts=5)
+    with pytest.raises(BadRequestError):
+        await transport.get_json("x")
+    await transport.aclose()
+    assert attempts["n"] == 1
+
+
+@pytest.mark.parametrize("status", [401, 403])
+@pytest.mark.anyio
+async def test_credential_and_entitlement_failures_are_configuration_problems(
+    status: int,
+) -> None:
+    """A token that was refused will be refused again, so retrying is pure waste.
+
+    403 also covers an entitlement gap — a tier asking for an endpoint it does not
+    include — which no amount of retrying fixes.
+    """
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        return httpx.Response(status, text="Unauthorized")
+
+    transport = _transport(handler, max_attempts=5)
+    with pytest.raises(ConfigurationError):
+        await transport.get_json("x")
+    await transport.aclose()
+    assert attempts["n"] == 1
+
+
+@pytest.mark.anyio
+async def test_a_reported_timeout_status_is_retried() -> None:
+    """408 is transient, unlike the other 4xx, and must stay in the retry set."""
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        return httpx.Response(408)
+
+    transport = _transport(handler, max_attempts=3)
+    with pytest.raises(TransportError):
+        await transport.get_json("x")
+    await transport.aclose()
+    assert attempts["n"] == 3
 
 
 @pytest.mark.anyio

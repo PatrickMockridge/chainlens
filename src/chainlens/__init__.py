@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from chainlens.exceptions import (
     AnalysisError,
+    BadRequestError,
     CapabilityError,
     ChainlensError,
     ConfigurationError,
@@ -32,6 +33,7 @@ except ImportError:  # pragma: no cover
 
 __all__ = [
     "AnalysisError",
+    "BadRequestError",
     "CapabilityError",
     "ChainlensError",
     "ConfigurationError",
