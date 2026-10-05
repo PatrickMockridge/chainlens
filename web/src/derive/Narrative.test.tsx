@@ -91,14 +91,22 @@ describe("what it says about prose that was thrown away", () => {
     expect(screen.getByText(/gap in the prose, not a disagreement/)).toBeInTheDocument();
   });
 
-  it("distinguishes a model that wrote nothing from a model that was never asked", () => {
-    const { unmount } = draw(narrative());
-    expect(screen.getByText(/nothing it wrote survived the checks/)).toBeInTheDocument();
-
-    unmount();
-    draw(narrative({ style: "none", model: null }));
+  it("tells three empty states apart, because they are three different facts", () => {
+    // Nobody asked.
+    const { unmount } = draw(narrative({ style: "none", model: null }));
     expect(screen.getByText(/No model was asked to write about this derivation/)).toBeInTheDocument();
     expect(screen.getByText("nothing written")).toBeInTheDocument();
+
+    // Asked, and it wrote nothing: an empty answer rather than a rejected one.
+    unmount();
+    draw(narrative({ paragraphs: [], dropped: [] }));
+    expect(screen.getByText(/wrote nothing/)).toBeInTheDocument();
+    expect(screen.queryByText(/survived the checks/)).toBeNull();
+
+    // Asked, and everything it wrote was discarded — which the reasons below explain.
+    unmount();
+    draw(narrative({ paragraphs: [], dropped: ["a paragraph used figure(s) (1905.16)"] }));
+    expect(screen.getByText(/nothing it wrote survived the checks/)).toBeInTheDocument();
   });
 });
 

@@ -45,12 +45,20 @@ export function Narrative({ document, onSelectStep, holds }: NarrativeProps) {
 
       {document.paragraphs.length === 0 ? (
         <p className="hint">
+          {/*
+            Three states, not two. "Nobody asked", "a model was asked and wrote nothing", and "a
+            model wrote and every paragraph was discarded" are different facts about the same empty
+            box, and a pane that said one of them in all three cases would be lying twice.
+          */}
           {document.style === "none"
             ? "No model was asked to write about this derivation, so nothing here is a judgement " +
               "on whether one should have been."
-            : "A model wrote about this derivation and nothing it wrote survived the checks — " +
-              "every paragraph carried a figure the derivation does not hold, or named a step it " +
-              "does not contain. The reasons are below."}
+            : document.dropped.length === 0
+              ? "A model was asked and wrote nothing. That is an empty answer rather than a " +
+                "rejected one — nothing was discarded, because there was nothing to discard."
+              : "A model wrote about this derivation and nothing it wrote survived the checks — " +
+                "every paragraph carried a figure the derivation does not hold, or named a step " +
+                "it does not contain. The reasons are below."}
         </p>
       ) : (
         document.paragraphs.map((paragraph, index) => (

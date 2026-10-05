@@ -64,6 +64,12 @@ The reference that is *not* in the loaded graph is the important one. It is coun
 that rests on it and marked, never dropped: a step resting on a transaction this walk did not
 reach is the step that says the walk was too shallow.
 
+Drop a **narrative** — prose about a derivation, written by a model and checked against it (see
+[Using a model](../explanation/extraction.md)) — and it appears under the tree. Each paragraph
+names the steps it is about, and those names are chips: clicking one opens that step, so the prose
+is checked against the argument rather than taken on trust. What was discarded getting there is
+shown too, because a narrative that had silently lost a sentence would read as complete.
+
 ### Where a derivation comes from
 
 ```console
