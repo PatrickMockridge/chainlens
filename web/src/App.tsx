@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   document as fetchDocument,
+  expand,
   health,
   overlay as fetchOverlay,
   recordAnnotation,
@@ -213,6 +214,23 @@ export function App() {
     [],
   );
 
+  /**
+   * Walk one level out from an address, and union what comes back.
+   *
+   * The union is what `apply` already does, and it is safe for the reason expansion is cheap at
+   * all: node keys are content-addressed, so a second walk over the same ground cannot duplicate
+   * anything and no merge logic is needed beyond the map.
+   */
+  const onExpand = useCallback(
+    async (key: string): Promise<string | null> => {
+      const result = await expand(key);
+      if (!result.ok) return result.error;
+      apply("live expansion", result.document);
+      return null;
+    },
+    [apply],
+  );
+
   return (
     <div className="app" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
       <header className="header">
@@ -295,6 +313,8 @@ export function App() {
               missing={missing}
               write={write}
               onRecord={onRecord}
+              live={mode.kind === "live"}
+              onExpand={onExpand}
               onSelectClaim={onSelectClaim}
               onSelectBranch={onSelectBranch}
               onSelectRef={onSelectRef}

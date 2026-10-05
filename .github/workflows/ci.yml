@@ -58,6 +58,75 @@ jobs:
             --cov --cov-report=term-missing --cov-report=xml \
             --cov-fail-under=90
 
+  # `ruff`, `mypy` and `pytest` do not see `web/`, so without this the front end would be the
+  # only ungated region in the tree.
+  web:
+    name: front end (typecheck, test, bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: typecheck
+        run: npx tsc --noEmit
+        working-directory: web
+      - name: test
+        run: npm test
+        working-directory: web
+      - name: build
+        run: npm run build
+        working-directory: web
+      - name: the committed bundle is current
+        # A committed build artifact goes stale silently. This is the mitigation, and it is a
+        # diff rather than a rule somebody has to remember.
+        run: |
+          git diff --exit-code -- src/chainlens/ui/static || {
+            echo "the committed bundle is out of date; run \`make ui\` and commit the result"
+            exit 1
+          }
+      - name: print the bundle size
+        # Bytes every `pip install` pays for, including headless ones. Printed so growth is a
+        # decision rather than an accident.
+        run: |
+          echo "gzipped, as served:"
+          for file in src/chainlens/ui/static/assets/*; do
+            printf '  %-28s %8s\n' "$(basename "$file")" "$(gzip -c "$file" | wc -c)"
+          done
+
+  # One artifact, two descriptions: the pydantic models are the source, the JSON Schema and the
+  # zod modules are generated from them. This is what makes "a field added in Python without a
+  # TypeScript change fails CI" true rather than aspirational.
+  contract:
+    name: the wire contract is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # hatch-vcs needs tags for version derivation
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --all-groups
+      - run: npm ci
+        working-directory: web
+      - run: make contract
+      - name: nothing drifted
+        run: |
+          git diff --exit-code -- web/schema tests/ledger/fixtures tests/ui/fixtures || {
+            echo "the generated contract is out of date; run \`make contract\` and commit the result"
+            exit 1
+          }
+
   build:
     name: build wheel + sdist
     runs-on: ubuntu-latest
@@ -72,6 +141,18 @@ jobs:
           uv venv /tmp/verify
           uv pip install --python /tmp/verify/bin/python dist/*.whl
           /tmp/verify/bin/python -c "import chainlens; print(chainlens.__version__)"
+      - name: the bundle really shipped, and the command runs
+        # A bundle that silently fails to ship is the failure mode here: the package would
+        # install, import and answer every API call, and only `ui serve` would be broken.
+        run: |
+          /tmp/verify/bin/python -c "
+          import importlib.resources
+          import chainlens.ui
+          index = importlib.resources.files('chainlens.ui').joinpath('static/index.html')
+          assert index.is_file(), 'the bundle is not in the wheel'
+          print('bundle present:', index)
+          "
+          /tmp/verify/bin/chainlens ui --help > /dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: dist

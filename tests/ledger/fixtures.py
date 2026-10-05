@@ -174,6 +174,21 @@ async def _evm_document() -> LedgerGraph:
     )
 
 
+async def _frontier_document() -> LedgerGraph:
+    """A walk that stopped at its depth limit, so the frontier is what it stopped *at*.
+
+    Depth 1 expands the seed and admits its counterparties, then defers them — which is the
+    shape a live view offers to continue from, and the one a front end has to render as a
+    boundary rather than as the edge of the world. Without a fixture in this state the
+    expansion affordance would be reachable only by running a real walk.
+    """
+    return await walk_ledger(
+        _bitcoin_provider(),
+        seed_address=ALICE,
+        policy=LedgerPolicy(max_depth=1, max_nodes=40, max_edges=40),
+    )
+
+
 async def _empty_document() -> LedgerGraph:
     """A seed with no history: the degenerate case a front end still has to render."""
     return await walk_ledger(
@@ -201,6 +216,7 @@ DOCUMENTS: dict[str, Any] = {
     "bitcoin": _bitcoin_document,
     "evm": _evm_document,
     "empty": _empty_document,
+    "frontier": _frontier_document,
     "truncated": _truncated_document,
 }
 

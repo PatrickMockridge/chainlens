@@ -72,6 +72,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+  - The graph app: ui/index.md
   - Explanation:
       - UTXO vs account models: explanation/utxo-vs-account.md
       - Forensic limits: explanation/forensic-limits.md

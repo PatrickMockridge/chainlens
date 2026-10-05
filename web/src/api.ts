@@ -71,6 +71,27 @@ export async function overlay(signal?: AbortSignal): Promise<unknown | null> {
   return result.ok ? result.body : null;
 }
 
+/**
+ * Walk one level out from an address, as another document to union.
+ *
+ * Only an address may be expanded, and that is the server's rule rather than this client's: a
+ * transaction node's neighbours are already drawn with it, because the walk draws a transaction
+ * whole. Asking for one is refused rather than guessed at, so the refusal is surfaced verbatim.
+ */
+export async function expand(
+  nodeKey: string,
+  depth = 1,
+  signal?: AbortSignal,
+): Promise<{ ok: true; document: unknown } | { ok: false; error: string }> {
+  const result = await call("/api/expand", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ node_key: nodeKey, depth }),
+    ...(signal ? { signal } : {}),
+  });
+  return result.ok ? { ok: true, document: result.body } : result;
+}
+
 export interface WritePermission {
   /** Whether the server will accept a record, and why not when it will not. */
   readonly writable: boolean;

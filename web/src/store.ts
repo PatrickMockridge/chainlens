@@ -28,6 +28,13 @@ export interface Store {
   readonly edges: ReadonlyMap<string, LedgerEdge>;
   readonly overlays: readonly OverlayEntry[];
   readonly derivations: readonly DerivationDocument[];
+  /**
+   * Address keys the walk admitted but did not expand — where it stopped, rather than where the
+   * chain does. Held because it is a *live view's* invitation: the document records the frontier
+   * precisely so something can offer to go on, and a UI that dropped it would show a boundary as
+   * if it were an ending.
+   */
+  readonly frontier: ReadonlySet<string>;
   readonly selection: Selection | null;
   /**
    * The derivation branch a reader clicked, when one is open.
@@ -57,6 +64,7 @@ export const emptyStore: Store = {
   edges: new Map(),
   overlays: [],
   derivations: [],
+  frontier: new Set(),
   selection: null,
   branch: null,
   warnings: [],
@@ -87,6 +95,13 @@ export function addLedger(store: Store, source: string, document: LedgerDocument
     if (!edges.has(edge.key)) edges.set(edge.key, edge);
   }
 
+  // The frontier unions rather than replacing, because it is a statement per *walk*: a frontier
+  // address that a later walk did expand is the one case where the union is wrong, and it is
+  // handled where the button is offered — see `expandable` — rather than by trying to unset it
+  // here, which would need to know which document superseded which.
+  const frontier = new Set(store.frontier);
+  for (const key of document.frontier ?? []) frontier.add(key);
+
   const warnings = [...store.warnings];
   if (document.truncated) {
     // The walk says why it stopped rather than leaving a small graph looking complete.
@@ -102,6 +117,7 @@ export function addLedger(store: Store, source: string, document: LedgerDocument
     sources: [...store.sources, source],
     nodes,
     edges,
+    frontier,
     warnings,
   };
 }

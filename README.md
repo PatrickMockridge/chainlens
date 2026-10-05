@@ -45,6 +45,24 @@ with chainlens.SyncClient() as client:
         print(tx.txid, tx.value)
 ```
 
+## The graph app
+
+```console
+chainlens ui serve --seed bc1q... --open      # a browsable graph, on loopback
+chainlens ui export --seed bc1q... --out graph.json
+```
+
+The app draws the ledger as it was recorded — a node per transaction and a node per
+address, one edge per input and per output — with the evidence the analysis layers
+computed joined onto the nodes it is about, and the derivation behind a finding beside
+the graph it rests on. A prior is the reader's own: it stays in the browser.
+
+Two things it will not do, and both matter more than the picture: it never apportions a
+transaction's inputs across its outputs (no ledger records which input funded which
+output, so an edge shows what was recorded rather than what is inferred), and it never
+writes to disk unless the server was started with `--annotations <dir>`. See
+[The graph app](docs/ui/index.md).
+
 ## Design in one paragraph
 
 Every transaction is represented as inputs and outputs regardless of chain: UTXO chains
@@ -60,7 +78,9 @@ forensic finding without provenance is not defensible.
 - No bundled attribution database. `chainlens` shows which addresses move together; it
   does not claim to know *who* they are unless you supply labels.
 - No full-node parsing engine. It talks to APIs and RPC endpoints.
-- No CLI (yet).
+- No hosted service, and no way to run one safely: the `chainlens ui serve` command binds
+  loopback only, has no authentication, and serves real address data. It is a local tool
+  for one analyst, not a deployment.
 
 ## Responsible use
 

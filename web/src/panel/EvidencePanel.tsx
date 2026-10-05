@@ -13,6 +13,8 @@
  *   not nothing: it is something this view cannot show, and saying so tells a reader to widen the
  *   walk rather than to conclude there is nothing there.
  */
+import { useState } from "react";
+
 import type { AnnotationRequest, EvidenceItem, GraphRef, LedgerEdge, LedgerNode } from "../schema/documents";
 import type { Store } from "../store";
 import { highlightedBranches, selectedKey } from "../store";
@@ -28,9 +30,30 @@ export interface EvidencePanelProps {
   write: WritePermission;
   /** Send one assertion. Resolves with the server's wording when the record is refused. */
   onRecord: (request: AnnotationRequest) => Promise<string | null>;
+  /** Whether a server is answering, which is what decides if a walk can be asked for at all. */
+  live: boolean;
+  /** Walk one level out from an address, resolving with the server's wording when refused. */
+  onExpand: (key: string) => Promise<string | null>;
   onSelectClaim: (claimId: string) => void;
   onSelectBranch: (branchId: string | null) => void;
   onSelectRef: (key: string) => void;
+}
+
+/**
+ * Whether this key is one a walk could go on from.
+ *
+ * Two cases, and both are addresses. A **frontier** address is one the walk admitted and did not
+ * expand: the document records it so a live view can offer to continue, and dropping it would show
+ * a boundary as though it were an ending. An **absent** address is one a reference points at that
+ * this graph does not hold at all — the sharpest case, because the evidence about it is on screen
+ * and the thing itself is not.
+ *
+ * A transaction is never expandable, and that is the server's rule rather than this panel's: a
+ * transaction is drawn whole, so its neighbours are already here.
+ */
+export function expandable(store: Store, key: string, live: boolean): boolean {
+  if (!live || !key.startsWith("address:")) return false;
+  return store.frontier.has(key) || !(store.nodes.has(key) || store.edges.has(key));
 }
 
 function DetailRows({ item }: { item: EvidenceItem }) {
@@ -80,6 +103,8 @@ export function EvidencePanel({
   missing,
   write,
   onRecord,
+  live,
+  onExpand,
   onSelectClaim,
   onSelectBranch,
   onSelectRef,
@@ -103,6 +128,10 @@ export function EvidencePanel({
       )}
 
       {selectionKey !== null && <NodeOrEdge store={store} selectionKey={selectionKey} />}
+
+      {selectionKey !== null && expandable(store, selectionKey, live) && (
+        <ExpandOne store={store} selectionKey={selectionKey} onExpand={onExpand} />
+      )}
 
       {evidence.length > 0 && (
         <section>
@@ -195,6 +224,54 @@ export function EvidencePanel({
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * The offer to walk on, for a frontier address or one this graph does not hold.
+ *
+ * It says which of the two it is, because they mean different things: a frontier address is
+ * *known about and not looked into*, and an absent one is *referred to and not here*. Both are
+ * reasons to fetch, and neither is a reason to think there is nothing there.
+ */
+function ExpandOne({
+  store,
+  selectionKey,
+  onExpand,
+}: {
+  store: Store;
+  selectionKey: string;
+  onExpand: (key: string) => Promise<string | null>;
+}) {
+  const [problem, setProblem] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const held = store.nodes.has(selectionKey) || store.edges.has(selectionKey);
+
+  return (
+    <section className="expand">
+      <p className="hint">
+        {held
+          ? "The walk stopped at this address rather than the chain ending here — one level out " +
+            "is not in this document."
+          : "Nothing in this graph is this address. It is referred to rather than absent, so " +
+            "fetching it is how you find out whether the reference resolves."}
+      </p>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          setProblem(null);
+          setPending(true);
+          void onExpand(selectionKey).then((error) => {
+            setPending(false);
+            setProblem(error);
+          });
+        }}
+      >
+        {pending ? "walking…" : "Walk one level out"}
+      </button>
+      {problem !== null && <p className="annotate-problem">{problem}</p>}
+    </section>
   );
 }
 
