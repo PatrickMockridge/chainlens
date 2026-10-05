@@ -1,0 +1,898 @@
+{
+  "$defs": {
+    "AmountStatus": {
+      "description": "Whether an edge's amount is a recorded value or an admission that it is unknown.\n\nThere is deliberately no third member for \"estimated\". The flow view estimates, and\nsays so with a confidence below 1.0; this view does not estimate, so an unknown\namount is reported as unknown rather than filled in. ``missing`` is the honest\nanswer for an unindexed prevout \u2014 Esplora's ``vin`` frequently omits input values \u2014\nand inventing one would corrupt every total that touched it.",
+      "enum": [
+        "recorded",
+        "missing"
+      ],
+      "title": "AmountStatus",
+      "type": "string"
+    },
+    "AssetKind": {
+      "description": "The kind of asset a transfer or balance refers to.",
+      "enum": [
+        "native",
+        "erc20",
+        "erc721",
+        "erc1155",
+        "other"
+      ],
+      "title": "AssetKind",
+      "type": "string"
+    },
+    "AssetRef": {
+      "additionalProperties": false,
+      "description": "A reference to an asset: the native coin, or a token contract.\n\n``decimals`` is carried so an amount can be rendered exactly. It is ``None``\nwhen the provider did not supply it, and rendering then refuses rather than\nguessing -- guessing the decimals of a token is how 1 token becomes 10**18.",
+      "properties": {
+        "chain": {
+          "$ref": "#/$defs/Chain"
+        },
+        "contract": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract"
+        },
+        "decimals": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decimals"
+        },
+        "kind": {
+          "$ref": "#/$defs/AssetKind",
+          "default": "native"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        },
+        "token_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Id"
+        }
+      },
+      "required": [
+        "chain"
+      ],
+      "title": "AssetRef",
+      "type": "object"
+    },
+    "Chain": {
+      "description": "A supported chain.\n\nOnly the chains this library has first-class knowledge of are enumerated.\nThird-party providers may target others by extending this enum at the edges\n(see the plugin docs) rather than by inventing free-form strings.",
+      "enum": [
+        "bitcoin",
+        "bitcoin_testnet",
+        "litecoin",
+        "dogecoin",
+        "bitcoin_cash",
+        "ethereum"
+      ],
+      "title": "Chain",
+      "type": "string"
+    },
+    "Direction": {
+      "description": "Traversal direction requested from the tracer.",
+      "enum": [
+        "in",
+        "out",
+        "both"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "FlowVia": {
+      "description": "The mechanism by which value moved.\n\n``INTERNAL`` is an EVM internal transfer (value moved by contract execution\nrather than by a top-level transaction); ``CONTRACT`` covers token transfers\nwhose sender is a contract. Confusing these with a plain native transfer is a\ncommon source of incorrect flow totals.",
+      "enum": [
+        "utxo",
+        "native",
+        "internal",
+        "contract",
+        "erc20",
+        "erc721",
+        "erc1155",
+        "coinbase"
+      ],
+      "title": "FlowVia",
+      "type": "string"
+    },
+    "LedgerAddressNode": {
+      "additionalProperties": false,
+      "description": "An address, exactly as the chain knows it \u2014 never merged into a cluster.\n\nDeliberately not folded into an entity node. The flow view groups addresses that\nshare a controller, which is a hypothesis; this view shows addresses, and carries\ncluster membership as *evidence* on them instead. A reader who wants to know that\ntwelve addresses were merged can be told, without the graph pretending the merge is\na fact of the ledger.\n\nAttributes:\n    key: ``address:{chain}:{address}``.\n    chain: which chain.\n    address: the address itself.\n    depth: hops from the seed, or ``None`` for an endpoint-only node.\n    is_seed: whether this was the seed.\n    tx_count: how many transactions of this address the walk observed. Not the\n        address's true transaction count unless the walk was exhaustive.\n    balance: only when the caller asked for one; never fetched implicitly, because\n        it costs a request per address.\n    flags: free-form markers, e.g. ``unexpanded``.\n    annotation_ids: user-declared annotations targeting this address.",
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "annotation_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Annotation Ids",
+          "type": "array"
+        },
+        "balance": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Balance"
+        },
+        "chain": {
+          "$ref": "#/$defs/Chain"
+        },
+        "depth": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depth"
+        },
+        "flags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "is_seed": {
+          "default": false,
+          "title": "Is Seed",
+          "type": "boolean"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "address",
+          "default": "address",
+          "title": "Kind",
+          "type": "string"
+        },
+        "tx_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Tx Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "chain",
+        "address"
+      ],
+      "title": "LedgerAddressNode",
+      "type": "object"
+    },
+    "LedgerEdge": {
+      "additionalProperties": false,
+      "description": "One recorded input or output, or one token movement.\n\nAttributes:\n    key: ``{txid}:in:{index}`` / ``:out:{index}`` / ``:log:{index}``. Unique, and\n        addressable \u2014 which the flow view's edges are not, since it keeps only its\n        first contributor's index.\n    src: the source node key.\n    dst: the destination node key.\n    chain: which chain.\n    txid: the transaction this movement belongs to.\n    role: which side of the transaction it is, or that it is a token movement.\n    index: the vin, vout or log index.\n    asset: the asset moved. For a token this **must** carry the contract, or two\n        different tokens between the same endpoints become one indistinguishable\n        thing.\n    amount: base units, or ``None`` when the provider did not record it.\n    amount_status: whether ``amount`` is a recorded value or an admitted unknown.\n    via: the movement mechanism.\n    is_change: whether the change heuristic flagged this output as returning to its\n        sender. **Flagged, never used to drop the edge** \u2014 a viewer that hides change\n        is hiding the mechanism by which value comes back, which is often what\n        someone reading a chain graph is looking for.\n    script_type: the output or input script template, when known.\n    block_height: including height, when known.\n    block_time: block timestamp, when known.\n    spent: whether a UTXO output has been spent, when the provider said.\n    spent_by_txid: what spent it, when the provider said.\n    annotation_ids: user-declared annotations targeting this edge.",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "amount_status": {
+          "$ref": "#/$defs/AmountStatus",
+          "default": "recorded"
+        },
+        "annotation_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Annotation Ids",
+          "type": "array"
+        },
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "block_height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Height"
+        },
+        "block_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Time"
+        },
+        "chain": {
+          "$ref": "#/$defs/Chain"
+        },
+        "dst": {
+          "title": "Dst",
+          "type": "string"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index"
+        },
+        "is_change": {
+          "default": false,
+          "title": "Is Change",
+          "type": "boolean"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/LedgerEdgeRole"
+        },
+        "script_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScriptType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "spent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spent"
+        },
+        "spent_by_txid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spent By Txid"
+        },
+        "src": {
+          "title": "Src",
+          "type": "string"
+        },
+        "txid": {
+          "title": "Txid",
+          "type": "string"
+        },
+        "via": {
+          "$ref": "#/$defs/FlowVia",
+          "default": "native"
+        }
+      },
+      "required": [
+        "key",
+        "src",
+        "dst",
+        "chain",
+        "txid",
+        "role"
+      ],
+      "title": "LedgerEdge",
+      "type": "object"
+    },
+    "LedgerEdgeRole": {
+      "description": "What a ledger edge is.\n\n``input`` and ``output`` are the two sides of a transaction node. ``internal`` is an\nEVM value movement inside a transaction that never touched the top-level input or\noutput view. ``token`` is a token movement, which arrives as a\n:class:`~chainlens.models.primitives.Transfer` rather than as a transaction field and\ntherefore carries less than a native edge does.",
+      "enum": [
+        "input",
+        "output",
+        "internal",
+        "token"
+      ],
+      "title": "LedgerEdgeRole",
+      "type": "string"
+    },
+    "LedgerPolicy": {
+      "additionalProperties": false,
+      "description": "The limits and pruning a ledger walk ran under.\n\nCarried on the document rather than passed alongside it, so a committed\n``graph.json`` describes itself: a reader can see exactly what produced this slice\nwithout having the code that made it. That is the same reason\n:class:`~chainlens.models.base.Provenance` rides on every retrieved fact.\n\nDeliberately a separate type from\n:class:`~chainlens.tracing.strategy.TraceBudget`/``PruningPolicy``, and not only\nbecause the defaults differ. Those encode the *tracer's* goal \u2014 follow value\noutward, drop dust, skip change and coinbase \u2014 and this one encodes the opposite:\nshow the transaction as recorded. Sharing a type would mean one of the two views\nrunning under defaults chosen for the other.\n\nAttributes:\n    max_depth: expansion rounds from the seed. The UI profile is 1.\n    max_nodes: distinct nodes to admit.\n    max_edges: edges to admit.\n    time_budget: wall-clock seconds, or ``None`` for no limit.\n    max_concurrency: provider requests in flight at once.\n    min_value: ignore movements below this, in base units. Applies to *edges*, so a\n        transaction all of whose edges fall below it disappears \u2014 the transaction is\n        not itself dust, but there is nothing left to draw.\n    dust_ratio: additionally ignore an output worth less than this fraction of its\n        transaction's total output value.\n    max_fan_out: above this many outputs, draw the first ``max_fan_out`` and mark the\n        transaction collapsed. **Collapse, never drop** \u2014 the true counts stay on the\n        node, so the view can say \"312 outputs, 40 drawn\" rather than quietly showing\n        a transaction that looks smaller than it is.\n    include_coinbase: whether to keep minted value. Visible here, unlike in a flow\n        graph, because a coinbase is just a transaction with no input edges.\n    include_change: whether to keep change outputs. They are flagged either way;\n        this only decides whether they are drawn.\n    include_self: whether to keep edges whose two ends are the same address.\n    include_tokens: whether to fetch token movements on an EVM chain. A no-op on\n        UTXO chains, which have none.",
+      "properties": {
+        "dust_ratio": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 1.0,
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dust Ratio"
+        },
+        "include_change": {
+          "default": true,
+          "title": "Include Change",
+          "type": "boolean"
+        },
+        "include_coinbase": {
+          "default": true,
+          "title": "Include Coinbase",
+          "type": "boolean"
+        },
+        "include_self": {
+          "default": false,
+          "title": "Include Self",
+          "type": "boolean"
+        },
+        "include_tokens": {
+          "default": true,
+          "title": "Include Tokens",
+          "type": "boolean"
+        },
+        "max_concurrency": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Max Concurrency",
+          "type": "integer"
+        },
+        "max_depth": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Max Depth",
+          "type": "integer"
+        },
+        "max_edges": {
+          "default": 600,
+          "minimum": 1,
+          "title": "Max Edges",
+          "type": "integer"
+        },
+        "max_fan_out": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 40,
+          "title": "Max Fan Out"
+        },
+        "max_nodes": {
+          "default": 300,
+          "minimum": 1,
+          "title": "Max Nodes",
+          "type": "integer"
+        },
+        "min_value": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Value"
+        },
+        "time_budget": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 60.0,
+          "title": "Time Budget"
+        }
+      },
+      "title": "LedgerPolicy",
+      "type": "object"
+    },
+    "LedgerTransactionNode": {
+      "additionalProperties": false,
+      "description": "A transaction, as the ledger records it.\n\nAttributes:\n    key: ``tx:{chain}:{txid}``.\n    chain: which chain.\n    txid: the transaction id, which is what the node *is*.\n    depth: hops from the seed, or ``None`` for a node admitted as an endpoint only.\n    is_seed: whether this was the node the walk started from.\n    block_height: including height, when confirmed.\n    block_time: block timestamp, when the provider gave one.\n    status: confirmation state.\n    is_coinbase: whether the transaction mints value. Then it has no input edges \u2014\n        not because they were pruned, but because minted value has no address to\n        come from.\n    is_coinjoin: whether the library's CoinJoin detector fired. Carried because a\n        CoinJoin is the case where reading a fund-flow *through* the transaction is\n        most wrong, and a viewer that does not say so invites exactly that.\n    fee: the fee in base units, when known.\n    vsize: virtual size, when known.\n    n_inputs: how many inputs the transaction records.\n    n_outputs: how many outputs it records. Compare with the drawn edges to see\n        whether the walk suppressed any \u2014 see ``is_collapsed``.\n    total_input_value: summed recorded inputs, or ``None`` if any input's value was\n        not recorded. Never a partial sum presented as a total.\n    total_output_value: summed recorded outputs, ``None`` on the same terms.\n    value_complete: whether every input and output carried a value.\n    is_collapsed: whether edges were suppressed by the fan-out policy. The true\n        counts stay on this node, so the view can always say \"312 outputs, 40 drawn\".\n    annotation_ids: user-declared annotations targeting this node.",
+      "properties": {
+        "annotation_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Annotation Ids",
+          "type": "array"
+        },
+        "block_height": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Height"
+        },
+        "block_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Time"
+        },
+        "chain": {
+          "$ref": "#/$defs/Chain"
+        },
+        "depth": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depth"
+        },
+        "fee": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fee"
+        },
+        "flags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "is_coinbase": {
+          "default": false,
+          "title": "Is Coinbase",
+          "type": "boolean"
+        },
+        "is_coinjoin": {
+          "default": false,
+          "title": "Is Coinjoin",
+          "type": "boolean"
+        },
+        "is_collapsed": {
+          "default": false,
+          "title": "Is Collapsed",
+          "type": "boolean"
+        },
+        "is_seed": {
+          "default": false,
+          "title": "Is Seed",
+          "type": "boolean"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "transaction",
+          "default": "transaction",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n_inputs": {
+          "default": 0,
+          "minimum": 0,
+          "title": "N Inputs",
+          "type": "integer"
+        },
+        "n_outputs": {
+          "default": 0,
+          "minimum": 0,
+          "title": "N Outputs",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TxStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "total_input_value": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Input Value"
+        },
+        "total_output_value": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Output Value"
+        },
+        "txid": {
+          "title": "Txid",
+          "type": "string"
+        },
+        "value_complete": {
+          "default": true,
+          "title": "Value Complete",
+          "type": "boolean"
+        },
+        "vsize": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vsize"
+        }
+      },
+      "required": [
+        "key",
+        "chain",
+        "txid"
+      ],
+      "title": "LedgerTransactionNode",
+      "type": "object"
+    },
+    "LedgerUnparsedNode": {
+      "additionalProperties": false,
+      "description": "One transaction's inputs and outputs that name no address.\n\nKept rather than dropped, because the alternative is a transaction node whose edges\ndo not add up: an OP_RETURN output or a nonstandard script is a real output with real\nvalue, and a graph that omits it misstates the transaction. One node per transaction\nrather than one per output keeps an OP_RETURN-heavy transaction from doubling its\nnode count while losing nothing \u2014 the edges still carry their own indexes and values.\n\nAttributes:\n    key: ``unparsed:{chain}:{txid}``.\n    chain: which chain.\n    txid: the transaction these belong to.\n    edge_count: how many addressless inputs and outputs the transaction has.\n    total_value: their summed recorded value, or ``None`` if any was unrecorded.",
+      "properties": {
+        "chain": {
+          "$ref": "#/$defs/Chain"
+        },
+        "edge_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Edge Count",
+          "type": "integer"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "unparsed",
+          "default": "unparsed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "total_value": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Value"
+        },
+        "txid": {
+          "title": "Txid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "chain",
+        "txid"
+      ],
+      "title": "LedgerUnparsedNode",
+      "type": "object"
+    },
+    "ScriptType": {
+      "description": "Classification of a Bitcoin output script (scriptPubKey).\n\n``NONSTANDARD`` means the script is well-formed hex but matches no known\ntemplate; ``UNKNOWN`` means it could not be parsed at all. The distinction\nmatters: a nonstandard output is still spendable and still carries value,\nwhereas an unparseable one means the provider sent us something we do not\nunderstand.",
+      "enum": [
+        "p2pk",
+        "p2pkh",
+        "p2sh",
+        "p2wpkh",
+        "p2wsh",
+        "p2tr",
+        "multisig",
+        "op_return",
+        "nonstandard",
+        "unknown"
+      ],
+      "title": "ScriptType",
+      "type": "string"
+    },
+    "TxStatus": {
+      "description": "Confirmation state of a transaction.",
+      "enum": [
+        "confirmed",
+        "pending",
+        "failed",
+        "dropped"
+      ],
+      "title": "TxStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A slice of the ledger, and everything needed to read it honestly.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    chain: which chain was walked.\n    seed: the node key the walk started from.\n    generated_at: when it was built.\n    provider: which provider answered, when one did.\n    provider_version: the provider's own version, when it reports one.\n    redistributable: whether the provider's terms permit redistributing this. False\n        for most commercial providers, and an exported document is redistribution \u2014\n        so this is carried onto the artifact rather than assumed away.\n    nodes: transactions, addresses and unparsed groups.\n    edges: one per recorded input, output or token movement.\n    assets: every asset appearing, so a front end can label and colour by contract\n        without inferring a palette from the edges.\n    truncated: whether a budget or policy stopped the walk early. A graph that is\n        small because we stopped looking must not look genuinely small.\n    stop_reasons: counts per reason, using the tracer's vocabulary.\n    frontier: node keys admitted but not expanded \u2014 the set a live view offers.\n    direction: which way the walk expanded from the seed. Edges are **not** filtered\n        by it: a transaction is drawn whole, because a node showing only its outgoing\n        side would look like a coinbase.\n    policy: the limits and pruning the walk ran under.\n    warnings: anything that qualified the walk.\n    elapsed_seconds: wall-clock cost, when measured.",
+  "properties": {
+    "assets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AssetRef"
+      },
+      "title": "Assets",
+      "type": "array"
+    },
+    "chain": {
+      "$ref": "#/$defs/Chain"
+    },
+    "direction": {
+      "$ref": "#/$defs/Direction",
+      "default": "out"
+    },
+    "edges": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/LedgerEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "elapsed_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Elapsed Seconds"
+    },
+    "frontier": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Frontier",
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "nodes": {
+      "default": [],
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "address": "#/$defs/LedgerAddressNode",
+            "transaction": "#/$defs/LedgerTransactionNode",
+            "unparsed": "#/$defs/LedgerUnparsedNode"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/LedgerAddressNode"
+          },
+          {
+            "$ref": "#/$defs/LedgerTransactionNode"
+          },
+          {
+            "$ref": "#/$defs/LedgerUnparsedNode"
+          }
+        ]
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "policy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LedgerPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "provider": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider"
+    },
+    "provider_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Version"
+    },
+    "redistributable": {
+      "default": false,
+      "title": "Redistributable",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed": {
+      "title": "Seed",
+      "type": "string"
+    },
+    "stop_reasons": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Stop Reasons",
+      "type": "object"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "chain",
+    "seed",
+    "generated_at"
+  ],
+  "title": "LedgerGraph",
+  "type": "object"
+}

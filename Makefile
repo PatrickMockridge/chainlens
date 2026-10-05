@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check ingest verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ingest verify case-study-check build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -55,6 +55,18 @@ define refuse_stray_goals
 		exit 2; \
 	fi
 endef
+
+contract:  ## Regenerate the wire schema and the golden fixture
+	# Two generated artifacts, one hand-maintained description: the pydantic models. A
+	# test in `make check` fails when either is stale, so this is a convenience rather
+	# than the guard.
+	uv run python -c "\
+from pathlib import Path; \
+from chainlens.ledger.schema import render_schema; \
+Path('web/schema').mkdir(parents=True, exist_ok=True); \
+Path('web/schema/ledger.schema.json').write_text(render_schema(), encoding='utf-8'); \
+print('wrote web/schema/ledger.schema.json')"
+	uv run python tests/ledger/fixtures.py
 
 ingest:  ## Digest everything dropped in case-study/inbox (ARGS="--dry-run" to preview)
 	# Never part of `check`: it consumes whatever a person put in the inbox.
