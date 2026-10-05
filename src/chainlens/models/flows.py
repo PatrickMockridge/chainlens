@@ -57,6 +57,13 @@ class EntityRef(LensModel):
     """A graph node that is a cluster of addresses.
 
     ``label`` is a display convenience only; the identity is ``entity_id``.
+
+    The member addresses are deliberately **not** carried here. Every edge holds
+    two node refs, so an address set on each of them would duplicate the whole
+    cluster once per edge — and a graph can have a great many edges. Resolve an
+    ``entity_id`` back to its addresses through the
+    :class:`~chainlens.analysis.clustering.Clusterer` that produced it, or through
+    the :class:`~chainlens.models.entities.Entity` objects on a report.
     """
 
     kind: Literal["entity"] = "entity"
