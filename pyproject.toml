@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chainlens"
 dynamic = ["version"]
-description = "Async-first blockchain chain-analysis and on-chain forensics toolkit for Bitcoin and Ethereum"
+description = "Async-first blockchain chain analysis and forensics for Bitcoin and Ethereum"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
