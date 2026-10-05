@@ -36,14 +36,20 @@ class AmountBand(LensModel):
         tolerance: how far either side still counts as the same amount. Zero means
             exact. This is the claim's own precision, not the provider's.
         asset: what is being counted.
+        at_least: the claim asserted a lower bound ("more than 40,000") rather than
+            an amount. Then ``nominal`` is the bound and only ``nominal - tolerance``
+            upward counts.
     """
 
     nominal: int = Field(ge=0)
     tolerance: int = Field(default=0, ge=0)
     asset: AssetRef
+    at_least: bool = False
 
     def contains(self, amount: int) -> bool:
         """Whether ``amount`` falls inside the band."""
+        if self.at_least:
+            return amount >= self.nominal - self.tolerance
         return abs(amount - self.nominal) <= self.tolerance
 
     @property
@@ -137,6 +143,21 @@ class ClaimElements(LensModel):
                 "price: its coincidence probability is 1 and its likelihood ratio "
                 "would be exactly 1, which is not evidence. Report a categorical "
                 "finding instead of a number."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _one_chain(self) -> Self:
+        """The claim's chain and its asset's chain are the same chain.
+
+        A Bitcoin claim about an ERC-20 token is not a claim that is hard to check,
+        it is a claim that does not parse — and letting one exist would put a
+        contradiction into the evidence rather than into the parse.
+        """
+        if self.asset.chain is not self.chain:
+            raise ValueError(
+                f"claim chain {self.chain.value!r} does not match asset chain "
+                f"{self.asset.chain.value!r}"
             )
         return self
 
