@@ -1,0 +1,125 @@
+"""Exception hierarchy for chainlens.
+
+Every error raised by the library derives from :class:`ChainlensError`, so a
+caller can guard a whole investigation with a single ``except``. The tree is
+deliberately shallow: providers raise :class:`ProviderError` subclasses, the
+analysis and tracing layers raise :class:`AnalysisError` subclasses, and
+plumbing problems raise :class:`ChainlensError` directly.
+
+Provider failures are *never* allowed to escape as bare library exceptions —
+adapters map transport and schema problems onto this tree so the caller can
+distinguish "the network blipped" (:class:`TransportError`) from "the upstream
+JSON changed shape" (:class:`SchemaError`) from "this provider cannot answer
+that question" (:class:`CapabilityError`).
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+
+class ChainlensError(Exception):
+    """Base class for every error raised by chainlens."""
+
+
+# --------------------------------------------------------------------------- #
+# Configuration and plugin loading
+# --------------------------------------------------------------------------- #
+class ConfigurationError(ChainlensError):
+    """Invalid or missing configuration (bad setting, absent API key, ...)."""
+
+
+class PluginLoadError(ChainlensError):
+    """A third-party plugin could not be imported or instantiated.
+
+    Collected on the registry as a non-fatal error rather than raised, so that
+    one broken plugin cannot prevent ``import chainlens`` from succeeding.
+    """
+
+    def __init__(self, entry_point: str, cause: BaseException) -> None:
+        self.entry_point = entry_point
+        self.cause = cause
+        super().__init__(f"failed to load plugin {entry_point!r}: {cause!r}")
+
+
+# --------------------------------------------------------------------------- #
+# Providers
+# --------------------------------------------------------------------------- #
+class ProviderError(ChainlensError):
+    """Base class for every provider-side failure."""
+
+    def __init__(self, provider: str, message: str) -> None:
+        self.provider = provider
+        super().__init__(f"[{provider}] {message}")
+
+
+class TransportError(ProviderError):
+    """The request failed below the application layer (timeout, DNS, TLS, 5xx)."""
+
+
+class RateLimitError(TransportError):
+    """The provider rate-limited us (HTTP 429 / documented quota exhausted).
+
+    ``retry_after`` carries the server-advertised delay in seconds when the
+    response included a ``Retry-After`` header or an equivalent hint.
+    """
+
+    def __init__(self, provider: str, message: str, *, retry_after: float | None = None) -> None:
+        self.retry_after = retry_after
+        super().__init__(provider, message)
+
+
+class NotFoundError(ProviderError):
+    """The requested entity does not exist upstream (address/tx/block unknown)."""
+
+
+class SchemaError(ProviderError):
+    """The upstream payload did not match the shape we know how to parse.
+
+    This is the signal that a provider changed its API: it is distinct from a
+    transport failure and should not be retried.
+    """
+
+
+class CapabilityError(ProviderError):
+    """The provider was asked for something it does not advertise.
+
+    The message names the capability requested and the set the provider *does*
+    support, so the failure is self-diagnosing.
+    """
+
+    def __init__(self, provider: str, capability: str, supported: Iterable[str] = ()) -> None:
+        self.capability = capability
+        self.supported = frozenset(supported)
+        detail = f"does not support capability {capability!r}"
+        if self.supported:
+            detail += f"; supported: {sorted(self.supported)}"
+        else:
+            detail += "; it advertises no capabilities"
+        super().__init__(provider, detail)
+
+
+# --------------------------------------------------------------------------- #
+# Analysis
+# --------------------------------------------------------------------------- #
+class AnalysisError(ChainlensError):
+    """Base class for clustering / tracing / graph / reporting failures."""
+
+
+class HeuristicError(AnalysisError):
+    """A clustering heuristic failed or was misconfigured."""
+
+    def __init__(self, heuristic: str, message: str) -> None:
+        self.heuristic = heuristic
+        super().__init__(f"[{heuristic}] {message}")
+
+
+class TracerError(AnalysisError):
+    """A value-flow trace failed or violated its declared budget."""
+
+    def __init__(self, message: str, *, detail: dict[str, Any] | None = None) -> None:
+        self.detail = detail or {}
+        super().__init__(message)
