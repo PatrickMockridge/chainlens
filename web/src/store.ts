@@ -11,6 +11,7 @@
  * (fetched from a local server), the static path (a file somebody dropped in) and the tests.
  */
 import type {
+  Annotation,
   DerivationDocument,
   EvidenceItem,
   LedgerDocument,
@@ -19,6 +20,7 @@ import type {
   OverlayDocument,
 } from "./schema/documents";
 import { asTree } from "./schema/documents";
+import { annotationEvidence, targetKey } from "./annotations";
 import { branchesTouching, refsOf, subtreeIds, walkTree } from "./derive/tree";
 
 export interface Store {
@@ -28,6 +30,15 @@ export interface Store {
   readonly edges: ReadonlyMap<string, LedgerEdge>;
   readonly overlays: readonly OverlayEntry[];
   readonly derivations: readonly DerivationDocument[];
+  /**
+   * Annotations that arrived *inside a ledger document*, keyed by their content-addressed id.
+   *
+   * A static export carries its own annotations because it has no server to join them; a served
+   * graph leaves the field empty and sends the join instead. Unioned by id either way, so the
+   * same record from two documents is one record — the same rule the rest of the store follows,
+   * and the reason two copies cannot be rendered as two assertions.
+   */
+  readonly annotations: ReadonlyMap<string, Annotation>;
   /**
    * Address keys the walk admitted but did not expand — where it stopped, rather than where the
    * chain does. Held because it is a *live view's* invitation: the document records the frontier
@@ -64,6 +75,7 @@ export const emptyStore: Store = {
   edges: new Map(),
   overlays: [],
   derivations: [],
+  annotations: new Map(),
   frontier: new Set(),
   selection: null,
   branch: null,
@@ -87,12 +99,18 @@ export const emptyStore: Store = {
 export function addLedger(store: Store, source: string, document: LedgerDocument): Store {
   const nodes = new Map(store.nodes);
   const edges = new Map(store.edges);
+  const annotations = new Map(store.annotations);
 
   for (const node of document.nodes) {
     if (!nodes.has(node.key)) nodes.set(node.key, node);
   }
   for (const edge of document.edges) {
     if (!edges.has(edge.key)) edges.set(edge.key, edge);
+  }
+  for (const annotation of document.annotations ?? []) {
+    // By id, so an export carrying a record the overlay also joined is one annotation rather
+    // than two identical ones.
+    if (!annotations.has(annotation.id)) annotations.set(annotation.id, annotation);
   }
 
   // The frontier unions rather than replacing, because it is a statement per *walk*: a frontier
@@ -117,6 +135,7 @@ export function addLedger(store: Store, source: string, document: LedgerDocument
     sources: [...store.sources, source],
     nodes,
     edges,
+    annotations,
     frontier,
     warnings,
   };
@@ -126,10 +145,17 @@ export function addLedger(store: Store, source: string, document: LedgerDocument
 export function mergeCounts(
   before: Store,
   after: Store,
-): { nodes: number; edges: number; overlays: number; derivations: number } {
+): {
+  nodes: number;
+  edges: number;
+  annotations: number;
+  overlays: number;
+  derivations: number;
+} {
   return {
     nodes: after.nodes.size - before.nodes.size,
     edges: after.edges.size - before.edges.size,
+    annotations: after.annotations.size - before.annotations.size,
     overlays: after.overlays.length - before.overlays.length,
     derivations: after.derivations.length - before.derivations.length,
   };
@@ -236,12 +262,52 @@ export function refsForClaim(store: Store, claimId: string): Set<string> {
   return keys;
 }
 
-/** The evidence items the loaded overlays place on one node or edge. */
+/**
+ * The evidence items on one node or edge: the join, plus any annotations the document carried.
+ *
+ * Both, because the two arrive by different routes and neither is complete without the other: a
+ * served graph's annotations come through the overlay, and an exported one's come inline. An
+ * annotation present on *both* paths is rendered once — the item's own `annotation_id` is what
+ * identifies it, and rendering a record twice would show one assertion as two.
+ */
 export function evidenceFor(store: Store, key: string): EvidenceItem[] {
-  return store.overlays.flatMap(({ document }) => [
+  const joined = store.overlays.flatMap(({ document }) => [
     ...(document.by_node?.[key] ?? []),
     ...(document.by_edge?.[key] ?? []),
   ]);
+  const declared = [...store.annotations.values()]
+    .filter((annotation) => targetKey(annotation) === key)
+    .map(annotationEvidence);
+
+  if (joined.length === 0) return declared;
+  if (declared.length === 0) return joined;
+
+  const already = new Set(
+    joined
+      .map((item) => item.detail?.find((row) => row.key === "annotation_id")?.value)
+      .filter((value): value is string => typeof value === "string"),
+  );
+  return [...joined, ...declared.filter((item) => {
+    const id = item.detail?.find((row) => row.key === "annotation_id")?.value;
+    return typeof id !== "string" || !already.has(id);
+  })];
+}
+
+/**
+ * Every key that carries anything a reader could look at, for marking nodes without a click.
+ *
+ * A store function rather than a component's `useMemo`, because an exported document and a served
+ * one put evidence on a key by different routes and a component that only knew about overlays
+ * would show an annotated address as bare.
+ */
+export function keysWithEvidence(store: Store): Set<string> {
+  const keys = new Set<string>();
+  for (const { document } of store.overlays) {
+    for (const key of Object.keys(document.by_node ?? {})) keys.add(key);
+    for (const key of Object.keys(document.by_edge ?? {})) keys.add(key);
+  }
+  for (const annotation of store.annotations.values()) keys.add(targetKey(annotation));
+  return keys;
 }
 
 /** Every unresolved reference across the loaded overlays, deduplicated by key. */

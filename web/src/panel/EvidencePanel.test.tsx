@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AnnotationRequest, LedgerDocument } from "../schema/documents";
-import { addLedger, emptyStore, select, type Store } from "../store";
+import { addLedger, emptyStore, evidenceFor, select, type Store } from "../store";
 import { EvidencePanel, expandable } from "./EvidencePanel";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +24,7 @@ const fixtures = JSON.parse(
 ) as { ledgers: Record<string, LedgerDocument> };
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
+const annotated = fixtures.ledgers["annotated"]!;
 const frontierLedger = fixtures.ledgers["frontier"]!;
 const EDGE = bitcoin.edges.find((edge) => edge.role === "output")!.key;
 const NODE = bitcoin.nodes.find((node) => node.kind === "address")!.key;
@@ -182,5 +183,44 @@ describe("walking on from a node", () => {
     const store = ledger(bitcoin, { kind: "node", key: NODE });
     expect(store.frontier.has(NODE)).toBe(false);
     expect(expandable(store, NODE, true)).toBe(false);
+  });
+});
+
+
+/**
+ * An assertion that arrived *inside* the document, with no server anywhere.
+ *
+ * This is the static path: an exported graph carries its own annotations, and the panel has to
+ * render them as declared evidence rather than as something the library computed. The badge is
+ * asserted in words, because the distinction is what the whole annotation model is for and it has
+ * to survive a screenshot.
+ */
+describe("a declaration carried by the document", () => {
+  it("shows on the node it targets, as the reader's own", () => {
+    const target = annotated.annotations!.find((item) => item.target.kind === "node")!;
+    const store = addLedger(emptyStore, "annotated.json", annotated);
+    const declared = evidenceFor(store, target.target.key);
+    expect(declared.length).toBeGreaterThan(0);
+
+    render(
+      <EvidencePanel
+        store={select(store, { kind: "node", key: target.target.key })}
+        evidence={declared}
+        missing={[]}
+        write={{ writable: false, reason: "no server is answering" }}
+        onRecord={vi.fn<OnRecord>(async () => null)}
+        live={false}
+        onExpand={vi.fn<OnExpand>(async () => null)}
+        onSelectClaim={() => undefined}
+        onSelectBranch={() => undefined}
+        onSelectRef={() => undefined}
+      />,
+    );
+    expect(screen.getByText("user-declared")).toBeInTheDocument();
+    // The assertion appears twice by design: in the item's summary and as its own `assertion`
+    // row, so the words a person wrote are on the record as well as in the sentence.
+    expect(screen.getAllByText(new RegExp(target.assertion)).length).toBeGreaterThan(0);
+    // And the basis travels with it, because an assertion with no stated ground is not a record.
+    expect(screen.getByText(/listed by the venue/)).toBeInTheDocument();
   });
 });

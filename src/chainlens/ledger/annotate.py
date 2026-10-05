@@ -32,7 +32,7 @@ from chainlens.models.ledger import LedgerGraph
 from chainlens.models.wire import GraphRef, GraphRefKind, detail_entries
 from chainlens.verify.verdicts import VerificationFinding
 
-__all__ = ["overlay"]
+__all__ = ["overlay", "stamp"]
 
 #: How many unresolved references to report before summarising. A walk that stops one hop
 #: short of a busy address can produce thousands, and a list nobody reads is a list that
@@ -263,4 +263,66 @@ def overlay(
         claim_refs=dict(sorted(claim_refs.items())),
         unjoined=reported,
         warnings=tuple(notes),
+    )
+
+
+def stamp(graph: LedgerGraph, *, annotations: Sequence[Annotation]) -> LedgerGraph:
+    """A copy of ``graph`` carrying ``annotations``, with their ids on the nodes and edges.
+
+    What an *export* needs and a served document does not. A served graph joins the same records
+    through :func:`overlay`, which produces one item per fact for a renderer; an exported file has
+    no server behind it, so it carries the records themselves (``LedgerGraph.annotations``) and
+    the ids that say which nodes and edges they are about.
+
+    **The ids are the only thing that touches ``nodes`` and ``edges``.** An annotation is never
+    merged into them: a node that carried an assertion's text would be indistinguishable, in a
+    JSON export, from a node the ledger recorded. The walk cannot do this itself — it has no
+    annotation store and should not grow one — which is why it happens at the point the store is
+    known.
+
+    An annotation whose target is not in the document still appears in the collection: the same
+    rule as the overlay's ``unjoined``. It is kept on the document even when it points at nothing,
+    rather than dropped, so a reader can see that something *was* asserted about a node this
+    export does not hold.
+    """
+    by_node: dict[str, list[str]] = {}
+    by_edge: dict[str, list[str]] = {}
+    for annotation in annotations:
+        into = by_node if annotation.target.kind is GraphRefKind.NODE else by_edge
+        into.setdefault(annotation.target.key, []).append(annotation.id)
+
+    def _with_ids(
+        ids: Mapping[str, list[str]], key: str, existing: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """The ids this item should carry: what it had, plus what was declared about it."""
+        stamped = ids.get(key, [])
+        if not stamped:
+            return existing
+        # Deduplicated and ordered, so re-stamping a graph cannot grow the list on every export.
+        return tuple(dict.fromkeys([*existing, *stamped]))
+
+    return graph.model_copy(
+        update={
+            "annotations": tuple(annotations),
+            "nodes": tuple(
+                node.model_copy(
+                    update={
+                        # An unparsed group carries no ids, and does not need to: it is a bag of
+                        # addressless scripts with no referent for an assertion. An annotation
+                        # naming one is still kept in the collection, and a renderer places it by
+                        # the annotation's own target rather than by a marker on the group.
+                        "annotation_ids": _with_ids(
+                            by_node, node.key, getattr(node, "annotation_ids", ())
+                        )
+                    }
+                )
+                for node in graph.nodes
+            ),
+            "edges": tuple(
+                edge.model_copy(
+                    update={"annotation_ids": _with_ids(by_edge, edge.key, edge.annotation_ids)}
+                )
+                for edge in graph.edges
+            ),
+        }
     )

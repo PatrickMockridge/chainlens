@@ -24,6 +24,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
+from chainlens.ledger.annotate import stamp
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.derive import derive_finding
 from chainlens.ledger.schema import SCHEMA_DIR, render_schemas, strict_dumps
@@ -182,21 +183,23 @@ def _command_export(args: argparse.Namespace) -> int:
         )
 
     graph = anyio.run(_walk_for_cli, provider, args.seed, _policy(args))
+
+    # Annotations are a **separate collection** on the document, never merged into its nodes and
+    # edges — which carry only their ids. Inlining them is what makes an exported file
+    # self-contained: a reader handed a graph otherwise sees annotation ids that point at nothing,
+    # and has no way to know whether the thing they point at was deleted or merely not shipped.
+    if args.annotations is not None:
+        graph = stamp(graph, annotations=AnnotationStore(args.annotations).load())
+
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(graph.model_dump_json(indent=2), encoding="utf-8")
+    out.write_text(strict_dumps(graph), encoding="utf-8")
 
     print(
         f"wrote {out}: {graph.node_count} nodes, {graph.edge_count} edges"
+        + (f", {len(graph.annotations)} annotation(s)" if graph.annotations else "")
         + (f", truncated ({', '.join(sorted(graph.stop_reasons))})" if graph.truncated else "")
     )
-    if args.annotations is not None:
-        store = AnnotationStore(args.annotations)
-        loaded = store.load()
-        print(
-            f"note: {len(loaded)} annotation(s) live in {args.annotations}; they are joined "
-            "by the server, and are not part of this file"
-        )
     return 0
 
 

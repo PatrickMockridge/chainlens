@@ -129,6 +129,23 @@ accepts the record: the identifier is content-addressed so two clients recording
 assertion agree, and the timestamp is when it was recorded rather than when a machine believed it
 was.
 
+### A file carries its assertions
+
+```console
+chainlens ui export --seed bc1q... --annotations ./chainlens.annotations --out graph.json
+```
+
+An exported graph **inlines** the annotations recorded against it, so the file stands on its own:
+a reader handed a `graph.json` sees the assertions, not a set of ids pointing at records they do
+not have. The annotations are a separate collection on the document, never merged into its nodes —
+a node that carried an assertion's text would be indistinguishable, in a JSON export, from a node
+the ledger recorded. Nodes and edges carry only the ids, which is also what lets the app mark an
+address as carrying evidence without opening anything.
+
+The app renders an inlined record the same way it renders the server's join, and the two are held
+to one rendering: the committed fixture carries both, and a test asserts that projecting the
+record gives exactly the item Python joined from it.
+
 ## Posture
 
 The server is stdlib only, and its constraints are stated in `chainlens/ui/server.py` rather than

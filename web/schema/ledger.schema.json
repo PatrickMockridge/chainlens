@@ -9,6 +9,83 @@
       "title": "AmountStatus",
       "type": "string"
     },
+    "Annotation": {
+      "additionalProperties": false,
+      "description": "Evidence a person asserts about a node or an edge.\n\nAttributes:\n    schema_version: the contract version.\n    id: content-addressed.\n    created_at: when it was recorded. Always timezone-aware.\n    author: who asserted it. **Required**, with no default: an assertion has an owner.\n    basis: why they say so. **Required**, for the same reason the case study refuses a\n        claim record with no falsifier \u2014 an assertion with no stated ground is not a\n        record, it is an opinion with a timestamp.\n    target: what it is about, named the way a graph names it.\n    kind: which kind of assertion it is.\n    assertion: the claim in the author's own words, kept verbatim.\n    evidence_urls: anything a reader can go and look at.\n    source: always ``USER``. Carried rather than assumed, so a renderer distinguishes a\n        declared label from a provider's without having to know where it came from.",
+      "properties": {
+        "assertion": {
+          "minLength": 1,
+          "title": "Assertion",
+          "type": "string"
+        },
+        "author": {
+          "minLength": 1,
+          "title": "Author",
+          "type": "string"
+        },
+        "basis": {
+          "minLength": 1,
+          "title": "Basis",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence_urls": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Urls",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AnnotationKind"
+        },
+        "schema_version": {
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/LabelSource",
+          "default": "user"
+        },
+        "target": {
+          "$ref": "#/$defs/GraphRef"
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "author",
+        "basis",
+        "target",
+        "kind",
+        "assertion"
+      ],
+      "title": "Annotation",
+      "type": "object"
+    },
+    "AnnotationKind": {
+      "description": "What a person is asserting about a target.\n\nDeliberately a short vocabulary of *kinds of assertion* rather than free text. A kind\ncan be checked against a computed label \u2014 and a disagreement between the two is worth\nshowing \u2014 whereas a sentence cannot.",
+      "enum": [
+        "exchange",
+        "mixer",
+        "sanctioned",
+        "own_wallet",
+        "correction",
+        "note"
+      ],
+      "title": "AnnotationKind",
+      "type": "string"
+    },
     "AssetKind": {
       "description": "The kind of asset a transfer or balance refers to.",
       "enum": [
@@ -123,6 +200,69 @@
         "coinbase"
       ],
       "title": "FlowVia",
+      "type": "string"
+    },
+    "GraphRef": {
+      "additionalProperties": false,
+      "description": "A pointer into a ledger document, which may or may not hold it.\n\nAttributes:\n    kind: whether the reference names a node or an edge.\n    key: the node or edge key. Node keys are ``address:``/``tx:``/``unparsed:``;\n        edge keys are ``{txid}:in|out|tok|int:{index}``.\n    exists: whether it was found in the document it was resolved against. ``None``\n        means nobody has looked \u2014 which is not the same as absent, and a front end\n        should offer to fetch rather than reporting nothing there.\n    note: why it was not found, when something knows.",
+      "properties": {
+        "exists": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exists"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/GraphRefKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "title": "GraphRef",
+      "type": "object"
+    },
+    "GraphRefKind": {
+      "description": "What a reference points at. An edge is addressable here, unlike in the flow view.",
+      "enum": [
+        "node",
+        "edge"
+      ],
+      "title": "GraphRefKind",
+      "type": "string"
+    },
+    "LabelSource": {
+      "description": "Provenance of a label attached to an address or entity.\n\nProvenance is what separates \"an exchange confirmed this address\" from \"a\nheuristic guessed it\", so it is recorded on every label.",
+      "enum": [
+        "provider",
+        "user",
+        "heuristic",
+        "imported"
+      ],
+      "title": "LabelSource",
       "type": "string"
     },
     "LedgerAddressNode": {
@@ -737,8 +877,16 @@
     }
   },
   "additionalProperties": false,
-  "description": "A slice of the ledger, and everything needed to read it honestly.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    chain: which chain was walked.\n    seed: the node key the walk started from.\n    generated_at: when it was built.\n    provider: which provider answered, when one did.\n    provider_version: the provider's own version, when it reports one.\n    redistributable: whether the provider's terms permit redistributing this. False\n        for most commercial providers, and an exported document is redistribution \u2014\n        so this is carried onto the artifact rather than assumed away.\n    nodes: transactions, addresses and unparsed groups.\n    edges: one per recorded input, output or token movement.\n    assets: every asset appearing, so a front end can label and colour by contract\n        without inferring a palette from the edges.\n    truncated: whether a budget or policy stopped the walk early. A graph that is\n        small because we stopped looking must not look genuinely small.\n    stop_reasons: counts per reason, using the tracer's vocabulary.\n    frontier: node keys admitted but not expanded \u2014 the set a live view offers.\n    direction: which way the walk expanded from the seed. Edges are **not** filtered\n        by it: a transaction is drawn whole, because a node showing only its outgoing\n        side would look like a coinbase.\n    policy: the limits and pruning the walk ran under.\n    warnings: anything that qualified the walk.\n    elapsed_seconds: wall-clock cost, when measured.",
+  "description": "A slice of the ledger, and everything needed to read it honestly.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    chain: which chain was walked.\n    seed: the node key the walk started from.\n    generated_at: when it was built.\n    provider: which provider answered, when one did.\n    provider_version: the provider's own version, when it reports one.\n    redistributable: whether the provider's terms permit redistributing this. False\n        for most commercial providers, and an exported document is redistribution \u2014\n        so this is carried onto the artifact rather than assumed away.\n    nodes: transactions, addresses and unparsed groups.\n    edges: one per recorded input, output or token movement.\n    assets: every asset appearing, so a front end can label and colour by contract\n        without inferring a palette from the edges.\n    annotations: evidence a person asserted about these nodes and edges.\n        **A separate collection, never merged into ``nodes`` or ``edges``**, which\n        carry only ``annotation_ids``: the distinction between what a ledger recorded\n        and what somebody declared has to survive a JSON export. Present so an\n        *exported* graph is self-contained \u2014 a reader handed the file otherwise sees\n        annotation ids that point at nothing. A served graph leaves it empty, because\n        the same records arrive there through the overlay's join.\n    truncated: whether a budget or policy stopped the walk early. A graph that is\n        small because we stopped looking must not look genuinely small.\n    stop_reasons: counts per reason, using the tracer's vocabulary.\n    frontier: node keys admitted but not expanded \u2014 the set a live view offers.\n    direction: which way the walk expanded from the seed. Edges are **not** filtered\n        by it: a transaction is drawn whole, because a node showing only its outgoing\n        side would look like a coinbase.\n    policy: the limits and pruning the walk ran under.\n    warnings: anything that qualified the walk.\n    elapsed_seconds: wall-clock cost, when measured.",
   "properties": {
+    "annotations": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Annotation"
+      },
+      "title": "Annotations",
+      "type": "array"
+    },
     "assets": {
       "default": [],
       "items": {

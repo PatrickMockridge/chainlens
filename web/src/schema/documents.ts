@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import { AnnotationRequestDocumentSchema } from "./annotation_request.gen";
 import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
-import { LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
+import { AnnotationSchema, LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
 import { EvidenceItemSchema, GraphRefSchema, OverlayDocumentSchema } from "./overlay.gen";
 
 export type LedgerDocument = z.infer<typeof LedgerDocumentSchema>;
@@ -29,6 +29,8 @@ export type OverlayDocument = z.infer<typeof OverlayDocumentSchema>;
 export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
 export type GraphRef = z.infer<typeof GraphRefSchema>;
 export type DerivationDocument = z.infer<typeof DerivationDocumentSchema>;
+/** A declared assertion, as an exported graph carries it. */
+export type Annotation = z.infer<typeof AnnotationSchema>;
 /**
  * What the app *sends* to record an annotation.
  *

@@ -35,6 +35,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field
 
+from chainlens.models.annotate import Annotation
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Chain, Direction, FlowVia, ScriptType, TxStatus
 from chainlens.models.primitives import AssetRef
@@ -408,6 +409,13 @@ class LedgerGraph(LensModel):
         edges: one per recorded input, output or token movement.
         assets: every asset appearing, so a front end can label and colour by contract
             without inferring a palette from the edges.
+        annotations: evidence a person asserted about these nodes and edges.
+            **A separate collection, never merged into ``nodes`` or ``edges``**, which
+            carry only ``annotation_ids``: the distinction between what a ledger recorded
+            and what somebody declared has to survive a JSON export. Present so an
+            *exported* graph is self-contained — a reader handed the file otherwise sees
+            annotation ids that point at nothing. A served graph leaves it empty, because
+            the same records arrive there through the overlay's join.
         truncated: whether a budget or policy stopped the walk early. A graph that is
             small because we stopped looking must not look genuinely small.
         stop_reasons: counts per reason, using the tracer's vocabulary.
@@ -432,6 +440,7 @@ class LedgerGraph(LensModel):
     nodes: tuple[LedgerNode, ...] = ()
     edges: tuple[LedgerEdge, ...] = ()
     assets: tuple[AssetRef, ...] = ()
+    annotations: tuple[Annotation, ...] = ()
 
     truncated: bool = False
     stop_reasons: Mapping[str, int] = Field(default_factory=dict)

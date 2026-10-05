@@ -37,6 +37,7 @@ import {
   emptyStore,
   evidenceFor,
   highlightedKeys,
+  keysWithEvidence,
   mergeCounts,
   select,
   selectBranch,
@@ -115,9 +116,12 @@ export function App() {
             : addDerivation(current, classified.document);
       const counts = mergeCounts(before, after);
       if (classified.kind === "ledger") {
+        // What the file carried is stated, so a reader knows whether the annotations in it came
+        // with the graph or are still somewhere else.
         setNotice(
-          `Loaded ${source}: +${counts.nodes} nodes, +${counts.edges} edges ` +
-            `(${after.nodes.size} nodes in total)`,
+          `Loaded ${source}: +${counts.nodes} nodes, +${counts.edges} edges` +
+            (counts.annotations > 0 ? `, +${counts.annotations} annotation(s)` : "") +
+            ` (${after.nodes.size} nodes in total)`,
         );
       }
       return after;
@@ -196,14 +200,10 @@ export function App() {
   const nodes = useMemo(() => [...store.nodes.values()], [store.nodes]);
   const edges = useMemo(() => [...store.edges.values()], [store.edges]);
 
-  const withEvidence = useMemo(() => {
-    const keys = new Set<string>();
-    for (const { document } of store.overlays) {
-      for (const key of Object.keys(document.by_node ?? {})) keys.add(key);
-      for (const key of Object.keys(document.by_edge ?? {})) keys.add(key);
-    }
-    return keys;
-  }, [store.overlays]);
+  // From the store rather than computed here, because evidence reaches a key by two routes — the
+  // overlay's join and a ledger document's own annotations — and a badge that knew about only one
+  // of them would show an annotated address as bare.
+  const withEvidence = useMemo(() => keysWithEvidence(store), [store]);
 
   // Both highlight sets come from the store rather than being computed here, so that the two views
   // cannot hold different opinions about what a selection points at.

@@ -24,6 +24,7 @@ import {
   evidenceFor,
   highlightedBranches,
   highlightedKeys,
+  keysWithEvidence,
   mergeCounts,
   refsForClaim,
   resolves,
@@ -43,6 +44,7 @@ const fixtures = JSON.parse(
 };
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
+const annotated = fixtures.ledgers["annotated"]!;
 const evm = fixtures.ledgers["evm"]!;
 const overlay = fixtures.overlays["bitcoin"]!;
 const noRatio = fixtures.derivations["no_ratio"]!;
@@ -77,7 +79,13 @@ describe("merging by key", () => {
   it("counts only what a second load actually added", () => {
     const first = addLedger(emptyStore, "a.json", bitcoin);
     const again = addLedger(first, "a-again.json", bitcoin);
-    expect(mergeCounts(first, again)).toEqual({ nodes: 0, edges: 0, overlays: 0, derivations: 0 });
+    expect(mergeCounts(first, again)).toEqual({
+      nodes: 0,
+      edges: 0,
+      annotations: 0,
+      overlays: 0,
+      derivations: 0,
+    });
   });
 
   it("cannot duplicate a node, because the key is the identity", () => {
@@ -280,5 +288,70 @@ describe("the two views, joined", () => {
     expect(both.branch).toBe(evidence);
     // The branch wins for the graph highlight, because it is the more specific statement.
     expect(highlightedKeys(both).has("tx1:out:0")).toBe(true);
+  });
+});
+
+
+/**
+ * Annotations that arrived inside a ledger document.
+ *
+ * An exported graph carries its own annotations, because it has no server to join them; a served
+ * one leaves the field empty and sends the join. Both routes reach the same panel, and an
+ * annotation present on both must be rendered once.
+ */
+describe("annotations carried by a ledger document", () => {
+  it("keeps them, keyed by their content-addressed id", () => {
+    const store = addLedger(emptyStore, "annotated.json", annotated);
+    expect(store.annotations.size).toBe(3);
+    for (const [id, annotation] of store.annotations) expect(annotation.id).toBe(id);
+  });
+
+  it("cannot duplicate one, because the id is the identity", () => {
+    const once = addLedger(emptyStore, "a.json", annotated);
+    const twice = addLedger(once, "b.json", annotated);
+    expect(twice.annotations.size).toBe(once.annotations.size);
+  });
+
+  it("puts the assertion on the node it targets, with no server anywhere", () => {
+    const store = addLedger(emptyStore, "annotated.json", annotated);
+    const target = annotated.annotations!.find((item) =>
+      item.target.key.startsWith("address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"),
+    )!;
+    const items = evidenceFor(store, target.target.key);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.kind).toBe("annotation");
+    expect(items[0]!.source).toBe("user");
+    expect(items[0]!.summary).toContain(target.assertion);
+  });
+
+  it("marks the key as carrying evidence, so the node is not drawn bare", () => {
+    const store = addLedger(emptyStore, "annotated.json", annotated);
+    const keys = keysWithEvidence(store);
+    for (const annotation of annotated.annotations!) {
+      expect(keys.has(annotation.target.key)).toBe(true);
+    }
+  });
+
+  it("renders it once when the overlay carried the same record", () => {
+    // The live path and the export path can both hold one annotation — a reader with a server
+    // running and an old export dropped in. Two copies of one assertion would read as two people
+    // saying the same thing.
+    const store = addOverlay(
+      addLedger(emptyStore, "annotated.json", annotated),
+      "live",
+      overlay,
+    );
+    const target = annotated.annotations![0]!.target.key;
+    const items = evidenceFor(store, target);
+    const fromOverlay = overlay.by_node![target]!.filter((item) => item.kind === "annotation");
+    expect(fromOverlay).toHaveLength(1);
+    expect(items.filter((item) => item.kind === "annotation")).toHaveLength(1);
+  });
+
+  it("does not mark a key the join mentions but the document does not hold", () => {
+    // The overlay's `unjoined` references name keys that are not in the graph at all; a node
+    // badge for one of those would have no node to appear on.
+    const store = addOverlay(addLedger(emptyStore, "bitcoin.json", bitcoin), "live", overlay);
+    expect(store.nodes.has("address:bitcoin:nobody")).toBe(false);
   });
 });

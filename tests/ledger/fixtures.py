@@ -23,7 +23,7 @@ from typing import Any
 
 import anyio
 
-from chainlens.ledger.annotate import overlay
+from chainlens.ledger.annotate import overlay, stamp
 from chainlens.ledger.derive import derive_finding
 from chainlens.ledger.schema import strict_dumps
 from chainlens.ledger.walk import walk_ledger
@@ -189,6 +189,52 @@ async def _frontier_document() -> LedgerGraph:
     )
 
 
+def _annotations() -> tuple[Annotation, ...]:
+    """Three declared assertions: on a node, on an edge, and on a node outside the walk.
+
+    Shared by the overlay fixture and the stamped ledger, so the front end can be handed the
+    *records* and the *join* of the same annotations and checked that its own projection of one
+    agrees with Python's rendering of the other. The third targets an address the walk never
+    reached, which is the case a renderer has to keep rather than drop.
+    """
+    return (
+        Annotation.create(
+            target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{ALICE}"),
+            kind=AnnotationKind.EXCHANGE,
+            assertion="a venue deposit address",
+            author="fixture",
+            basis="listed by the venue",
+            created_at=FIXTURE_INSTANT,
+        ),
+        Annotation.create(
+            target=GraphRef(kind=GraphRefKind.EDGE, key="tx1:out:0"),
+            kind=AnnotationKind.NOTE,
+            assertion="the payment the claim is about",
+            author="fixture",
+            basis="matched by amount and recipient",
+            created_at=FIXTURE_INSTANT,
+        ),
+        Annotation.create(
+            target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{OUTSIDE}"),
+            kind=AnnotationKind.NOTE,
+            assertion="seen in an earlier walk",
+            author="fixture",
+            basis="a previous export",
+            created_at=FIXTURE_INSTANT,
+        ),
+    )
+
+
+async def _annotated_document() -> LedgerGraph:
+    """The bitcoin walk with its annotations inlined, as an export writes them.
+
+    What a reader handed a file gets: the ledger, and the assertions made about it, in one
+    document with no server behind it. The overlay fixture is the same records *joined*; this is
+    the same records *carried*, and the front end has to render both to the same thing.
+    """
+    return stamp(await _bitcoin_document(), annotations=_annotations())
+
+
 async def _empty_document() -> LedgerGraph:
     """A seed with no history: the degenerate case a front end still has to render."""
     return await walk_ledger(
@@ -215,6 +261,7 @@ async def _truncated_document() -> LedgerGraph:
 DOCUMENTS: dict[str, Any] = {
     "bitcoin": _bitcoin_document,
     "evm": _evm_document,
+    "annotated": _annotated_document,
     "empty": _empty_document,
     "frontier": _frontier_document,
     "truncated": _truncated_document,
@@ -349,32 +396,7 @@ async def _overlay_document() -> EvidenceOverlay:
                 heuristics=("common-input-ownership",),
             ),
         ),
-        annotations=(
-            Annotation.create(
-                target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{ALICE}"),
-                kind=AnnotationKind.EXCHANGE,
-                assertion="a venue deposit address",
-                author="fixture",
-                basis="listed by the venue",
-                created_at=FIXTURE_INSTANT,
-            ),
-            Annotation.create(
-                target=GraphRef(kind=GraphRefKind.EDGE, key="tx1:out:0"),
-                kind=AnnotationKind.NOTE,
-                assertion="the payment the claim is about",
-                author="fixture",
-                basis="matched by amount and recipient",
-                created_at=FIXTURE_INSTANT,
-            ),
-            Annotation.create(
-                target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{OUTSIDE}"),
-                kind=AnnotationKind.NOTE,
-                assertion="seen in an earlier walk",
-                author="fixture",
-                basis="a previous export",
-                created_at=FIXTURE_INSTANT,
-            ),
-        ),
+        annotations=_annotations(),
     )
 
 

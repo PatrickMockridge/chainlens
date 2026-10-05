@@ -18,8 +18,10 @@ import pytest
 
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.walk import walk_ledger
+from chainlens.models.annotate import Annotation, AnnotationKind
 from chainlens.models.enums import Chain
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
+from chainlens.models.wire import GraphRef, GraphRefKind
 from chainlens.providers.capabilities import Capability
 from chainlens.testing.factories import btc_transaction, inp, out
 from chainlens.testing.in_memory import InMemoryProvider
@@ -536,3 +538,68 @@ def test_open_opens_the_url_once_the_socket_is_listening(monkeypatch: pytest.Mon
 
     assert main(["ui", "serve", "--seed", ALICE, "--open"]) == 0
     assert opened == ["http://127.0.0.1:8765/"]
+
+
+def test_export_inlines_the_annotations_a_reader_would_otherwise_not_get(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file handed to somebody else has to carry what was asserted about it.
+
+    Without this the export holds annotation *ids* on its nodes and nothing those ids point at, so
+    a reader sees an address marked as carrying evidence and no way to find out what the evidence
+    is — and cannot tell whether it was deleted or merely not shipped.
+    """
+    import chainlens.ui.cli as cli
+
+    monkeypatch.setattr(cli, "_provider", lambda name, chain: _provider())
+    annotations = tmp_path / "annotations"
+    store = AnnotationStore(annotations)
+    store.append(
+        Annotation.create(
+            target=GraphRef(kind=GraphRefKind.NODE, key=f"address:bitcoin:{ALICE}"),
+            kind=AnnotationKind.OWN_WALLET,
+            assertion="this one is mine",
+            author="pm",
+            basis="I hold the key",
+            created_at=WHEN,
+        )
+    )
+
+    out = tmp_path / "graph.json"
+    status = main(
+        ["ui", "export", "--seed", ALICE, "--out", str(out), "--annotations", str(annotations)]
+    )
+    assert status == 0
+    document = LedgerGraph.model_validate_json(out.read_text(encoding="utf-8"))
+
+    assert len(document.annotations) == 1
+    record = document.annotations[0]
+    assert record.assertion == "this one is mine"
+    assert record.source.value == "user"
+    # The node carries the id, so the two halves agree about where the evidence belongs.
+    # `getattr` because an unparsed group carries no ids — a bag of addressless scripts has no
+    # referent for an assertion — so only two of the three node kinds can be marked.
+    marked = [node for node in document.nodes if record.id in getattr(node, "annotation_ids", ())]
+    assert [node.key for node in marked] == [f"address:bitcoin:{ALICE}"]
+    # And a measured field is untouched by any of it: the annotation is a separate collection, and
+    # the node it names still records exactly what the walk recorded.
+    without = LedgerGraph.model_validate_json(_exported_without_annotations(tmp_path))
+    declared = [{**node.model_dump(), "annotation_ids": ()} for node in document.nodes]
+    assert declared == [node.model_dump() for node in without.nodes]
+
+
+def _exported_without_annotations(tmp_path: Path) -> str:
+    bare = tmp_path / "bare.json"
+    assert main(["ui", "export", "--seed", ALICE, "--out", str(bare)]) == 0
+    return bare.read_text(encoding="utf-8")
+
+
+def test_export_without_an_annotation_directory_carries_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import chainlens.ui.cli as cli
+
+    monkeypatch.setattr(cli, "_provider", lambda name, chain: _provider())
+    out = tmp_path / "graph.json"
+    assert main(["ui", "export", "--seed", ALICE, "--out", str(out)]) == 0
+    assert LedgerGraph.model_validate_json(out.read_text(encoding="utf-8")).annotations == ()
