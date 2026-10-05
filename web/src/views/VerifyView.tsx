@@ -21,10 +21,11 @@ import { useMemo, useState } from "react";
 
 import { DerivationTree } from "../derive/DerivationTree";
 import { PriorControl, planPosterior } from "../derive/PriorControl";
+import { Narrative } from "../derive/Narrative";
 import { GraphView } from "../graph/GraphView";
 import type { LedgerEdge, LedgerNode } from "../schema/documents";
 import type { Store } from "../store";
-import { highlightedBranches, highlightedKeys } from "../store";
+import { highlightedBranches, highlightedKeys, narrativeFor } from "../store";
 
 export interface VerifyViewProps {
   store: Store;
@@ -66,6 +67,7 @@ export function VerifyView({
 
   const highlighted = highlightedKeys(store);
   const branches = highlightedBranches(store);
+  const narrative = active === null ? null : narrativeFor(store, active.claim_id);
 
   if (store.derivations.length === 0) {
     return (
@@ -182,6 +184,13 @@ export function VerifyView({
               {plan !== null && (
                 <PriorControl plan={plan} logOdds={priorLogOdds} onChange={setPriorLogOdds} />
               )}
+
+              {/*
+                The prose sits under the tree it is about, and only where one has been loaded: a
+                narrative is a view of the derivation, not part of it, so its absence is the normal
+                case rather than a missing piece.
+              */}
+              {narrative !== null && <Narrative document={narrative} />}
 
               <DerivationTree
                 document={active}

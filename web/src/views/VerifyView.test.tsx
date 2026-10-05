@@ -18,13 +18,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DerivationDocument, LedgerDocument, OverlayDocument } from "../schema/documents";
+import type {
+  DerivationDocument,
+  LedgerDocument,
+  NarrativeDocument,
+  OverlayDocument,
+} from "../schema/documents";
 import { asTree } from "../schema/documents";
 import { posteriorProbability } from "../derive/posterior";
 import { detailValue, findRatio, walkTree } from "../derive/tree";
 import {
   addDerivation,
   addLedger,
+  addNarrative,
   emptyStore,
   select,
   selectBranch,
@@ -39,9 +45,11 @@ const fixtures = JSON.parse(
   ledgers: Record<string, LedgerDocument>;
   overlays: Record<string, OverlayDocument>;
   derivations: Record<string, DerivationDocument>;
+  narratives: Record<string, NarrativeDocument>;
 };
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
+const narrative = fixtures.narratives["with_prose"]!;
 const noRatio = fixtures.derivations["no_ratio"]!;
 const ratioNoPrior = fixtures.derivations["ratio_without_prior"]!;
 const withRatio = fixtures.derivations["with_ratio"]!;
@@ -307,6 +315,31 @@ describe("references the graph does not hold", () => {
     draw(loaded(withRatio, false));
     expect(screen.getByText("No graph loaded")).toBeInTheDocument();
     expect(screen.queryByText(/Not drawing/)).toBeNull();
+  });
+});
+
+/**
+ * The prose pane, wired: a narrative is keyed by the claim it is about, and the pane shows the prose
+ * for whichever claim the reader is looking at. Nothing else would make it visible.
+ */
+describe("the narrative", () => {
+  it("renders beside the argument it is about", () => {
+    const store = addNarrative(loaded(noRatio), narrative);
+    draw(store);
+    expect(screen.getByRole("heading", { level: 3, name: /Narrative/ })).toBeInTheDocument();
+    expect(screen.getByText(/The claim names a transfer/)).toBeInTheDocument();
+    expect(screen.getByText(/fixture, prompt v1/)).toBeInTheDocument();
+  });
+
+  it("says which steps of the derivation have no prose", () => {
+    draw(addNarrative(loaded(noRatio), narrative));
+    expect(screen.getByText(/1 step\(s\) of the derivation have no paragraph/)).toBeInTheDocument();
+  });
+
+  it("shows nothing at all when no narrative was loaded", () => {
+    // The normal case: a narrative is a view of a derivation, not part of it.
+    draw(loaded(noRatio));
+    expect(screen.queryByRole("heading", { level: 3, name: /Narrative/ })).toBeNull();
   });
 });
 

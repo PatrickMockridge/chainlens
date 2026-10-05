@@ -203,3 +203,102 @@ class TestTheTwoCommandsCompose:
         )
         assert status == 0
         assert ClaimVerdict.SUPPORTED.value in derivation.read_text(encoding="utf-8")
+
+
+class TestWritingProseAboutADerivation:
+    """`ui narrate` — the command that makes the narrative reachable from a shell."""
+
+    def _derivation(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, claims: Path) -> Path:
+        """A derivation on disk, produced the way a user would produce one."""
+        from chainlens.models.enums import Chain
+        from chainlens.testing.factories import btc_transaction, inp, out
+        from chainlens.testing.in_memory import InMemoryProvider
+        from chainlens.verify.extract import FakeLLM
+
+        _wire(monkeypatch, FakeLLM({"claims": [{"type": "transfer", "quote": QUOTE}]}))
+        main(["ui", "extract", "--post", str(claims.parent / "post.txt"), "--out", str(claims)])
+        monkeypatch.setattr(
+            cli,
+            "_provider",
+            lambda name, chain: InMemoryProvider(
+                chain=Chain.BITCOIN,
+                transactions=[
+                    btc_transaction(
+                        "tx1",
+                        [out(0, BOB, 30_000)],
+                        [inp(0, ALICE, 30_000)],
+                        block_height=900_000,
+                    )
+                ],
+            ),
+        )
+        target = tmp_path / "derivation.json"
+        main(
+            [
+                "ui",
+                "derive",
+                "--claim",
+                str(claims / "post-1.json"),
+                "--out",
+                str(target),
+                "--no-estimate",
+            ]
+        )
+        return target
+
+    def _fixture(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        post = tmp_path / "post.txt"
+        post.write_text(POST_TEXT, encoding="utf-8")
+        return self._derivation(tmp_path, monkeypatch, tmp_path / "claims")
+
+    def test_it_writes_a_narrative_document(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from chainlens.models.narrative import NarrativeDocument
+        from chainlens.verify.extract import FakeLLM
+
+        derivation = self._fixture(tmp_path, monkeypatch)
+        _wire(monkeypatch, FakeLLM({"paragraphs": [{"claim_ids": [], "text": "One sentence."}]}))
+        out = tmp_path / "narrative.json"
+        assert main(["ui", "narrate", "--derivation", str(derivation), "--out", str(out)]) == 0
+
+        narrative = NarrativeDocument.model_validate_json(out.read_text(encoding="utf-8"))
+        assert narrative.text == "One sentence."
+        assert narrative.claim_id, "the narrative names the claim it is about"
+        assert narrative.style == "model"
+
+    def test_the_prose_is_written_through_the_strict_serialiser(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A document that reaches a browser goes through the same check as every other."""
+        from chainlens.verify.extract import FakeLLM
+
+        derivation = self._fixture(tmp_path, monkeypatch)
+        _wire(monkeypatch, FakeLLM({"paragraphs": [{"claim_ids": [], "text": "Plain."}]}))
+        out = tmp_path / "narrative.json"
+        main(["ui", "narrate", "--derivation", str(derivation), "--out", str(out)])
+        text = out.read_text(encoding="utf-8")
+        assert "Infinity" not in text
+        assert "NaN" not in text
+
+    def test_a_missing_derivation(self, tmp_path: Path) -> None:
+        with pytest.raises(SystemExit, match="no such derivation"):
+            main(["ui", "narrate", "--derivation", str(tmp_path / "absent.json"), "--out", "o"])
+
+    def test_a_file_that_is_not_a_derivation(self, tmp_path: Path) -> None:
+        broken = tmp_path / "broken.json"
+        broken.write_text('{"hello": "world"}', encoding="utf-8")
+        with pytest.raises(SystemExit, match="is not a derivation document"):
+            main(["ui", "narrate", "--derivation", str(broken), "--out", "o"])
+
+    def test_a_model_failure_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from chainlens.verify.extract import FakeLLM
+
+        derivation = self._fixture(tmp_path, monkeypatch)
+        _wire(monkeypatch, FakeLLM({}, fail_with=LLMError("the model rate-limited the request")))
+        out = tmp_path / "narrative.json"
+        with pytest.raises(SystemExit, match="could not be described"):
+            main(["ui", "narrate", "--derivation", str(derivation), "--out", str(out)])
+        assert not out.exists()

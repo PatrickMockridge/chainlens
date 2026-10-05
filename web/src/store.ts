@@ -13,6 +13,7 @@
 import type {
   Annotation,
   DerivationDocument,
+  NarrativeDocument,
   EvidenceItem,
   LedgerDocument,
   LedgerEdge,
@@ -30,6 +31,15 @@ export interface Store {
   readonly edges: ReadonlyMap<string, LedgerEdge>;
   readonly overlays: readonly OverlayEntry[];
   readonly derivations: readonly DerivationDocument[];
+  /**
+   * Prose about a derivation, keyed by the claim it is about.
+   *
+   * Keyed rather than listed because a narrative *belongs* to one derivation, and the pane that
+   * shows the tree is the pane that should show its prose. Two narratives for one claim cannot both
+   * be right, so the later replaces the earlier — the same rule the overlay follows, and for the
+   * same reason: a narrative is a view of something, not a fact about the chain.
+   */
+  readonly narratives: ReadonlyMap<string, NarrativeDocument>;
   /**
    * Annotations that arrived *inside a ledger document*, keyed by their content-addressed id.
    *
@@ -75,6 +85,7 @@ export const emptyStore: Store = {
   edges: new Map(),
   overlays: [],
   derivations: [],
+  narratives: new Map(),
   annotations: new Map(),
   frontier: new Set(),
   selection: null,
@@ -179,6 +190,17 @@ export function addOverlay(store: Store, source: string, overlay: OverlayDocumen
   const overlays = [...store.overlays];
   overlays[existing] = { source, document: overlay };
   return { ...store, overlays };
+}
+
+export function addNarrative(store: Store, narrative: NarrativeDocument): Store {
+  const narratives = new Map(store.narratives);
+  narratives.set(narrative.claim_id, narrative);
+  return { ...store, narratives };
+}
+
+/** The prose about one claim's derivation, when one has been loaded. */
+export function narrativeFor(store: Store, claimId: string): NarrativeDocument | null {
+  return store.narratives.get(claimId) ?? null;
 }
 
 export function addDerivation(store: Store, derivation: DerivationDocument): Store {

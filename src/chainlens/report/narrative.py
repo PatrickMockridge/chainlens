@@ -37,11 +37,14 @@ from pydantic import Field
 
 from chainlens.exceptions import LLMError
 from chainlens.ledger.derive import claim_id
-from chainlens.models.base import LensModel
+from chainlens.models.base import LensModel, utcnow
+from chainlens.models.derive import DerivationDocument
+from chainlens.models.narrative import NarrativeDocument, NarrativeParagraph
 from chainlens.verify.extract import StructuredLLM
 from chainlens.verify.verdicts import VerificationFinding, VerificationReport
 
 __all__ = [
+    "DERIVATION_PROMPT",
     "DraftNarrative",
     "DraftParagraph",
     "NarrativeReport",
@@ -72,6 +75,34 @@ Rules, in order of importance:
    no character, no reliability, no "likely".
 5. Write for an analyst reading the report: plain sentences, no preamble, no restatement of these
    rules, no summary of what you are about to do.
+"""
+
+#: The prompt for prose about a *derivation* rather than a report. Separate text rather than a
+#: parameter, because the two subjects differ in what a paragraph is about: a report holds many
+#: claims and a paragraph names the ones it rests on, while a derivation is one argument and a
+#: paragraph names its *steps*.
+DERIVATION_PROMPT = """\
+You write a short narrative about a derivation that has already been computed. You add nothing to
+it.
+
+Rules, in order of importance:
+
+1. Every figure you write must appear in the derivation exactly as it writes it. Do not round, do
+   not convert units, do not add up, do not compute a percentage. If a figure is not there, describe
+   it in words instead — the derivation's own verbal band ("strong"), "the interval it reports",
+   "the count it gives". A paragraph containing a figure the derivation does not contain is
+   discarded.
+2. Write only what the derivation says. If its verdict is that the data was insufficient, say that
+   and give its own reason; never state or imply a conclusion it does not carry, and never soften
+   one it does.
+3. Every paragraph names the steps it is about, using the step ids you are given. A paragraph naming
+   a step the derivation does not contain is discarded.
+4. A posterior is shown only where somebody supplied a prior, and it is theirs. Say so when you
+   mention it; never present it as the library's or as a conclusion.
+5. Describe what a post asserts and what the chain shows. Never characterise a person: no motive, no
+   character, no reliability, no "likely".
+6. Write for an analyst reading the derivation: plain sentences, no preamble, no restatement of
+   these rules, no summary of what you are about to do.
 """
 
 #: A numeral, with its unit suffix when it has one. The suffix is kept because `40k` and `40` are
@@ -278,6 +309,80 @@ class Narrator:
             numerals=frozenset(numerals(*(paragraph.text for paragraph in kept))),
         )
 
+    async def narrate_derivation(self, document: DerivationDocument) -> NarrativeDocument:
+        """Prose about one derivation, as a document a front end can render.
+
+        The same checks as :meth:`narrate`, with one difference in what a paragraph is about: a
+        derivation is a single argument, so a paragraph names the *steps* it rests on rather than
+        the claims — and the identifier that ties this document to the rest of the system is the
+        claim it is about.
+        """
+        steps = {node.id for node in document.root.walk()}
+        empty = NarrativeDocument(
+            claim_id=document.claim_id,
+            claim_quote=document.claim_quote,
+            verdict=document.verdict.value,
+            style="none",
+            model=None,
+            limitations=document.limitations,
+            generated_at=utcnow(),
+        )
+        if not steps:
+            return empty
+
+        try:
+            answer = await self._llm.complete(
+                system=DERIVATION_PROMPT,
+                prompt=_derivation_prompt_for(document),
+                shape=DraftNarrative,
+            )
+            draft = DraftNarrative.model_validate(answer)
+        except ValueError as exc:
+            raise LLMError(f"the model's answer is not a valid narrative: {exc}") from exc
+
+        allowed_figures = report_numerals(document)
+        kept: list[NarrativeParagraph] = []
+        dropped: list[str] = []
+        warnings: list[str] = []
+
+        if len(draft.paragraphs) > self._max_paragraphs:
+            warnings.append(
+                f"the model wrote {len(draft.paragraphs)} paragraphs, more than the "
+                f"{self._max_paragraphs} this narrator accepts; the rest were not read"
+            )
+
+        for paragraph in draft.paragraphs[: self._max_paragraphs]:
+            unknown = sorted(set(paragraph.claim_ids) - steps)
+            if unknown:
+                named = ", ".join(unknown)
+                dropped.append(
+                    f"a paragraph named steps the derivation does not contain ({named}): "
+                    f"{paragraph.text[:80]!r}"
+                )
+                continue
+            invented = sorted(numerals(paragraph.text) - allowed_figures)
+            if invented:
+                dropped.append(
+                    f"a paragraph used figure(s) the derivation does not contain "
+                    f"({', '.join(invented)}): {paragraph.text[:80]!r}"
+                )
+                continue
+            kept.append(NarrativeParagraph(text=paragraph.text, steps=tuple(paragraph.claim_ids)))
+
+        covered = {step for paragraph in kept for step in paragraph.steps}
+        return empty.model_copy(
+            update={
+                "paragraphs": tuple(kept),
+                # `style` moves off "none" only here: a document with no paragraphs says a model
+                # wrote nothing, which is a different fact from a model never having been asked.
+                "style": "model",
+                "dropped": tuple(dropped),
+                "uncovered": tuple(sorted(steps - covered)),
+                "model": self._llm.name,
+                "prompt_version": self._prompt_version,
+            }
+        )
+
 
 def _claim_id(finding: VerificationFinding) -> str:
     """The id a paragraph refers to a finding by.
@@ -288,6 +393,16 @@ def _claim_id(finding: VerificationFinding) -> str:
     """
     chain = finding.elements.chain.value if finding.elements is not None else ""
     return claim_id(finding.claim.quote, chain_suffix=chain)
+
+
+def _derivation_prompt_for(document: DerivationDocument) -> str:
+    """The derivation, as the model sees it: the same JSON the check will be run against."""
+    rendered = document.model_dump_json(indent=2)
+    ids = "\n".join(f"- {node.id}" for node in document.root.walk())
+    return (
+        f"The derivation, as JSON:\n\n{rendered}\n\n"
+        f"The step ids available to name in a paragraph:\n{ids}\n"
+    )
 
 
 def _prompt_for(report: VerificationReport) -> str:

@@ -33,6 +33,7 @@ import { VerifyView } from "./views/VerifyView";
 import {
   addDerivation,
   addLedger,
+  addNarrative,
   addOverlay,
   emptyStore,
   evidenceFor,
@@ -113,8 +114,19 @@ export function App() {
           ? addLedger(current, source, classified.document)
           : classified.kind === "overlay"
             ? addOverlay(current, source, classified.document)
-            : addDerivation(current, classified.document);
+            : classified.kind === "narrative"
+              ? addNarrative(current, classified.document)
+              : addDerivation(current, classified.document);
       const counts = mergeCounts(before, after);
+      if (classified.kind === "narrative") {
+        // Which claim it is about, and who wrote it. Prose that has travelled away from its
+        // derivation should still say both, and the reader is told where to read it.
+        const { model, claim_id: claimId, paragraphs } = classified.document;
+        setNotice(
+          `Loaded ${source}: ${paragraphs.length} paragraph(s) about ${claimId}, written by ` +
+            `${model ?? "nobody"} — open Verify to read them beside the argument`,
+        );
+      }
       if (classified.kind === "ledger") {
         // What the file carried is stated, so a reader knows whether the annotations in it came
         // with the graph or are still somewhere else.

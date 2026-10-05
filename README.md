@@ -52,6 +52,7 @@ chainlens ui serve --seed bc1q... --open      # a browsable graph, on loopback
 chainlens ui export --seed bc1q... --out graph.json
 chainlens ui extract --post post.txt --out claims/     # a post into claim records, with a model
 chainlens ui derive --claim claim.toml --out derivation.json
+chainlens ui narrate --derivation derivation.json --out narrative.json   # prose, checked against it
 ```
 
 `ui extract` reads a post with a model and writes what it asserts as claim records; `ui derive`

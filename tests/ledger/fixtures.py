@@ -24,15 +24,23 @@ from typing import Any
 import anyio
 
 from chainlens.ledger.annotate import overlay, stamp
-from chainlens.ledger.derive import derive_finding
+from chainlens.ledger.derive import PRIOR_LIMITATIONS, claim_id, derive_finding
 from chainlens.ledger.schema import strict_dumps
 from chainlens.ledger.walk import walk_ledger
 from chainlens.models.annotate import Annotation, AnnotationKind, EvidenceOverlay
 from chainlens.models.base import LensModel
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.entities import Entity, Label
-from chainlens.models.enums import AssetKind, Chain, EntityKind, FlowVia, LabelSource
+from chainlens.models.enums import (
+    AssetKind,
+    Chain,
+    ClaimVerdict,
+    EntityKind,
+    FlowVia,
+    LabelSource,
+)
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
+from chainlens.models.narrative import NarrativeDocument, NarrativeParagraph
 from chainlens.models.primitives import AssetRef
 from chainlens.models.wire import GraphRef, GraphRefKind
 from chainlens.providers.base import Provider
@@ -403,6 +411,49 @@ async def _overlay_document() -> EvidenceOverlay:
 OVERLAYS: dict[str, Any] = {"bitcoin": _overlay_document}
 
 
+#: Narratives, shaped exactly as `report/narrative.py` writes them.
+#:
+#: Built here rather than generated, because generating one needs a model and a fixture cannot:
+#: what this pins is the *shape* the app validates against, not the prose a model writes. Which
+#: paragraphs survive is decided by checks tested in `tests/report/test_narrative.py`.
+def _narrative_documents() -> dict[str, Any]:
+    """Two: prose that survived, and prose that was written and discarded."""
+    claim = claim_id(CLAIM_QUOTE, chain_suffix=Chain.BITCOIN.value)
+    return {
+        "with_prose": NarrativeDocument(
+            claim_id=claim,
+            claim_quote=CLAIM_QUOTE,
+            verdict=ClaimVerdict.SUPPORTED.value,
+            paragraphs=(
+                NarrativeParagraph(
+                    text="The claim names a transfer, and the chain recorded one to the recipient.",
+                    steps=(f"{claim}/evidence",),
+                ),
+                NarrativeParagraph(text="The evidence is the transfer the claim is about."),
+            ),
+            model="fixture",
+            prompt_version=1,
+            uncovered=(f"{claim}/caveat/0",),
+            limitations=PRIOR_LIMITATIONS,
+            generated_at=FIXTURE_INSTANT,
+        ),
+        "written_and_discarded": NarrativeDocument(
+            claim_id=claim,
+            claim_quote=CLAIM_QUOTE,
+            verdict=ClaimVerdict.SUPPORTED.value,
+            paragraphs=(),
+            style="model",
+            model="fixture",
+            prompt_version=1,
+            dropped=(
+                "a paragraph used figure(s) the derivation does not contain (1905.16): '...'",
+            ),
+            limitations=PRIOR_LIMITATIONS,
+            generated_at=FIXTURE_INSTANT,
+        ),
+    }
+
+
 #: Anything that reads as an instant, wherever it appears in a document. Provenance
 #: timestamps are recorded at fetch time and so differ on every run, in the middle of
 #: otherwise stable evidence — which is why pinning only the document's own ``generated_at``
@@ -456,12 +507,17 @@ def render_all() -> str:
     for name, build in OVERLAYS.items():
         overlays[name] = _stable(anyio.run(build))
 
+    narratives: dict[str, Any] = {
+        name: _stable(document) for name, document in _narrative_documents().items()
+    }
+
     return (
         json.dumps(
             {
                 "schema_version": 1,
                 "ledgers": ledgers,
                 "derivations": derivations,
+                "narratives": narratives,
                 "overlays": overlays,
             },
             indent=2,

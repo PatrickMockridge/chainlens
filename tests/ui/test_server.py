@@ -421,6 +421,7 @@ def test_the_schema_command_writes_every_document(tmp_path: Path) -> None:
         "derivation.schema.json",
         "overlay.schema.json",
         "annotation_request.schema.json",
+        "narrative.schema.json",
     }
 
 

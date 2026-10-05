@@ -13,12 +13,18 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { DerivationDocument, LedgerDocument, OverlayDocument } from "./schema/documents";
+import type {
+  DerivationDocument,
+  LedgerDocument,
+  NarrativeDocument,
+  OverlayDocument,
+} from "./schema/documents";
 import { asTree, classify } from "./schema/documents";
 import { walkTree } from "./derive/tree";
 import {
   addDerivation,
   addLedger,
+  addNarrative,
   addOverlay,
   emptyStore,
   evidenceFor,
@@ -26,6 +32,7 @@ import {
   highlightedKeys,
   keysWithEvidence,
   mergeCounts,
+  narrativeFor,
   refsForClaim,
   resolves,
   select,
@@ -41,6 +48,7 @@ const fixtures = JSON.parse(
   ledgers: Record<string, LedgerDocument>;
   overlays: Record<string, OverlayDocument>;
   derivations: Record<string, DerivationDocument>;
+  narratives: Record<string, NarrativeDocument>;
 };
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
@@ -48,17 +56,58 @@ const annotated = fixtures.ledgers["annotated"]!;
 const evm = fixtures.ledgers["evm"]!;
 const overlay = fixtures.overlays["bitcoin"]!;
 const noRatio = fixtures.derivations["no_ratio"]!;
+const narrative = fixtures.narratives["with_prose"]!;
+const discarded = fixtures.narratives["written_and_discarded"]!;
 
 describe("classifying a dropped file", () => {
-  it("recognises each of the three documents", () => {
+  it("recognises each of the documents", () => {
     expect(classify(bitcoin)?.kind).toBe("ledger");
     expect(classify(overlay)?.kind).toBe("overlay");
     expect(classify(fixtures.ledgers["empty"])?.kind).toBe("ledger");
   });
 
+  it("recognises prose about a derivation", () => {
+    expect(classify(narrative)?.kind).toBe("narrative");
+    expect(classify(discarded)?.kind).toBe("narrative");
+  });
+
   it("refuses something that is none of them", () => {
     expect(classify({ hello: "world" })).toBeNull();
     expect(classify(null)).toBeNull();
+  });
+});
+
+/**
+ * A narrative belongs to one derivation, so the store keys it rather than listing it.
+ *
+ * Two narratives for one claim cannot both be right, and the later replaces the earlier — the rule
+ * the overlay follows, for the same reason: this is a *view* of something, not a fact about the
+ * chain.
+ */
+describe("prose about a derivation", () => {
+  it("is found by the claim it is about", () => {
+    const store = addNarrative(emptyStore, narrative);
+    const found = narrativeFor(store, narrative.claim_id)!;
+    expect(found.paragraphs[0]!.text).toContain("The claim names a transfer");
+  });
+
+  it("answers with nothing, rather than failing, for a claim with no narrative", () => {
+    expect(narrativeFor(addNarrative(emptyStore, narrative), "claim:other")).toBeNull();
+  });
+
+  it("replaces an earlier narrative for the same claim", () => {
+    const first = addNarrative(emptyStore, narrative);
+    const second = addNarrative(first, discarded);
+    expect(second.narratives.size).toBe(1);
+    expect(narrativeFor(second, narrative.claim_id)?.paragraphs).toEqual([]);
+  });
+
+  it("carries the account of what was discarded, so an empty narrative is not a blank", () => {
+    const store = addNarrative(emptyStore, discarded);
+    const found = narrativeFor(store, discarded.claim_id)!;
+    expect(found.paragraphs).toEqual([]);
+    expect(found.dropped.length).toBeGreaterThan(0);
+    expect(found.style).toBe("model");
   });
 });
 

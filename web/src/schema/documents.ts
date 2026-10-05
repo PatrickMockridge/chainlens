@@ -20,9 +20,12 @@ import { z } from "zod";
 import { AnnotationRequestDocumentSchema } from "./annotation_request.gen";
 import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
 import { AnnotationSchema, LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
+import { NarrativeDocumentSchema } from "./narrative.gen";
 import { EvidenceItemSchema, GraphRefSchema, OverlayDocumentSchema } from "./overlay.gen";
 
 export type LedgerDocument = z.infer<typeof LedgerDocumentSchema>;
+/** Prose about one derivation, written by a model and checked against it before it was written. */
+export type NarrativeDocument = z.infer<typeof NarrativeDocumentSchema>;
 export type LedgerNode = LedgerDocument["nodes"][number];
 export type LedgerEdge = z.infer<typeof LedgerEdgeSchema>;
 export type OverlayDocument = z.infer<typeof OverlayDocumentSchema>;
@@ -80,6 +83,7 @@ export {
   DerivationDocumentSchema,
   DerivationNodeSchema,
   LedgerDocumentSchema,
+  NarrativeDocumentSchema,
   OverlayDocumentSchema,
 };
 
@@ -87,6 +91,7 @@ export type Classified =
   | { kind: "ledger"; document: LedgerDocument }
   | { kind: "overlay"; document: OverlayDocument }
   | { kind: "derivation"; document: DerivationDocument }
+  | { kind: "narrative"; document: NarrativeDocument }
   | { kind: "request"; document: AnnotationRequest };
 
 /** Which document a parsed JSON file turned out to be, or `null` if it is none of them. */
@@ -103,7 +108,11 @@ export function classify(value: unknown): Classified | null {
   const derivation = DerivationDocumentSchema.safeParse(value);
   if (derivation.success) return { kind: "derivation", document: derivation.data };
 
-  // Last, because a request is the smallest of the four and the only one that is not a record of
+  // A narrative has `claim_id` and `paragraphs`, neither of which any of the above carries.
+  const narrative = NarrativeDocumentSchema.safeParse(value);
+  if (narrative.success) return { kind: "narrative", document: narrative.data };
+
+  // Last, because a request is the smallest of the five and the only one that is not a record of
   // anything: recognised so that dropping one back into the app explains what it is — a thing to
   // send to a server — rather than reporting an unrecognised file.
   const request = AnnotationRequestDocumentSchema.safeParse(value);

@@ -129,7 +129,7 @@ function makeOverride() {
   };
 }
 
-const documents = ["ledger", "derivation", "overlay", "annotation_request"];
+const documents = ["ledger", "derivation", "overlay", "annotation_request", "narrative"];
 
 for (const name of documents) {
   const raw = JSON.parse(readFileSync(join(schemaDir, `${name}.schema.json`), "utf8"));

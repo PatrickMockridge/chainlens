@@ -94,7 +94,13 @@ def test_every_document_the_front_end_reads_has_a_schema() -> None:
     description that can be wrong, and the browser would find out from a 400 rather than from its
     own build.
     """
-    assert set(DOCUMENTS) == {"ledger", "derivation", "overlay", "annotation_request"}
+    assert set(DOCUMENTS) == {
+        "ledger",
+        "derivation",
+        "overlay",
+        "annotation_request",
+        "narrative",
+    }
     for name in DOCUMENTS:
         assert schema_path(name).exists(), f"{name}.schema.json is not committed"
 

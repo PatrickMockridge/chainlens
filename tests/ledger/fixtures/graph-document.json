@@ -4504,6 +4504,51 @@
       "warnings": []
     }
   },
+  "narratives": {
+    "with_prose": {
+      "claim_id": "claim:b6da67668bf55249",
+      "claim_quote": "carol moved ~30,000 sats to alice",
+      "dropped": [],
+      "generated_at": "2026-01-01T00:00:00+00:00",
+      "limitations": "A posterior probability is shown, and it is **not** the library's. The likelihood ratio is\nthe weight of the evidence; the prior is an assumption supplied by the reader, and the\nposterior is those two combined. Change the prior and the posterior changes with it while\nthe ratio does not, which is why the ratio is the quantity a forensic report gives and the\nprior is the decision-maker's to choose.\n\nThe ratio itself is not robust to how the claim was selected: a forensic ratio is computed\nfor a proposition chosen without regard to the evidence, and a claim harvested from a post\nwas not. Nothing here identifies a person.\n",
+      "model": "fixture",
+      "paragraphs": [
+        {
+          "steps": [
+            "claim:b6da67668bf55249/evidence"
+          ],
+          "text": "The claim names a transfer, and the chain recorded one to the recipient."
+        },
+        {
+          "steps": [],
+          "text": "The evidence is the transfer the claim is about."
+        }
+      ],
+      "prompt_version": 1,
+      "schema_version": 1,
+      "style": "model",
+      "uncovered": [
+        "claim:b6da67668bf55249/caveat/0"
+      ],
+      "verdict": "supported"
+    },
+    "written_and_discarded": {
+      "claim_id": "claim:b6da67668bf55249",
+      "claim_quote": "carol moved ~30,000 sats to alice",
+      "dropped": [
+        "a paragraph used figure(s) the derivation does not contain (1905.16): '...'"
+      ],
+      "generated_at": "2026-01-01T00:00:00+00:00",
+      "limitations": "A posterior probability is shown, and it is **not** the library's. The likelihood ratio is\nthe weight of the evidence; the prior is an assumption supplied by the reader, and the\nposterior is those two combined. Change the prior and the posterior changes with it while\nthe ratio does not, which is why the ratio is the quantity a forensic report gives and the\nprior is the decision-maker's to choose.\n\nThe ratio itself is not robust to how the claim was selected: a forensic ratio is computed\nfor a proposition chosen without regard to the evidence, and a claim harvested from a post\nwas not. Nothing here identifies a person.\n",
+      "model": "fixture",
+      "paragraphs": [],
+      "prompt_version": 1,
+      "schema_version": 1,
+      "style": "model",
+      "uncovered": [],
+      "verdict": "supported"
+    }
+  },
   "overlays": {
     "bitcoin": {
       "by_edge": {

@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from chainlens.models.annotate import AnnotationRequest, EvidenceOverlay
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph
+from chainlens.models.narrative import NarrativeDocument
 
 __all__ = [
     "DOCUMENTS",
@@ -57,11 +58,17 @@ SCHEMA_DIR = Path("web/schema")
 #: than hand-written in TypeScript for the same reason the others are: a request body built
 #: from a second description of the fields is a second description that can be wrong, and the
 #: browser would find out from a 400 rather than from its own type checker.
+#:
+#: ``narrative`` is the prose *about* a derivation. It is a document rather than a string on the
+#: derivation because it is written by a model and checked against the derivation, and a checked
+#: artifact should be able to travel on its own — with the account of what was discarded getting
+#: there attached to it.
 DOCUMENTS: dict[str, type[BaseModel]] = {
     "ledger": LedgerGraph,
     "derivation": DerivationDocument,
     "overlay": EvidenceOverlay,
     "annotation_request": AnnotationRequest,
+    "narrative": NarrativeDocument,
 }
 
 

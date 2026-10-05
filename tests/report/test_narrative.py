@@ -18,7 +18,9 @@ import pytest
 
 from chainlens.exceptions import LLMError
 from chainlens.ledger.derive import claim_id
+from chainlens.models.derive import DerivationDocument
 from chainlens.models.enums import Chain, ClaimVerdict
+from chainlens.models.narrative import NarrativeDocument
 from chainlens.models.primitives import AssetRef
 from chainlens.report.narrative import (
     SYSTEM_PROMPT,
@@ -330,3 +332,98 @@ class TestTheRendering:
         assert DraftParagraph(text="x").claim_ids == ()
         with pytest.raises(ValueError, match="at least 1 character"):
             DraftParagraph(text="")
+
+
+class TestProseAboutADerivation:
+    """The derivation is the subject a front end can actually be handed, so it has its own entry."""
+
+    def _derivation(self) -> DerivationDocument:
+        """A real derivation, built by the library from a real finding.
+
+        Round-tripped through JSON on purpose: the narrate command reads it from a file, so this is
+        the shape it actually receives rather than the object that happened to produce it.
+        """
+        from chainlens.ledger.derive import derive_finding
+
+        return DerivationDocument.model_validate_json(
+            derive_finding(_finding(with_ratio=True)).model_dump_json()
+        )
+
+    @pytest.mark.anyio
+    async def test_it_writes_a_document_tied_to_the_claim_it_is_about(self) -> None:
+        derivation = self._derivation()
+        step = next(node.id for node in derivation.root.walk() if node.kind.value == "evidence")
+        llm = FakeLLM({"paragraphs": [{"claim_ids": [step], "text": "The evidence is stated."}]})
+        narrative = await Narrator(llm).narrate_derivation(derivation)
+
+        assert isinstance(narrative, NarrativeDocument)
+        assert narrative.claim_id == derivation.claim_id
+        assert narrative.claim_quote == derivation.claim_quote
+        assert narrative.verdict == derivation.verdict.value
+        assert narrative.style == "model"
+        assert narrative.model == "fake"
+        assert [paragraph.steps for paragraph in narrative.paragraphs] == [(step,)]
+        assert narrative.text == "The evidence is stated."
+        assert narrative.limitations == derivation.limitations
+
+    @pytest.mark.anyio
+    async def test_a_figure_the_derivation_holds_is_allowed_and_a_rounded_one_is_not(self) -> None:
+        derivation = self._derivation()
+        ratio = next(
+            node for node in derivation.root.walk() if node.kind.value == "likelihood_ratio"
+        )
+        detail = {entry.key: entry.value for entry in ratio.detail}
+        exact = str(detail["log10_lr"])
+        llm = FakeLLM(
+            {
+                "paragraphs": [
+                    {"claim_ids": [], "text": f"The logarithm of the ratio is {exact}."},
+                    {"claim_ids": [], "text": "The ratio is about 1905.16."},
+                ]
+            }
+        )
+        narrative = await Narrator(llm).narrate_derivation(derivation)
+
+        assert len(narrative.paragraphs) == 1
+        assert len(narrative.dropped) == 1
+        assert "1905.16" in narrative.dropped[0]
+
+    @pytest.mark.anyio
+    async def test_a_paragraph_naming_a_step_that_is_not_there_is_discarded(self) -> None:
+        derivation = self._derivation()
+        llm = FakeLLM({"paragraphs": [{"claim_ids": ["claim/nope"], "text": "About something."}]})
+        narrative = await Narrator(llm).narrate_derivation(derivation)
+
+        assert narrative.paragraphs == ()
+        assert "claim/nope" in narrative.dropped[0]
+        assert narrative.is_empty is True
+
+    @pytest.mark.anyio
+    async def test_the_steps_with_no_prose_are_reported(self) -> None:
+        derivation = self._derivation()
+        llm = FakeLLM({"paragraphs": [{"claim_ids": [], "text": "One sentence about the whole."}]})
+        narrative = await Narrator(llm).narrate_derivation(derivation)
+
+        assert narrative.uncovered, "a derivation holds many steps and this covers none"
+        assert len(narrative.uncovered) <= len(list(derivation.root.walk()))
+
+    @pytest.mark.anyio
+    async def test_the_prompt_says_a_posterior_is_the_reader_s(self) -> None:
+        derivation = self._derivation()
+        llm = FakeLLM({"paragraphs": [{"claim_ids": [], "text": "Plain."}]})
+        await Narrator(llm).narrate_derivation(derivation)
+
+        assert "posterior is shown only where somebody supplied a prior" in llm.systems[0]
+        assert derivation.claim_id in llm.prompts[0]
+
+    def test_the_document_refuses_an_unknown_style(self) -> None:
+        from chainlens.models.base import utcnow
+
+        with pytest.raises(ValueError, match="style"):
+            NarrativeDocument(
+                claim_id="claim:x",
+                claim_quote="q",
+                verdict="supported",
+                style="templated",  # type: ignore[arg-type]
+                generated_at=utcnow(),
+            )

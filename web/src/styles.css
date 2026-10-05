@@ -727,3 +727,47 @@ body {
 .notices .warning {
   color: var(--warn);
 }
+
+/* -- the narrative --------------------------------------------------------- */
+
+/*
+ * Prose about the derivation above it. Outlined rather than filled, and visually distinct from the
+ * tree, because it is the one thing in this pane a model wrote: a reader should be able to tell at
+ * a glance which part of the screen is the argument and which part is a description of it.
+ */
+.narrative {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 12px 0;
+  padding: 8px 10px;
+}
+
+.narrative h3 {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+
+.narrative-paragraph {
+  margin: 0 0 8px;
+}
+
+/* Which steps of the derivation a paragraph is about, so a reader can check the prose against the
+   tree rather than taking it on trust. */
+.narrative-steps {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.narrative-dropped {
+  border-top: 1px dashed var(--warn);
+  margin-top: 8px;
+  padding-top: 6px;
+}
+
+.narrative-dropped ul {
+  color: var(--warn);
+  font-size: 11px;
+  margin: 4px 0 0;
+  padding-left: 16px;
+}

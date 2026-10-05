@@ -101,13 +101,22 @@ the model's error rate, which the report prints. A corpus built this way should 
 
 ## Writing prose about a report
 
+```console
+chainlens ui narrate --derivation derivation.json --out narrative.json
+```
+
 ```python
 from chainlens.report import Narrator
 from chainlens.verify.extract import AnthropicLLM
 
-narrative = await Narrator(AnthropicLLM()).narrate(report)
-print(narrative.format())
+narrative = await Narrator(AnthropicLLM()).narrate_derivation(derivation)
+print(narrative.text)
 ```
+
+The prose is a **separate document**, not a field on the derivation: it is written by a model and
+checked against the derivation, and an artifact that has been through a check should be able to
+travel on its own — with the account of what was discarded getting there attached. Dropping it on
+the app shows it in the Verify pane, under the tree it describes.
 
 A verification report is precise and it is not readable, and an analyst writing a paragraph by hand
 reintroduces exactly the errors this library spends its effort preventing: a rounded ratio, a

@@ -31,10 +31,13 @@ from chainlens.ledger.derive import derive_finding
 from chainlens.ledger.schema import SCHEMA_DIR, render_schemas, strict_dumps
 from chainlens.ledger.walk import walk_ledger
 from chainlens.models.base import utcnow
+from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
+from chainlens.models.narrative import NarrativeDocument
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
+from chainlens.report.narrative import Narrator
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.ui.server import LOOPBACK, ServeConfig, serve
 from chainlens.verify.engine import VerificationEngine
@@ -192,6 +195,55 @@ def _command_derive(args: argparse.Namespace) -> int:
         f"wrote {out}: {finding.verdict.value} by {finding.method}, "
         f"{'with' if document.has_ratio else 'without'} a likelihood ratio"
     )
+    return 0
+
+
+async def _narrate_for_cli(llm: object, document: DerivationDocument) -> NarrativeDocument:
+    """``anyio.run`` entry point for writing prose about one derivation."""
+    return await Narrator(llm).narrate_derivation(document)  # type: ignore[arg-type]
+
+
+def _command_narrate(args: argparse.Namespace) -> int:
+    """Write prose about a derivation, checked against the derivation's own figures.
+
+    The prose is a separate document rather than a field on the derivation, because it is written by
+    a model and held to the derivation: a checked artifact should be able to travel on its own, and
+    the derivation should be the same document whether or not anybody asked for prose.
+    """
+    import anyio
+
+    source = Path(args.derivation)
+    if not source.is_file():
+        raise SystemExit(f"no such derivation: {source}")
+    try:
+        document = DerivationDocument.model_validate_json(source.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise SystemExit(f"{source} is not a derivation document: {exc}") from exc
+
+    try:
+        llm: StructuredLLM = AnthropicLLM(model=args.model)
+    except ConfigurationError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    try:
+        narrative = anyio.run(_narrate_for_cli, llm, document)
+    except LLMError as exc:
+        raise SystemExit(f"the derivation could not be described: {exc}") from exc
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(strict_dumps(narrative), encoding="utf-8")
+
+    written = len(narrative.paragraphs)
+    print(f"wrote {out}: {written} paragraph(s), {len(narrative.dropped)} dropped")
+    if narrative.dropped:
+        for reason in narrative.dropped:
+            print(f"  discarded: {reason}", file=sys.stderr)
+    if narrative.uncovered:
+        print(
+            f"note: {len(narrative.uncovered)} step(s) of the derivation have no paragraph",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -445,6 +497,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
     extract.set_defaults(handler=_command_extract)
+
+    narrate = ui_commands.add_parser(
+        "narrate",
+        help="write prose about a derivation, checked against it",
+        description=(
+            "Write a narrative about one derivation. Every figure in the prose must be a figure "
+            "the derivation holds, verbatim, and every paragraph must name the steps it is about; "
+            "a paragraph that fails either check is discarded rather than rewritten."
+        ),
+    )
+    narrate.add_argument("--derivation", required=True, help="a derivation document")
+    narrate.add_argument("--out", required=True, help="where to write the narrative")
+    narrate.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
+    narrate.set_defaults(handler=_command_narrate)
 
     export = ui_commands.add_parser("export", help="write a ledger document to a file")
     add_walk_options(export)
