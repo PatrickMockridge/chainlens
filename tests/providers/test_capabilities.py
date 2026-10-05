@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from chainlens.models.enums import Chain
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import (
@@ -10,7 +12,10 @@ from chainlens.providers.capabilities import (
     METRICS_CAPABILITIES,
     QUERY_CAPABILITIES,
     Capability,
+    collect_capabilities,
+    collect_declared,
     declared_by,
+    make_provides,
     provides,
 )
 
@@ -102,3 +107,77 @@ def test_metrics_and_query_lanes_are_never_address_shaped() -> None:
     assert not (METRICS_CAPABILITIES & ADDRESS_CAPABILITIES)
     assert not (QUERY_CAPABILITIES & ADDRESS_CAPABILITIES)
     assert not (LABEL_CAPABILITIES & ADDRESS_CAPABILITIES)
+
+
+# --------------------------------------------------------------------------- #
+# A second vocabulary on the same mechanism
+# --------------------------------------------------------------------------- #
+#: The stand-in for the social layer's vocabulary. Declared here rather than
+#: imported, so this file tests the *mechanism* and not one caller of it.
+_SOCIAL_ATTR = "__test_social_capabilities__"
+
+
+class SocialCapability(StrEnum):
+    LOOKUP = "post.lookup"
+    SEARCH = "post.search"
+
+
+social_provides = make_provides(_SOCIAL_ATTR)
+
+
+class _Both(BaseProvider):
+    """A class that is both a chain provider and a post source."""
+
+    name = "both"
+    chain = Chain.BITCOIN
+
+    @provides(Capability.TX)
+    def chain_method(self) -> None: ...
+
+    @social_provides(SocialCapability.LOOKUP)
+    def social_method(self) -> None: ...
+
+
+def test_a_second_vocabulary_does_not_leak_into_the_capability_set() -> None:
+    """The sharpest form of the separation: what the provider *advertises*.
+
+    A merged attribute would make ``social_method`` look like a chain capability,
+    and a tracer would dispatch to it.
+    """
+    assert collect_capabilities(_Both) == frozenset({Capability.TX})
+    assert _Both.capabilities == frozenset({Capability.TX})
+
+
+class _Stacked(BaseProvider):
+    """Stacked decorators from the second vocabulary."""
+
+    name = "stacked"
+    chain = Chain.BITCOIN
+
+    @social_provides(SocialCapability.LOOKUP)
+    @social_provides(SocialCapability.SEARCH)
+    def stacked(self) -> None: ...
+
+
+def test_each_attribute_holds_only_its_own_vocabulary() -> None:
+    social: frozenset[StrEnum] = collect_declared(_Both, _SOCIAL_ATTR)
+    assert social == frozenset({SocialCapability.LOOKUP})
+    assert collect_capabilities(_Both).isdisjoint(social)
+
+
+def test_declared_by_honours_the_attribute_it_is_given() -> None:
+    assert declared_by(_Both.chain_method, _SOCIAL_ATTR) == frozenset()
+    assert declared_by(_Both.social_method) == frozenset()
+    assert declared_by(_Both.social_method, _SOCIAL_ATTR) == frozenset({SocialCapability.LOOKUP})
+
+
+def test_the_two_vocabularies_land_on_different_attributes() -> None:
+    """Not merely different values -- different storage, which is what keeps them apart."""
+    assert not hasattr(_Both.chain_method, _SOCIAL_ATTR)
+    assert not hasattr(_Both.social_method, "__chainlens_capabilities__")
+
+
+def test_make_provides_composes_like_provides() -> None:
+    assert declared_by(_Stacked.stacked, _SOCIAL_ATTR) == frozenset(
+        {SocialCapability.LOOKUP, SocialCapability.SEARCH}
+    )

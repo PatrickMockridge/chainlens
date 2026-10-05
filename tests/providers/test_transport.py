@@ -7,7 +7,7 @@ test.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 import httpx
@@ -19,6 +19,7 @@ from chainlens.exceptions import (
     ConfigurationError,
     NotFoundError,
     RateLimitError,
+    ResponseTooLargeError,
     SchemaError,
     TransportError,
 )
@@ -292,6 +293,101 @@ async def test_connection_failure_is_mapped_to_transport_error() -> None:
     with pytest.raises(TransportError, match="connection failed"):
         await transport.get_json("x")
     await transport.aclose()
+
+
+# --------------------------------------------------------------------------- #
+# Binary reads with a byte ceiling
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_get_bytes_returns_the_raw_body() -> None:
+    transport = _transport(lambda request: httpx.Response(200, content=b"\x89PNG\r\n\x1a\n"))
+    assert await transport.get_bytes("media/img.png") == b"\x89PNG\r\n\x1a\n"
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_get_bytes_refuses_a_declared_oversize_body() -> None:
+    """A declared length over the cap is refused without reading the body at all."""
+    transport = _transport(lambda request: httpx.Response(200, content=b"x" * 4096))
+    with pytest.raises(ResponseTooLargeError) as caught:
+        await transport.get_bytes("media/big.png", max_bytes=1000)
+    await transport.aclose()
+    assert caught.value.limit == 1000
+    assert caught.value.advertised == 4096
+
+
+@pytest.mark.anyio
+async def test_get_bytes_aborts_while_reading_an_undeclared_body() -> None:
+    """The real cap: enforced as the body arrives, not after buffering it.
+
+    A chunked response declares no length, so there is nothing to check up front
+    and the ceiling can only be applied to the bytes themselves.
+    """
+
+    async def chunks() -> AsyncIterator[bytes]:
+        yield b"x" * 2048
+        yield b"x" * 2048
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=chunks())
+
+    transport = _transport(handler)
+    with pytest.raises(ResponseTooLargeError) as caught:
+        await transport.get_bytes("media/stream.mp4", max_bytes=1000)
+    await transport.aclose()
+    assert caught.value.advertised is None
+    assert caught.value.limit == 1000
+
+
+@pytest.mark.anyio
+async def test_get_bytes_reads_a_body_exactly_at_the_cap() -> None:
+    """The cap is inclusive: a body of exactly ``max_bytes`` is not over it."""
+    transport = _transport(lambda request: httpx.Response(200, content=b"x" * 1000))
+    assert len(await transport.get_bytes("media/ok.png", max_bytes=1000)) == 1000
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_get_bytes_without_a_cap_reads_the_whole_body() -> None:
+    transport = _transport(lambda request: httpx.Response(200, content=b"x" * 8192))
+    assert len(await transport.get_bytes("media/anything.bin")) == 8192
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_get_bytes_tolerates_a_malformed_content_length() -> None:
+    """A bad header is not worth failing a fetch over when the body is readable."""
+    transport = _transport(
+        lambda request: httpx.Response(
+            200, headers={"Content-Length": "not-a-number"}, content=b"ok"
+        )
+    )
+    assert await transport.get_bytes("media/odd.bin") == b"ok"
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_get_bytes_maps_an_error_status() -> None:
+    """The streaming path must still describe a failure, not raise ResponseNotRead."""
+    transport = _transport(_constant(httpx.Response(404, text="no such object")))
+    with pytest.raises(NotFoundError):
+        await transport.get_bytes("media/gone.png")
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_an_oversized_response_is_not_retried() -> None:
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        return httpx.Response(200, content=b"x" * 4096)
+
+    transport = _transport(handler, max_attempts=5)
+    with pytest.raises(ResponseTooLargeError):
+        await transport.get_bytes("media/big.png", max_bytes=10)
+    await transport.aclose()
+    assert attempts["n"] == 1
 
 
 # --------------------------------------------------------------------------- #

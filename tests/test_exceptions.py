@@ -15,23 +15,36 @@ from chainlens.exceptions import (
     ChainlensError,
     ConfigurationError,
     HeuristicError,
+    LLMError,
     NotFoundError,
     PluginLoadError,
     ProviderError,
     RateLimitError,
+    ResponseTooLargeError,
     SchemaError,
+    SocialError,
     TracerError,
     TransportError,
 )
 
-PROVIDER_ERRORS = [TransportError, RateLimitError, NotFoundError, SchemaError, CapabilityError]
+PROVIDER_ERRORS = [
+    TransportError,
+    RateLimitError,
+    NotFoundError,
+    SchemaError,
+    CapabilityError,
+    ResponseTooLargeError,
+]
 ANALYSIS_ERRORS = [HeuristicError, TracerError]
+#: Failures that belong to neither the provider nor the analysis family.
+LAYER_ERRORS = [SocialError, LLMError]
 
 
 def test_every_error_derives_from_the_root() -> None:
     everything = [
         *PROVIDER_ERRORS,
         *ANALYSIS_ERRORS,
+        *LAYER_ERRORS,
         ProviderError,
         AnalysisError,
         ConfigurationError,
@@ -135,3 +148,38 @@ def test_errors_are_raisable_and_catchable_as_the_root() -> None:
         raise SchemaError("dune", "unexpected column")
     with pytest.raises(AnalysisError):
         raise TracerError("cycle")
+
+
+# --------------------------------------------------------------------------- #
+# Response size, social ingest, and language models
+# --------------------------------------------------------------------------- #
+def test_response_too_large_is_not_retryable() -> None:
+    """An oversized body stays oversized, so it must not join the retry set."""
+    err = ResponseTooLargeError("cdn", "over the cap", limit=1024)
+    assert isinstance(err, ProviderError)
+    assert not isinstance(err, TransportError)
+
+
+def test_response_too_large_carries_the_cap_and_the_declared_size() -> None:
+    err = ResponseTooLargeError("cdn", "over the cap", limit=1024, advertised=4096)
+    assert err.limit == 1024
+    assert err.advertised == 4096
+    assert str(err) == "[cdn] over the cap"
+
+
+def test_response_too_large_has_no_declared_size_when_the_cap_was_hit_while_reading() -> None:
+    assert ResponseTooLargeError("cdn", "m", limit=1).advertised is None
+
+
+def test_social_and_llm_errors_are_their_own_families() -> None:
+    """Neither is a provider failure: the transport already has its own tree."""
+    for cls in LAYER_ERRORS:
+        assert not issubclass(cls, ProviderError)
+        assert not issubclass(cls, AnalysisError)
+
+
+def test_an_llm_failure_does_not_claim_a_verdict_was_lost() -> None:
+    """The model authors no verdict, so the message must not imply one was."""
+    with pytest.raises(LLMError) as caught:
+        raise LLMError("extraction returned no parseable claims")
+    assert "verdict" not in str(caught.value).lower()

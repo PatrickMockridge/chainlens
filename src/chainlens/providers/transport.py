@@ -37,6 +37,7 @@ from chainlens.exceptions import (
     ConfigurationError,
     NotFoundError,
     RateLimitError,
+    ResponseTooLargeError,
     SchemaError,
     TransportError,
 )
@@ -47,6 +48,24 @@ __all__ = ["Transport"]
 _MAX_ATTEMPTS = 5
 _DEFAULT_HEADERS = {"Accept": "application/json"}
 _TRUNCATED_BODY = 200
+
+
+def _content_length(response: httpx.Response) -> int | None:
+    """The body length the upstream declared, when it declared a usable one.
+
+    Absent is the common case for a chunked response, and it is not an error: the
+    cap is then enforced on the body as it arrives. A malformed or negative header
+    is treated the same way rather than raising, because a bad header is not worth
+    failing a fetch over when the body itself can still be measured.
+    """
+    raw = response.headers.get("Content-Length")
+    if raw is None:
+        return None
+    try:
+        declared = int(raw)
+    except ValueError:
+        return None
+    return declared if declared >= 0 else None
 
 
 class _OfflineBackend(httpx.AsyncBaseTransport):
@@ -319,6 +338,83 @@ class Transport:
         """
         response = await self.request("GET", path, params=params, **kwargs)
         return response.text
+
+    async def get_bytes(
+        self,
+        path: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        max_bytes: int | None = None,
+        **kwargs: Any,
+    ) -> bytes:
+        """GET a path and return the raw body.
+
+        The response is **streamed**, so ``max_bytes`` is enforced as the body
+        arrives rather than after it has been buffered whole. That distinction is
+        the entire reason this method exists: media sits on a host we do not
+        control, and a cap checked after ``response.content`` has already been
+        materialised is not a cap.
+
+        Args:
+            max_bytes: refuse a body larger than this. ``None`` reads unbounded,
+                which is only appropriate when the size is known to be small.
+
+        Raises:
+            ResponseTooLargeError: the body exceeded ``max_bytes``. Never retried —
+                the same request returns the same oversized body.
+            (plus everything :meth:`request` raises)
+        """
+        normalized = self._normalize(path)
+        async for attempt in self._retrying():
+            with attempt:
+                return await self._stream_into_bytes(
+                    normalized, params=params, max_bytes=max_bytes, **kwargs
+                )
+        raise AssertionError("retry loop exited without returning or raising")  # pragma: no cover
+
+    async def _stream_into_bytes(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, Any] | None = None,
+        max_bytes: int | None = None,
+        **kwargs: Any,
+    ) -> bytes:
+        """Fetch ``url`` with a byte ceiling, aborting as soon as it is passed."""
+        if self._limiter is not None:
+            await self._limiter.acquire()
+        try:
+            async with self._client.stream("GET", url, params=params, **kwargs) as response:
+                if response.status_code >= 400:
+                    # An error body has to be read before it can be described, and
+                    # ``response.text`` raises on a stream that has not been read.
+                    await response.aread()
+                    self._check_status(response)
+
+                declared = _content_length(response)
+                if max_bytes is not None and declared is not None and declared > max_bytes:
+                    raise ResponseTooLargeError(
+                        self._name,
+                        f"response declares {declared} bytes, over the "
+                        f"{max_bytes} byte cap ({url})",
+                        limit=max_bytes,
+                        advertised=declared,
+                    )
+
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body.extend(chunk)
+                    if max_bytes is not None and len(body) > max_bytes:
+                        raise ResponseTooLargeError(
+                            self._name,
+                            f"response exceeded the {max_bytes} byte cap ({url})",
+                            limit=max_bytes,
+                        )
+                return bytes(body)
+        except httpx.TimeoutException as exc:
+            raise TransportError(self._name, f"request timed out: {exc}") from exc
+        except httpx.TransportError as exc:
+            raise TransportError(self._name, f"connection failed: {exc}") from exc
 
     async def post_json(
         self,

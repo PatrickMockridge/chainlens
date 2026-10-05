@@ -11,6 +11,12 @@ adapters map transport and schema problems onto this tree so the caller can
 distinguish "the network blipped" (:class:`TransportError`) from "the upstream
 JSON changed shape" (:class:`SchemaError`) from "this provider cannot answer
 that question" (:class:`CapabilityError`).
+
+The social and model layers join the same tree rather than carrying their own.
+:class:`SocialError` is the ingest vocabulary above the transport, and
+:class:`LLMError` marks a model that failed — which, because no verdict and no
+number is ever authored by the model, degrades the *extraction* rather than the
+evidence.
 """
 
 from __future__ import annotations
@@ -96,6 +102,34 @@ class BadRequestError(ProviderError):
         super().__init__(provider, message)
 
 
+class ResponseTooLargeError(ProviderError):
+    """An upstream response exceeded the byte cap its caller set.
+
+    Raised by ``Transport.get_bytes``, which streams and aborts rather than
+    buffering a body whose size we do not control. Deterministic — the same
+    request returns the same oversized body — so it is deliberately **not** a
+    :class:`TransportError` and is never retried: five attempts at a body that is
+    too large five times over is pure waste.
+
+    Attributes:
+        limit: the cap the caller asked for, in bytes.
+        advertised: the ``Content-Length`` the upstream declared, when the refusal
+            came from the header rather than from the body as it arrived.
+    """
+
+    def __init__(
+        self,
+        provider: str,
+        message: str,
+        *,
+        limit: int,
+        advertised: int | None = None,
+    ) -> None:
+        self.limit = limit
+        self.advertised = advertised
+        super().__init__(provider, message)
+
+
 class SchemaError(ProviderError):
     """The upstream payload did not match the shape we know how to parse.
 
@@ -143,3 +177,27 @@ class TracerError(AnalysisError):
     def __init__(self, message: str, *, detail: dict[str, Any] | None = None) -> None:
         self.detail = detail or {}
         super().__init__(message)
+
+
+# --------------------------------------------------------------------------- #
+# Social ingest and language models
+# --------------------------------------------------------------------------- #
+class SocialError(ChainlensError):
+    """A post could not be ingested, validated or reduced to a claim.
+
+    Distinct from :class:`ProviderError`, which the X client raises *through*: this
+    is the social layer's own vocabulary — a rejected search operator, an
+    unsupported media type, a post whose text could not be recovered. A transport
+    failure is still a transport failure; this type is for the failures that only
+    exist because the upstream is a social network.
+    """
+
+
+class LLMError(ChainlensError):
+    """A model call failed, or its output could not be read as a structured answer.
+
+    Because no verdict and no number in the output is ever authored by the model,
+    a failure here costs the *extraction* and nothing else: the deterministic
+    layers keep whatever they already established, and the caller reports the gap
+    rather than filling it.
+    """

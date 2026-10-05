@@ -11,7 +11,9 @@ from chainlens.providers.base import BaseProvider, Provider
 from chainlens.providers.capabilities import (
     Capability,
     collect_capabilities,
+    collect_declared,
     declared_by,
+    make_provides,
     provides,
 )
 from chainlens.providers.composite import CompositeProvider
@@ -32,8 +34,10 @@ __all__ = [
     "ProviderInfo",
     "ProviderRegistry",
     "collect_capabilities",
+    "collect_declared",
     "declared_by",
     "get_registry",
+    "make_provides",
     "provides",
     "reset_registry_cache",
 ]
