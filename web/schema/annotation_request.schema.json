@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "AnnotationKind": {
+      "description": "What a person is asserting about a target.\n\nDeliberately a short vocabulary of *kinds of assertion* rather than free text. A kind\ncan be checked against a computed label \u2014 and a disagreement between the two is worth\nshowing \u2014 whereas a sentence cannot.",
+      "enum": [
+        "exchange",
+        "mixer",
+        "sanctioned",
+        "own_wallet",
+        "correction",
+        "note"
+      ],
+      "title": "AnnotationKind",
+      "type": "string"
+    },
+    "GraphRef": {
+      "additionalProperties": false,
+      "description": "A pointer into a ledger document, which may or may not hold it.\n\nAttributes:\n    kind: whether the reference names a node or an edge.\n    key: the node or edge key. Node keys are ``address:``/``tx:``/``unparsed:``;\n        edge keys are ``{txid}:in|out|tok|int:{index}``.\n    exists: whether it was found in the document it was resolved against. ``None``\n        means nobody has looked \u2014 which is not the same as absent, and a front end\n        should offer to fetch rather than reporting nothing there.\n    note: why it was not found, when something knows.",
+      "properties": {
+        "exists": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exists"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/GraphRefKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "title": "GraphRef",
+      "type": "object"
+    },
+    "GraphRefKind": {
+      "description": "What a reference points at. An edge is addressable here, unlike in the flow view.",
+      "enum": [
+        "node",
+        "edge"
+      ],
+      "title": "GraphRefKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What a client sends to record an annotation.\n\nThe *request* rather than the record, because two fields of the record are not the\nclient's to supply. ``id`` is content-addressed and derived by the same function whatever\nwrote it, so two clients recording the same assertion agree; ``created_at`` is stamped by\nwhoever accepts the record, because a browser's clock is not an authority and a record\ncommitted to a repository should say when it *was* recorded rather than when a machine\nbelieved it was.\n\nThere is deliberately no ``source`` field. ``Annotation`` refuses to claim anything but\n``USER``, and leaving the field out means an attempt to record provider evidence through\nthis path is rejected as an unknown field rather than as a value that failed a check \u2014\nthe failure is at the shape, which cannot be worked around.\n\nThe constraints ``Annotation`` enforces (an owner, a stated basis, a source that is the\nperson's own) are enforced there, once. This model only fixes the field set.",
+  "properties": {
+    "assertion": {
+      "title": "Assertion",
+      "type": "string"
+    },
+    "author": {
+      "title": "Author",
+      "type": "string"
+    },
+    "basis": {
+      "title": "Basis",
+      "type": "string"
+    },
+    "evidence_urls": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Urls",
+      "type": "array"
+    },
+    "kind": {
+      "$ref": "#/$defs/AnnotationKind"
+    },
+    "target": {
+      "$ref": "#/$defs/GraphRef"
+    }
+  },
+  "required": [
+    "target",
+    "kind",
+    "assertion",
+    "author",
+    "basis"
+  ],
+  "title": "AnnotationRequest",
+  "type": "object"
+}

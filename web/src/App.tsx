@@ -16,9 +16,17 @@ import "@xyflow/react/dist/style.css";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  document as fetchDocument,
+  health,
+  overlay as fetchOverlay,
+  recordAnnotation,
+  writePermission,
+  type WritePermission,
+} from "./api";
 import { GraphView } from "./graph/GraphView";
-import type { LedgerDocument } from "./schema/documents";
-import { classify } from "./schema/documents";
+import type { AnnotationRequest, LedgerDocument } from "./schema/documents";
+import { OverlayDocumentSchema, classify } from "./schema/documents";
 import { EvidencePanel } from "./panel/EvidencePanel";
 import { VerifyView } from "./views/VerifyView";
 import {
@@ -52,6 +60,12 @@ export function App() {
   const [mode, setMode] = useState<Mode>({ kind: "probing" });
   const [notice, setNotice] = useState<string | null>(null);
   const [view, setView] = useState<View>("explore");
+  // Whether a record can be written, and the reason when it cannot. The server's answer rather
+  // than the app's inference, so the message a reader sees names the flag they would change.
+  const [write, setWrite] = useState<WritePermission>({
+    writable: false,
+    reason: "no server is answering yet",
+  });
 
   const apply = useCallback((source: string, value: unknown) => {
     const classified = classify(value);
@@ -62,13 +76,23 @@ export function App() {
       );
       return;
     }
+    if (classified.kind === "request") {
+      // Recognised so that dropping one back explains itself. It is not a record and this app
+      // will not pretend otherwise: the identifier and the timestamp are stamped by a server.
+      setNotice(
+        `${source} is an annotation request, not a record — it says what to assert and carries ` +
+          "no identifier or timestamp. A server started with `--annotations <dir>` is what " +
+          "records it.",
+      );
+      return;
+    }
     setStore((current) => {
       const before = current;
       const after =
         classified.kind === "ledger"
           ? addLedger(current, source, classified.document)
           : classified.kind === "overlay"
-            ? addOverlay(current, classified.document)
+            ? addOverlay(current, source, classified.document)
             : addDerivation(current, classified.document);
       const counts = mergeCounts(before, after);
       if (classified.kind === "ledger") {
@@ -81,29 +105,55 @@ export function App() {
     });
   }, []);
 
+  /** Re-read the server's join, which is what makes a recorded assertion appear. */
+  const refreshOverlay = useCallback(async () => {
+    const refreshed = await fetchOverlay();
+    if (refreshed === null) return;
+    const parsed = OverlayDocumentSchema.safeParse(refreshed);
+    if (!parsed.success) return;
+    // Keyed by source, so this replaces the last join rather than stacking a stale one beside it.
+    setStore((current) => addOverlay(current, "live", parsed.data));
+  }, []);
+
+  const onRecord = useCallback(
+    async (request: AnnotationRequest): Promise<string | null> => {
+      const result = await recordAnnotation(request);
+      if (!result.ok) return result.error;
+      await refreshOverlay();
+      setNotice(`Recorded ${result.recorded.id}.`);
+      return null;
+    },
+    [refreshOverlay],
+  );
+
   // Probe once on boot. A server that is not running is the normal case for a static export, so a
   // failed probe is a mode rather than an error.
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     void (async () => {
-      try {
-        const health = await fetch("/api/health", { signal: controller.signal });
-        if (!health.ok) throw new Error(String(health.status));
-        const payload = (await health.json()) as { provider?: string };
-        const document = (await (await fetch("/api/document", { signal: controller.signal })).json()) as LedgerDocument;
-        if (cancelled) return;
-        setMode({ kind: "live", provider: payload.provider ?? "unknown" });
-        apply("live", document);
-      } catch {
-        if (!cancelled) setMode({ kind: "static" });
+      const answered = await health(controller.signal);
+      if (cancelled) return;
+      if (answered === null) {
+        setMode({ kind: "static" });
+        setWrite(await writePermission(controller.signal));
+        return;
       }
+      const graph = await fetchDocument(controller.signal);
+      if (cancelled) return;
+      setMode({ kind: "live", provider: answered.provider });
+      if (graph !== null) apply("live", graph);
+      setWrite(await writePermission(controller.signal));
+      if (cancelled) return;
+      // The join, including any annotation already on disk — so a reload shows what was recorded
+      // rather than only what has been recorded since the tab opened.
+      await refreshOverlay();
     })();
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [apply]);
+  }, [apply, refreshOverlay]);
 
   const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -126,9 +176,9 @@ export function App() {
 
   const withEvidence = useMemo(() => {
     const keys = new Set<string>();
-    for (const overlay of store.overlays) {
-      for (const key of Object.keys(overlay.by_node ?? {})) keys.add(key);
-      for (const key of Object.keys(overlay.by_edge ?? {})) keys.add(key);
+    for (const { document } of store.overlays) {
+      for (const key of Object.keys(document.by_node ?? {})) keys.add(key);
+      for (const key of Object.keys(document.by_edge ?? {})) keys.add(key);
     }
     return keys;
   }, [store.overlays]);
@@ -243,6 +293,8 @@ export function App() {
               store={store}
               evidence={selectedKey(store) !== null ? evidenceFor(store, selectedKey(store)!) : []}
               missing={missing}
+              write={write}
+              onRecord={onRecord}
               onSelectClaim={onSelectClaim}
               onSelectBranch={onSelectBranch}
               onSelectRef={onSelectRef}

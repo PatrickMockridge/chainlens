@@ -83,13 +83,18 @@ def test_the_committed_schema_matches_a_fresh_render(name: str) -> None:
 
 
 def test_every_document_the_front_end_reads_has_a_schema() -> None:
-    """Three documents — the graph, a derivation, and the evidence on the graph.
+    """Four — the graph, a derivation, the evidence on the graph, and what the app sends back.
 
-    A schema per root rather than one file holding all three: a code generator emits a module
-    per file, and one file with three roots would need a hand-written entry point that nobody
+    A schema per root rather than one file holding all of them: a code generator emits a module
+    per file, and one file with four roots would need a hand-written entry point that nobody
     would remember to extend.
+
+    The request is the odd one out — it travels towards the server — and it is here for the same
+    reason as the rest: a payload built from a second description of the fields is a second
+    description that can be wrong, and the browser would find out from a 400 rather than from its
+    own build.
     """
-    assert set(DOCUMENTS) == {"ledger", "derivation", "overlay"}
+    assert set(DOCUMENTS) == {"ledger", "derivation", "overlay", "annotation_request"}
     for name in DOCUMENTS:
         assert schema_path(name).exists(), f"{name}.schema.json is not committed"
 

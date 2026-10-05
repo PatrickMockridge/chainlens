@@ -26,7 +26,7 @@ export interface Store {
   readonly sources: readonly string[];
   readonly nodes: ReadonlyMap<string, LedgerNode>;
   readonly edges: ReadonlyMap<string, LedgerEdge>;
-  readonly overlays: readonly OverlayDocument[];
+  readonly overlays: readonly OverlayEntry[];
   readonly derivations: readonly DerivationDocument[];
   readonly selection: Selection | null;
   /**
@@ -38,6 +38,12 @@ export interface Store {
    */
   readonly branch: string | null;
   readonly warnings: readonly string[];
+}
+
+/** Where an overlay came from, so a refresh from the same place replaces rather than stacks. */
+export interface OverlayEntry {
+  readonly source: string;
+  readonly document: OverlayDocument;
 }
 
 export type Selection =
@@ -113,10 +119,24 @@ export function mergeCounts(
   };
 }
 
-export function addOverlay(store: Store, overlay: OverlayDocument): Store {
-  const known = new Set(store.overlays.map((item) => JSON.stringify(item.claim_refs)));
-  if (known.has(JSON.stringify(overlay.claim_refs))) return store;
-  return { ...store, overlays: [...store.overlays, overlay] };
+/**
+ * Add an overlay, or replace the one the same source gave before.
+ *
+ * **Keyed by source rather than by content**, unlike nodes and edges, and the difference is
+ * deliberate. A node is a fact about the chain, so the same one from two documents *is* the same
+ * one. An overlay is a *view of what is known right now*: the server re-joins it on every read,
+ * and an annotation recorded a moment ago changes it. Unioning those would stack a stale join
+ * beside a fresh one and show an address twice while the two disagreed about what it is.
+ *
+ * It also removes a fragile check — deduplicating by comparing serialised `claim_refs` — which
+ * would have dropped a refreshed overlay precisely when it carried something new.
+ */
+export function addOverlay(store: Store, source: string, overlay: OverlayDocument): Store {
+  const existing = store.overlays.findIndex((entry) => entry.source === source);
+  if (existing === -1) return { ...store, overlays: [...store.overlays, { source, document: overlay }] };
+  const overlays = [...store.overlays];
+  overlays[existing] = { source, document: overlay };
+  return { ...store, overlays };
 }
 
 export function addDerivation(store: Store, derivation: DerivationDocument): Store {
@@ -194,24 +214,24 @@ export function highlightedBranches(store: Store): Set<string> {
 /** Every node key an overlay associates with a claim, for highlighting. */
 export function refsForClaim(store: Store, claimId: string): Set<string> {
   const keys = new Set<string>();
-  for (const overlay of store.overlays) {
-    for (const ref of overlay.claim_refs?.[claimId] ?? []) keys.add(ref.key);
+  for (const { document } of store.overlays) {
+    for (const ref of document.claim_refs?.[claimId] ?? []) keys.add(ref.key);
   }
   return keys;
 }
 
 /** The evidence items the loaded overlays place on one node or edge. */
 export function evidenceFor(store: Store, key: string): EvidenceItem[] {
-  return store.overlays.flatMap((overlay) => [
-    ...(overlay.by_node?.[key] ?? []),
-    ...(overlay.by_edge?.[key] ?? []),
+  return store.overlays.flatMap(({ document }) => [
+    ...(document.by_node?.[key] ?? []),
+    ...(document.by_edge?.[key] ?? []),
   ]);
 }
 
 /** Every unresolved reference across the loaded overlays, deduplicated by key. */
 export function unresolved(store: Store): { key: string; note?: string }[] {
   const seen = new Map<string, { key: string; note?: string }>();
-  for (const overlay of store.overlays) {
+  for (const { document: overlay } of store.overlays) {
     for (const ref of overlay.unjoined) {
       // A note of `null` means "no reason recorded", which is not a reason — normalised here so
       // a renderer never has to decide what a null note reads as.

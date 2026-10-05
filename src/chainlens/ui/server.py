@@ -40,10 +40,11 @@ from urllib.parse import parse_qs, urlparse
 import anyio
 
 from chainlens.exceptions import ChainlensError
+from chainlens.ledger.annotate import overlay
 from chainlens.ledger.annotations import AnnotationStore, AnnotationStoreError
 from chainlens.ledger.schema import strict_dumps
 from chainlens.ledger.walk import walk_ledger
-from chainlens.models.annotate import Annotation
+from chainlens.models.annotate import Annotation, AnnotationRequest
 from chainlens.models.base import utcnow
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.providers.base import Provider
@@ -148,6 +149,9 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/document":
             self._document(parse_qs(parsed.query))
             return
+        if parsed.path == "/api/overlay":
+            self._overlay()
+            return
         if parsed.path == "/api/annotations":
             self._list_annotations()
             return
@@ -215,6 +219,31 @@ class _Handler(BaseHTTPRequestHandler):
             return
         _json_response(self, strict_dumps(self.config.graph), HTTPStatus.OK)
 
+    def _overlay(self) -> None:
+        """Everything known about the served graph, joined onto its own keys.
+
+        The join happens here rather than in the browser because the browser cannot do it: it
+        holds no findings, labels or clusters, and the whole point of the overlay is that it is
+        a join of what the analysis layers computed rather than of what a client inferred.
+
+        It is served on every read rather than cached, so an annotation recorded a moment ago
+        appears in the panel on the next load without anything having to be invalidated — and
+        so "reload the app and it is still there" is a property of the file rather than of a
+        cache that might not have been invalidated.
+        """
+        store = self.config.annotations
+        warnings: tuple[str, ...] = ()
+        try:
+            annotations = () if store is None else store.load()
+        except AnnotationStoreError as exc:
+            # A malformed annotation file must not take the whole view down: the graph is still
+            # the graph, and the reader is told which file to go and look at.
+            annotations = ()
+            warnings = (f"annotations could not be read: {exc}",)
+
+        result = overlay(self.config.graph, annotations=annotations, warnings=warnings)
+        _json_response(self, strict_dumps(result), HTTPStatus.OK)
+
     def _list_annotations(self) -> None:
         store = self.config.annotations
         if store is None:
@@ -240,6 +269,13 @@ class _Handler(BaseHTTPRequestHandler):
         )
 
     def _add_annotation(self) -> None:
+        """Record one assertion, composed here from what the client asked for.
+
+        **The client sends a request, not a record.** ``id`` is derived and ``created_at`` is
+        stamped on this side, because a content-addressed identifier has to be computed by the
+        same function whatever wrote it and because a browser's clock is not an authority: the
+        record says when it was recorded, not when a machine believed it was.
+        """
         if not self.config.allow_writes or self.config.annotations is None:
             _error(
                 self,
@@ -252,7 +288,16 @@ class _Handler(BaseHTTPRequestHandler):
         if payload is None:
             return
         try:
-            annotation = Annotation.model_validate(payload)
+            request = AnnotationRequest.model_validate(payload)
+            annotation = Annotation.create(
+                target=request.target,
+                kind=request.kind,
+                assertion=request.assertion,
+                author=request.author,
+                basis=request.basis,
+                created_at=utcnow(),
+                evidence_urls=request.evidence_urls,
+            )
             self.config.annotations.append(annotation)
         except (ValueError, AnnotationStoreError) as exc:
             _error(self, HTTPStatus.BAD_REQUEST, str(exc))

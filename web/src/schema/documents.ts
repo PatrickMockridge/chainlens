@@ -17,6 +17,7 @@
  */
 import { z } from "zod";
 
+import { AnnotationRequestDocumentSchema } from "./annotation_request.gen";
 import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
 import { LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
 import { EvidenceItemSchema, GraphRefSchema, OverlayDocumentSchema } from "./overlay.gen";
@@ -28,6 +29,15 @@ export type OverlayDocument = z.infer<typeof OverlayDocumentSchema>;
 export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
 export type GraphRef = z.infer<typeof GraphRefSchema>;
 export type DerivationDocument = z.infer<typeof DerivationDocumentSchema>;
+/**
+ * What the app *sends* to record an annotation.
+ *
+ * The only wire type that travels towards the server, and it is generated for the same reason as
+ * the rest: a payload written from a second description of the fields would be a second
+ * description that can be wrong, and the browser would learn that from a 400. The record itself —
+ * identifier and timestamp — is the server's to compose, which is why this type has neither.
+ */
+export type AnnotationRequest = z.infer<typeof AnnotationRequestDocumentSchema>;
 
 export type LedgerTransactionNode = Extract<LedgerNode, { kind: "transaction" }>;
 export type LedgerAddressNode = Extract<LedgerNode, { kind: "address" }>;
@@ -63,12 +73,22 @@ export function asTree(root: unknown): DerivationNode {
   return root as DerivationNode;
 }
 
-export { DerivationDocumentSchema, DerivationNodeSchema, LedgerDocumentSchema, OverlayDocumentSchema };
+export {
+  AnnotationRequestDocumentSchema,
+  DerivationDocumentSchema,
+  DerivationNodeSchema,
+  LedgerDocumentSchema,
+  OverlayDocumentSchema,
+};
+
+export type Classified =
+  | { kind: "ledger"; document: LedgerDocument }
+  | { kind: "overlay"; document: OverlayDocument }
+  | { kind: "derivation"; document: DerivationDocument }
+  | { kind: "request"; document: AnnotationRequest };
 
 /** Which document a parsed JSON file turned out to be, or `null` if it is none of them. */
-export function classify(
-  value: unknown,
-): { kind: "ledger"; document: LedgerDocument } | { kind: "overlay"; document: OverlayDocument } | { kind: "derivation"; document: DerivationDocument } | null {
+export function classify(value: unknown): Classified | null {
   // Tried in order of specificity: a ledger document has `nodes` and `edges`, an overlay has
   // `by_node`, and a derivation has `root`. None is a subset of another, so the order does not
   // matter for correctness — but it does for the error a reader sees.
@@ -80,6 +100,12 @@ export function classify(
 
   const derivation = DerivationDocumentSchema.safeParse(value);
   if (derivation.success) return { kind: "derivation", document: derivation.data };
+
+  // Last, because a request is the smallest of the four and the only one that is not a record of
+  // anything: recognised so that dropping one back into the app explains what it is — a thing to
+  // send to a server — rather than reporting an unrecognised file.
+  const request = AnnotationRequestDocumentSchema.safeParse(value);
+  if (request.success) return { kind: "request", document: request.data };
 
   return null;
 }

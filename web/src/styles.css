@@ -241,6 +241,76 @@ body {
   border-left-color: var(--declared);
 }
 
+/* -- recording an assertion ---------------------------------------------- */
+
+/*
+ * Set apart from the evidence above it, and outlined in the declared colour, because everything in
+ * this box is the reader's own assertion rather than something the library computed.
+ */
+.annotate {
+  border: 1px dashed var(--declared);
+  border-radius: 6px;
+  margin-top: 16px;
+  padding: 8px 10px;
+}
+
+.annotate h3 {
+  color: var(--declared);
+  margin: 0 0 6px;
+}
+
+.annotate-row {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.annotate-row span {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.annotate-row input,
+.annotate-row select,
+.annotate-row textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  padding: 4px 6px;
+  width: 100%;
+}
+
+.annotate-row textarea {
+  min-height: 44px;
+  resize: vertical;
+}
+
+.annotate button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  margin-top: 4px;
+  padding: 3px 10px;
+}
+
+.annotate button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* The refusal, in the server's own words where the server gave any. */
+.annotate-problem {
+  color: var(--warn);
+  margin: 6px 0 0;
+}
+
 .canvas {
   min-height: 0;
   position: relative;

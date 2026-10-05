@@ -31,7 +31,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from chainlens.models.annotate import EvidenceOverlay
+from chainlens.models.annotate import AnnotationRequest, EvidenceOverlay
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph
 
@@ -49,12 +49,18 @@ __all__ = [
 #: can find is a schema nobody regenerates.
 SCHEMA_DIR = Path("web/schema")
 
-#: Every document the front end reads, by the name its schema file is called. Adding one
-#: here is all it takes for it to be emitted, committed and checked for staleness.
+#: Every document the front end reads *or sends*, by the name its schema file is called.
+#: Adding one here is all it takes for it to be emitted, committed and checked for staleness.
+#:
+#: ``annotation_request`` is the one document that travels the other way. It is here rather
+#: than hand-written in TypeScript for the same reason the others are: a request body built
+#: from a second description of the fields is a second description that can be wrong, and the
+#: browser would find out from a 400 rather than from its own type checker.
 DOCUMENTS: dict[str, type[BaseModel]] = {
     "ledger": LedgerGraph,
     "derivation": DerivationDocument,
     "overlay": EvidenceOverlay,
+    "annotation_request": AnnotationRequest,
 }
 
 

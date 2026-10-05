@@ -35,6 +35,7 @@ from chainlens.models.wire import DetailEntry, GraphRef
 __all__ = [
     "Annotation",
     "AnnotationKind",
+    "AnnotationRequest",
     "EvidenceItem",
     "EvidenceKind",
     "EvidenceOverlay",
@@ -149,6 +150,33 @@ class Annotation(LensModel):
             assertion=assertion,
             evidence_urls=evidence_urls,
         )
+
+
+class AnnotationRequest(LensModel):
+    """What a client sends to record an annotation.
+
+    The *request* rather than the record, because two fields of the record are not the
+    client's to supply. ``id`` is content-addressed and derived by the same function whatever
+    wrote it, so two clients recording the same assertion agree; ``created_at`` is stamped by
+    whoever accepts the record, because a browser's clock is not an authority and a record
+    committed to a repository should say when it *was* recorded rather than when a machine
+    believed it was.
+
+    There is deliberately no ``source`` field. ``Annotation`` refuses to claim anything but
+    ``USER``, and leaving the field out means an attempt to record provider evidence through
+    this path is rejected as an unknown field rather than as a value that failed a check —
+    the failure is at the shape, which cannot be worked around.
+
+    The constraints ``Annotation`` enforces (an owner, a stated basis, a source that is the
+    person's own) are enforced there, once. This model only fixes the field set.
+    """
+
+    target: GraphRef
+    kind: AnnotationKind
+    assertion: str
+    author: str
+    basis: str
+    evidence_urls: tuple[str, ...] = ()
 
 
 class EvidenceKind(StrEnum):

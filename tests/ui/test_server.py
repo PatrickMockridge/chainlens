@@ -9,7 +9,6 @@ files rather than resolving paths. A test that stubbed the transport would asser
 
 from __future__ import annotations
 
-import json
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,10 +18,8 @@ import pytest
 
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.walk import walk_ledger
-from chainlens.models.annotate import Annotation, AnnotationKind
 from chainlens.models.enums import Chain
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
-from chainlens.models.wire import GraphRef, GraphRefKind
 from chainlens.providers.capabilities import Capability
 from chainlens.testing.factories import btc_transaction, inp, out
 from chainlens.testing.in_memory import InMemoryProvider
@@ -53,15 +50,20 @@ async def _walk(provider: InMemoryProvider) -> LedgerGraph:
     return await walk_ledger(provider, seed_address=ALICE, policy=LedgerPolicy(max_depth=1))
 
 
-def _annotation() -> Annotation:
-    return Annotation.create(
-        target=GraphRef(kind=GraphRefKind.NODE, key=f"address:bitcoin:{ALICE}"),
-        kind=AnnotationKind.EXCHANGE,
-        assertion="a venue deposit address",
-        author="pm",
-        basis="listed by the venue",
-        created_at=WHEN,
-    )
+def _request() -> dict[str, object]:
+    """What a client sends: the fields, without the identifier or the timestamp.
+
+    Those two are the server's — one content-addressed so two clients recording the same
+    assertion agree, one stamped when the record is accepted — so a client that sent them
+    would be describing a record it does not get to define.
+    """
+    return {
+        "target": {"kind": "node", "key": f"address:bitcoin:{ALICE}"},
+        "kind": "exchange",
+        "assertion": "a venue deposit address",
+        "author": "pm",
+        "basis": "listed by the venue",
+    }
 
 
 @pytest.fixture
@@ -225,23 +227,114 @@ def test_annotations_start_empty_and_are_readable(served: object) -> None:
 def test_an_annotation_can_be_recorded_and_comes_back(served: object) -> None:
     posted = httpx.post(
         f"{served.base}/api/annotations",  # type: ignore[attr-defined]
-        json=json.loads(_annotation().model_dump_json()),
+        json=_request(),
     )
     assert posted.status_code == 201
 
+    # The identifier and the timestamp are the server's, and both come back on the record.
+    body = posted.json()
+    assert body["id"].startswith("annotation:")
+    assert body["created_at"]
+    assert body["source"] == "user"
+
     listed = httpx.get(f"{served.base}/api/annotations").json()  # type: ignore[attr-defined]
-    assert [item["id"] for item in listed["annotations"]] == [posted.json()["id"]]
+    assert [item["id"] for item in listed["annotations"]] == [body["id"]]
 
     on_disk = served.annotations.load()  # type: ignore[attr-defined]
     assert len(on_disk) == 1
     assert on_disk[0].source.value == "user"
 
 
+def test_a_client_cannot_choose_the_identifier_or_the_timestamp(served: object) -> None:
+    """A record committed to a repository says when it was recorded, not what a clock said.
+
+    Both are refused as *unknown fields* rather than as bad values, so the failure is at the
+    shape of the request and cannot be worked around by sending something well-formed.
+    """
+    for field, value in (("id", "annotation:mine"), ("created_at", WHEN.isoformat())):
+        response = httpx.post(
+            f"{served.base}/api/annotations",  # type: ignore[attr-defined]
+            json=_request() | {field: value},
+        )
+        assert response.status_code == 400, field
+
+
+def test_a_client_cannot_claim_a_source(served: object) -> None:
+    """Provider evidence does not arrive through this door.
+
+    There is no `source` field on the request at all, so an attempt to record something as a
+    provider's own say-so is refused as an unknown field — which is a stronger refusal than a
+    validator rejecting a value, because there is no value that would have been accepted.
+    """
+    response = httpx.post(
+        f"{served.base}/api/annotations",  # type: ignore[attr-defined]
+        json=_request() | {"source": "provider"},
+    )
+    assert response.status_code == 400
+
+
 def test_an_annotation_that_breaks_the_model_is_refused(served: object) -> None:
     """A declared assertion with no author and no ground is not a record."""
-    broken = json.loads(_annotation().model_dump_json()) | {"basis": ""}
-    response = httpx.post(f"{served.base}/api/annotations", json=broken)  # type: ignore[attr-defined]
-    assert response.status_code == 400
+    for field, value in (("basis", ""), ("author", "   ")):
+        response = httpx.post(
+            f"{served.base}/api/annotations",  # type: ignore[attr-defined]
+            json=_request() | {field: value},
+        )
+        assert response.status_code == 400, field
+
+
+def test_the_overlay_is_served_without_the_browser_joining_anything(served: object) -> None:
+    """The join happens here, because a browser holds no findings, labels or clusters."""
+    posted = httpx.post(
+        f"{served.base}/api/annotations",  # type: ignore[attr-defined]
+        json=_request(),
+    )
+    assert posted.status_code == 201
+
+    payload = httpx.get(f"{served.base}/api/overlay").json()  # type: ignore[attr-defined]
+    key = f"address:bitcoin:{ALICE}"
+    assert key in payload["by_node"]
+    item = payload["by_node"][key][0]
+    assert item["kind"] == "annotation"
+    assert item["source"] == "user"
+    # And the graph it was joined onto is not in the overlay, so nothing can be mistaken for a
+    # measurement: an overlay carries evidence, never the ledger.
+    assert "nodes" not in payload
+
+
+def test_the_overlay_is_read_from_disk_on_every_request(served: object) -> None:
+    """So "reload the app and it is still there" is a property of the file, not of a cache."""
+    empty = httpx.get(f"{served.base}/api/overlay").json()  # type: ignore[attr-defined]
+    assert empty["by_node"] == {}
+
+    httpx.post(f"{served.base}/api/annotations", json=_request())  # type: ignore[attr-defined]
+
+    again = httpx.get(f"{served.base}/api/overlay").json()  # type: ignore[attr-defined]
+    assert again["by_node"] != empty["by_node"]
+
+
+def test_an_overlay_is_served_even_with_no_annotation_directory(tmp_path: Path) -> None:
+    """Read-only is a mode rather than an error: the graph is evidence too."""
+    server = build_server(
+        ServeConfig(provider=_provider(), graph=_graph()), port=0, static_dir=tmp_path
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://{LOOPBACK}:{server.server_address[1]}"
+    try:
+        payload = httpx.get(f"{base}/api/overlay").json()
+        assert payload == {
+            "by_node": {},
+            "by_edge": {},
+            "claim_refs": {},
+            "schema_version": 1,
+            "unjoined": [],
+            "warnings": [],
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_a_server_without_a_directory_refuses_to_write(tmp_path: Path) -> None:
@@ -253,9 +346,7 @@ def test_a_server_without_a_directory_refuses_to_write(tmp_path: Path) -> None:
     thread.start()
     base = f"http://{LOOPBACK}:{server.server_address[1]}"
     try:
-        response = httpx.post(
-            f"{base}/api/annotations", json=json.loads(_annotation().model_dump_json())
-        )
+        response = httpx.post(f"{base}/api/annotations", json=_request())
         assert response.status_code == 403
         assert "--annotations" in response.json()["error"]
         assert httpx.get(f"{base}/api/annotations").json() == {"annotations": [], "writable": False}
@@ -327,6 +418,7 @@ def test_the_schema_command_writes_every_document(tmp_path: Path) -> None:
         "ledger.schema.json",
         "derivation.schema.json",
         "overlay.schema.json",
+        "annotation_request.schema.json",
     }
 
 

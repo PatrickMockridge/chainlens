@@ -127,7 +127,7 @@ describe("merging by key", () => {
 
 describe("the overlay, and what it does not fit", () => {
   it("finds the evidence on a node and on an edge", () => {
-    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), overlay);
+    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), "overlay.json", overlay);
     const nodeKeys = Object.keys(overlay.by_node ?? {});
     const edgeKeys = Object.keys(overlay.by_edge ?? {});
     expect(nodeKeys.length).toBeGreaterThan(0);
@@ -136,12 +136,12 @@ describe("the overlay, and what it does not fit", () => {
   });
 
   it("answers with nothing, rather than failing, for a key it does not know", () => {
-    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), overlay);
+    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), "overlay.json", overlay);
     expect(evidenceFor(store, "address:bitcoin:nobody")).toEqual([]);
   });
 
   it("maps a claim to every key it touches", () => {
-    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), overlay);
+    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), "overlay.json", overlay);
     const claimId = Object.keys(overlay.claim_refs ?? {})[0]!;
     const refs = refsForClaim(store, claimId);
     expect(refs.size).toBeGreaterThan(0);
@@ -149,7 +149,7 @@ describe("the overlay, and what it does not fit", () => {
   });
 
   it("reports evidence that resolved to nothing, instead of dropping it", () => {
-    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), overlay);
+    const store = addOverlay(addLedger(emptyStore, "a.json", bitcoin), "overlay.json", overlay);
     const missing = unresolved(store);
     expect(missing.length).toBeGreaterThan(0);
     // Nothing that did not resolve is in the graph, and the app says so rather than showing an
@@ -157,9 +157,18 @@ describe("the overlay, and what it does not fit", () => {
     for (const item of missing) expect(resolves(store, item.key)).toBe(false);
   });
 
-  it("does not load the same overlay twice", () => {
-    const first = addOverlay(emptyStore, overlay);
-    expect(addOverlay(first, overlay)).toBe(first);
+  it("replaces an overlay the same source gave before, rather than stacking a stale one", () => {
+    // Keyed by source, unlike nodes and edges: an overlay is a view of what is known *now* — the
+    // server re-joins it on every read — so a refreshed one has to displace its predecessor.
+    // Unioning would show an address twice while the two disagreed about what it is.
+    const first = addOverlay(emptyStore, "live", overlay);
+    const refreshed = addOverlay(first, "live", { ...overlay, warnings: ["rejoined"] });
+    expect(refreshed.overlays).toHaveLength(1);
+    expect(refreshed.overlays[0]!.document.warnings).toEqual(["rejoined"]);
+
+    // A different source still unions, because a dropped file is not the server's view.
+    const both = addOverlay(first, "dropped.json", overlay);
+    expect(both.overlays.map((entry) => entry.source)).toEqual(["live", "dropped.json"]);
   });
 });
 
@@ -240,7 +249,7 @@ describe("the two views, joined", () => {
     // walk was too shallow. Dropping it from the answer would hide that, so an unresolvable ref is
     // highlighted exactly like a resolvable one — and the tree says which it is.
     const dangling = addDerivation(
-      addOverlay(addLedger(emptyStore, "bitcoin.json", bitcoin), overlay),
+      addOverlay(addLedger(emptyStore, "bitcoin.json", bitcoin), "overlay.json", overlay),
       noRatio,
     );
     // The overlay holds a reference to an address the walk never reached. It is selected here as

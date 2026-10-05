@@ -129,7 +129,7 @@ function makeOverride() {
   };
 }
 
-const documents = ["ledger", "derivation", "overlay"];
+const documents = ["ledger", "derivation", "overlay", "annotation_request"];
 
 for (const name of documents) {
   const raw = JSON.parse(readFileSync(join(schemaDir, `${name}.schema.json`), "utf8"));
@@ -164,7 +164,12 @@ for (const name of documents) {
   const { $defs: rootDefs, definitions: rootLegacy, ...rootBody } = schema;
   void rootDefs;
   void rootLegacy;
-  const rootIdentifier = `${name[0].toUpperCase()}${name.slice(1)}DocumentSchema`;
+  // Camel-cased from the file name, so `annotation_request` becomes `AnnotationRequest…` rather
+  // than `Annotation_request…`: the identifier is what the app imports by name.
+  const rootIdentifier = `${name
+    .split(/[-_]/)
+    .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join("")}DocumentSchema`;
   lines.push(
     exportDeclaration(
       jsonSchemaToZod(rootBody, {

@@ -13,15 +13,21 @@
  *   not nothing: it is something this view cannot show, and saying so tells a reader to widen the
  *   walk rather than to conclude there is nothing there.
  */
-import type { EvidenceItem, LedgerEdge, LedgerNode } from "../schema/documents";
+import type { AnnotationRequest, EvidenceItem, GraphRef, LedgerEdge, LedgerNode } from "../schema/documents";
 import type { Store } from "../store";
 import { highlightedBranches, selectedKey } from "../store";
+import type { WritePermission } from "../api";
 import { DerivationTree } from "../derive/DerivationTree";
+import { AnnotationForm } from "./AnnotationForm";
 
 export interface EvidencePanelProps {
   store: Store;
   evidence: EvidenceItem[];
   missing: { key: string; note?: string }[];
+  /** Whether a record can be written where this app is running, and why not when it cannot. */
+  write: WritePermission;
+  /** Send one assertion. Resolves with the server's wording when the record is refused. */
+  onRecord: (request: AnnotationRequest) => Promise<string | null>;
   onSelectClaim: (claimId: string) => void;
   onSelectBranch: (branchId: string | null) => void;
   onSelectRef: (key: string) => void;
@@ -49,6 +55,17 @@ function formatValue(value: string | number | boolean | string[] | null | undefi
   return String(value);
 }
 
+/**
+ * The reference an assertion would be about: whatever is selected.
+ *
+ * `exists` is left unset rather than claimed. The server is what resolves a reference against the
+ * document it served, so the browser has no lookup to report — and `exists: true` typed here would
+ * be an assertion about a check this side never made.
+ */
+function targetRef(store: Store, key: string): GraphRef {
+  return { kind: store.edges.has(key) ? "edge" : "node", key, exists: null, note: null };
+}
+
 function describe(key: string): string {
   const parts = key.split(":");
   if (parts[0] === "address") return `address ${parts.slice(2).join(":")}`;
@@ -61,6 +78,8 @@ export function EvidencePanel({
   store,
   evidence,
   missing,
+  write,
+  onRecord,
   onSelectClaim,
   onSelectBranch,
   onSelectRef,
@@ -142,6 +161,19 @@ export function EvidencePanel({
             resolves={(key) => store.nodes.has(key) || store.edges.has(key)}
           />
         </section>
+      )}
+
+      {/*
+        Authoring sits under the selection, because the selection *is* the target. A key typed
+        into a field could place evidence on a different address and nobody would notice.
+      */}
+      {selectionKey !== null && (
+        <AnnotationForm
+          target={targetRef(store, selectionKey)}
+          writable={write.writable}
+          reason={write.reason}
+          onRecord={onRecord}
+        />
       )}
 
       {missing.length > 0 && (
