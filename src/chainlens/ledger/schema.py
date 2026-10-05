@@ -42,6 +42,7 @@ __all__ = [
     "render_schemas",
     "schema_path",
     "strict_dumps",
+    "strict_json",
 ]
 
 #: Where the generated schemas live. They sit beside the front-end source rather than with
@@ -96,6 +97,31 @@ def _non_finite(value: Any, path: str = "") -> list[str]:
     elif isinstance(value, float) and not math.isfinite(value):
         found.append(path or "(root)")
     return found
+
+
+def strict_json(value: Any, *, indent: int | None = None) -> str:
+    """Serialise a plain structure — not a model — as JSON a strict parser will accept.
+
+    The same guarantee :func:`strict_dumps` gives a document, for the exporters that build their
+    payload from ordinary dictionaries and lists. ``graph/export.py`` is the one that does, and it
+    borrows this rather than growing a second copy of the discipline.
+
+    ``allow_nan=False`` is what refuses an infinity at the point of writing; the walk is what names
+    the field, because ``json``'s own complaint ("Out of range float values are not JSON
+    compliant") does not tell a caller *which* value it was, and an exporter's caller is usually a
+    person looking at a graph they cannot search.
+
+    Raises:
+        ValueError: the value holds a non-finite float.
+    """
+    offenders = sorted(set(_non_finite(value)))
+    if offenders:
+        raise ValueError(
+            f"non-finite value in {', '.join(offenders)}. JSON has no infinity or NaN, so this "
+            "cannot be written: the exporter's caller has to represent it as a null beside a flag "
+            "that says why, rather than as a number that reads as absent."
+        )
+    return json.dumps(value, indent=indent, allow_nan=False)
 
 
 def strict_dumps(document: BaseModel) -> str:

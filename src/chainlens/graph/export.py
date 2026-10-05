@@ -11,10 +11,12 @@ allowed to drop the thing that makes the edge falsifiable.
 
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 from xml.sax.saxutils import escape, quoteattr
 
+# The strict-JSON discipline lives with the wire contract rather than here: one implementation of
+# "JSON a strict parser accepts", used by every exporter, so a second one cannot drift from it.
+from chainlens.ledger.schema import strict_json
 from chainlens.models.flows import AddressRef, EntityRef, FlowGraph, NodeRef, ValueFlow
 
 __all__ = ["amount_label", "to_cytoscape_json", "to_dot", "to_graphml", "to_mermaid"]
@@ -136,7 +138,7 @@ def to_cytoscape_json(flow_graph: FlowGraph, *, indent: int | None = 2) -> str:
         }
         for edge in flow_graph.edges
     ]
-    return json.dumps({"elements": {"nodes": nodes, "edges": edges}}, indent=indent)
+    return strict_json({"elements": {"nodes": nodes, "edges": edges}}, indent=indent)
 
 
 def _dot_escape(text: str) -> str:

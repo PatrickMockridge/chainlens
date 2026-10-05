@@ -32,7 +32,7 @@ from chainlens.ledger.schema import (
 )
 from chainlens.models.base import utcnow
 from chainlens.models.enums import Chain
-from chainlens.models.flows import FlowGraph
+from chainlens.models.flows import FlowGraph, ValueFlow
 from chainlens.models.ledger import (
     LedgerAddressNode,
     LedgerGraph,
@@ -451,18 +451,36 @@ def _flow_graph() -> FlowGraph:
 def test_every_existing_exporter_emits_strict_json_or_plain_text(
     name: str, render: Callable[[FlowGraph], str]
 ) -> None:
-    """The habit worth breaking now, before the ledger's own wire format joins them.
-
-    ``graph/export.py`` calls ``json.dumps`` directly, which writes ``Infinity`` for a
-    non-finite float. Nothing reachable today produces one — amounts are integers and
-    confidences are bounded — so this is a guard rather than a bug report, and the guard is
-    worth having before a new exporter copies the pattern.
-    """
+    """A benign graph goes through every exporter without a non-JSON token in the output."""
     text = render(_flow_graph())
     if name in {"graphml", "dot", "mermaid"}:
         assert text
         return
     json.loads(text, parse_constant=_refuse)
+
+
+def test_an_exporter_refuses_a_non_finite_value_instead_of_writing_a_token() -> None:
+    """The guard that can actually fail, and why it needs an unvalidated graph to fail on.
+
+    ``ValueFlow.confidence`` is ``Field(ge=0.0, le=1.0)``, so an infinite one cannot exist in a
+    graph that was *validated* — which is why the test above passes vacuously and always will.
+    ``model_construct`` is the escape hatch that builds an unvalidated instance, and it is the
+    case worth guarding: a future field without a bound, or a caller assembling a graph by hand.
+
+    Before this, ``to_cytoscape_json`` called ``json.dumps`` directly and wrote ``Infinity``,
+    which Python parses back and no browser does. Now the refusal names the field, because a
+    caller told only "Out of range float values are not JSON compliant" has to go looking for
+    which edge it was.
+    """
+    graph = _flow_graph()
+    edge = graph.edges[0]
+    infinite_edge = ValueFlow.model_construct(**{**edge.__dict__, "confidence": float("inf")})
+    poisoned = FlowGraph.model_construct(**{**graph.__dict__, "edges": (infinite_edge,)})
+
+    # The message names the *payload's own* path to the value, not just the model field: that is
+    # what makes it actionable for somebody holding a graph rather than a stack trace.
+    with pytest.raises(ValueError, match=r"elements\['edges'\]\[0\]\['data'\]\['confidence'\]"):
+        to_cytoscape_json(poisoned)
 
 
 def test_a_wire_document_round_trips_exactly() -> None:
