@@ -13,16 +13,18 @@
  *   not nothing: it is something this view cannot show, and saying so tells a reader to widen the
  *   walk rather than to conclude there is nothing there.
  */
-import type { DerivationDocument, EvidenceItem, LedgerEdge, LedgerNode } from "../schema/documents";
-import { asTree } from "../schema/documents";
+import type { EvidenceItem, LedgerEdge, LedgerNode } from "../schema/documents";
 import type { Store } from "../store";
-import { selectedKey } from "../store";
+import { highlightedBranches, selectedKey } from "../store";
+import { DerivationTree } from "../derive/DerivationTree";
 
 export interface EvidencePanelProps {
   store: Store;
   evidence: EvidenceItem[];
   missing: { key: string; note?: string }[];
   onSelectClaim: (claimId: string) => void;
+  onSelectBranch: (branchId: string | null) => void;
+  onSelectRef: (key: string) => void;
 }
 
 function DetailRows({ item }: { item: EvidenceItem }) {
@@ -55,35 +57,14 @@ function describe(key: string): string {
   return key;
 }
 
-function DerivationTree({ document }: { document: DerivationDocument }) {
-  const root = asTree(document.root);
-  const render = (node: ReturnType<typeof asTree>, depth: number): React.ReactNode => (
-    <li key={node.id} className={`tree-node tree-${node.kind}`}>
-      <div className="tree-label">
-        <span className="tree-kind">{node.kind}</span>
-        <span>{node.label}</span>
-        {node.band && <span className="band">{node.band}</span>}
-      </div>
-      {node.summary && <p className="tree-summary">{node.summary}</p>}
-      {node.children && node.children.length > 0 && depth < 12 && (
-        <ul>{node.children.map((child) => render(child, depth + 1))}</ul>
-      )}
-    </li>
-  );
-  return (
-    <section className="derivation">
-      <h3>Derivation</h3>
-      {/*
-        The limitations text is carried on the document and rendered verbatim. It is *swapped*
-        when a posterior is present, because the standard text says the library reports none.
-      */}
-      <p className="limitations">{document.limitations}</p>
-      <ul className="tree">{render(root, 0)}</ul>
-    </section>
-  );
-}
-
-export function EvidencePanel({ store, evidence, missing, onSelectClaim }: EvidencePanelProps) {
+export function EvidencePanel({
+  store,
+  evidence,
+  missing,
+  onSelectClaim,
+  onSelectBranch,
+  onSelectRef,
+}: EvidencePanelProps) {
   const selection = store.selection;
   const selectionKey = selectedKey(store);
   const claim =
@@ -149,7 +130,19 @@ export function EvidencePanel({ store, evidence, missing, onSelectClaim }: Evide
         </section>
       )}
 
-      {claim && <DerivationTree document={claim} />}
+      {claim && (
+        <section>
+          <h3>Derivation</h3>
+          <DerivationTree
+            document={claim}
+            selectedBranch={store.branch}
+            highlighted={highlightedBranches(store)}
+            onSelectBranch={onSelectBranch}
+            onSelectRef={onSelectRef}
+            resolves={(key) => store.nodes.has(key) || store.edges.has(key)}
+          />
+        </section>
+      )}
 
       {missing.length > 0 && (
         <section>

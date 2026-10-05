@@ -19,13 +19,14 @@ import { z } from "zod";
 
 import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
 import { LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
-import { EvidenceItemSchema, OverlayDocumentSchema } from "./overlay.gen";
+import { EvidenceItemSchema, GraphRefSchema, OverlayDocumentSchema } from "./overlay.gen";
 
 export type LedgerDocument = z.infer<typeof LedgerDocumentSchema>;
 export type LedgerNode = LedgerDocument["nodes"][number];
 export type LedgerEdge = z.infer<typeof LedgerEdgeSchema>;
 export type OverlayDocument = z.infer<typeof OverlayDocumentSchema>;
 export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
+export type GraphRef = z.infer<typeof GraphRefSchema>;
 export type DerivationDocument = z.infer<typeof DerivationDocumentSchema>;
 
 export type LedgerTransactionNode = Extract<LedgerNode, { kind: "transaction" }>;
@@ -42,7 +43,12 @@ export interface DerivationNode {
   value?: number | null;
   unit?: string | null;
   band?: string | null;
-  graph_refs?: { kind: string; key: string; exists?: boolean | null; note?: string | null }[];
+  /**
+   * The generated `GraphRef`, not a copy of its shape. A second hand-written shape is one that can
+   * drift from the schema the rest of the app is validated against — and the drift would be silent,
+   * because a structural match is all TypeScript checks.
+   */
+  graph_refs?: GraphRef[];
   children?: DerivationNode[];
 }
 

@@ -18,6 +18,8 @@ import type {
   LedgerNode,
   OverlayDocument,
 } from "./schema/documents";
+import { asTree } from "./schema/documents";
+import { branchesTouching, refsOf, subtreeIds, walkTree } from "./derive/tree";
 
 export interface Store {
   /** Documents loaded so far, in the order they arrived. */
@@ -27,6 +29,14 @@ export interface Store {
   readonly overlays: readonly OverlayDocument[];
   readonly derivations: readonly DerivationDocument[];
   readonly selection: Selection | null;
+  /**
+   * The derivation branch a reader clicked, when one is open.
+   *
+   * Orthogonal to `selection` rather than a fourth `Selection` member: a graph key and a tree
+   * branch are selected *together* — that is the whole point of the two views being a pair — so
+   * folding them into one field would mean a click on one cleared the other.
+   */
+  readonly branch: string | null;
   readonly warnings: readonly string[];
 }
 
@@ -42,6 +52,7 @@ export const emptyStore: Store = {
   overlays: [],
   derivations: [],
   selection: null,
+  branch: null,
   warnings: [],
 };
 
@@ -122,6 +133,62 @@ export function selectedKey(store: Store): string | null {
 
 export function select(store: Store, selection: Selection | null): Store {
   return { ...store, selection };
+}
+
+/** Open, or close, a derivation branch. */
+export function selectBranch(store: Store, branch: string | null): Store {
+  return { ...store, branch };
+}
+
+/**
+ * The ledger keys to highlight, from whichever view a reader last worked in.
+ *
+ * A branch selection wins over the graph selection because it is the more specific statement: a
+ * reader who clicked a step of the argument wants that step's evidence shown, not the whole
+ * claim's. Both are computed from `graph_refs`, so the two directions cannot disagree about which
+ * keys a branch rests on.
+ */
+export function highlightedKeys(store: Store): Set<string> {
+  const keys = new Set<string>();
+  const branchId = store.branch;
+  if (branchId !== null) {
+    for (const derivation of store.derivations) {
+      const found = walkTree(asTree(derivation.root)).find((node) => node.id === branchId);
+      if (found !== undefined) {
+        for (const ref of refsOf(found)) keys.add(ref.key);
+        return keys;
+      }
+    }
+  }
+  const selection = store.selection;
+  if (selection === null) return keys;
+  if (selection.kind === "claim") {
+    for (const key of refsForClaim(store, selection.id)) keys.add(key);
+    return keys;
+  }
+  keys.add(selection.key);
+  return keys;
+}
+
+/**
+ * The derivation branches to highlight, from the other direction.
+ *
+ * Every branch in every loaded derivation that rests on the selected key — including branches
+ * whose *descendants* rest on it, because a branch's argument is everything beneath it. An
+ * unresolved reference still highlights: a branch pointing at a node this graph does not hold is
+ * exactly the branch a reader needs to see, since it is the one that says the walk is too shallow.
+ */
+export function highlightedBranches(store: Store): Set<string> {
+  const ids = new Set<string>();
+  const selection = store.selection;
+  if (selection === null || selection.kind === "claim") return ids;
+
+  for (const derivation of store.derivations) {
+    for (const branch of branchesTouching(asTree(derivation.root), selection.key)) {
+      for (const id of subtreeIds(branch)) ids.add(id);
+    }
+  }
+  return ids;
 }
 
 /** Every node key an overlay associates with a claim, for highlighting. */

@@ -82,6 +82,9 @@ ui:  ## Build the front-end bundle into the package
 	cd web && npm run build
 
 ui-check:  ## Typecheck, test and build the front end, and fail on a stale bundle
+	# The test run is not optional here: `ruff`, `mypy` and `pytest` do not see `web/`, so without
+	# it the front end would be the only ungated region in the tree.
+	cd web && npm test
 	cd web && npm run build
 	@git diff --exit-code -- src/chainlens/ui/static || { \
 		echo "the committed bundle is out of date; run \`make ui\` and commit the result"; \

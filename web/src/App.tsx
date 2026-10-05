@@ -17,30 +17,41 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { GraphView } from "./graph/GraphView";
-import { refsForClaim } from "./store";
 import type { LedgerDocument } from "./schema/documents";
 import { classify } from "./schema/documents";
 import { EvidencePanel } from "./panel/EvidencePanel";
+import { VerifyView } from "./views/VerifyView";
 import {
   addDerivation,
   addLedger,
   addOverlay,
   emptyStore,
   evidenceFor,
+  highlightedKeys,
   mergeCounts,
   select,
+  selectBranch,
   selectedKey,
   unresolved,
-  type Selection,
   type Store,
 } from "./store";
 
 type Mode = { kind: "probing" } | { kind: "live"; provider: string } | { kind: "static" };
 
+/**
+ * Which view a reader is in.
+ *
+ * Two views over one store rather than two apps: the graph is the same graph, the selection is the
+ * same selection, and switching views must not throw away either. A reader who found a
+ * transaction in Explore and then wants to know what rests on it switches rather than reloads.
+ */
+type View = "explore" | "verify";
+
 export function App() {
   const [store, setStore] = useState<Store>(emptyStore);
   const [mode, setMode] = useState<Mode>({ kind: "probing" });
   const [notice, setNotice] = useState<string | null>(null);
+  const [view, setView] = useState<View>("explore");
 
   const apply = useCallback((source: string, value: unknown) => {
     const classified = classify(value);
@@ -122,19 +133,35 @@ export function App() {
     return keys;
   }, [store.overlays]);
 
-  const highlighted = useMemo(() => {
-    const keys = new Set<string>();
-    const selection: Selection | null = store.selection;
-    if (selection === null) return keys;
-    if (selection.kind === "claim") {
-      for (const key of refsForClaim(store, selection.id)) keys.add(key);
-      return keys;
-    }
-    keys.add(selection.key);
-    return keys;
-  }, [store]);
+  // Both highlight sets come from the store rather than being computed here, so that the two views
+  // cannot hold different opinions about what a selection points at.
+  const highlighted = useMemo(() => highlightedKeys(store), [store]);
 
   const missing = unresolved(store);
+
+  const onSelect = useCallback(
+    (selection: { kind: "node" | "edge"; key: string } | null) =>
+      setStore((current) => select(current, selection)),
+    [],
+  );
+
+  const onSelectRef = useCallback(
+    (key: string) =>
+      setStore((current) =>
+        select(current, current.edges.has(key) ? { kind: "edge", key } : { kind: "node", key }),
+      ),
+    [],
+  );
+
+  const onSelectBranch = useCallback(
+    (branchId: string | null) => setStore((current) => selectBranch(current, branchId)),
+    [],
+  );
+
+  const onSelectClaim = useCallback(
+    (claimId: string) => setStore((current) => select(current, { kind: "claim", id: claimId })),
+    [],
+  );
 
   return (
     <div className="app" onDrop={onDrop} onDragOver={(event) => event.preventDefault()}>
@@ -153,6 +180,21 @@ export function App() {
         </div>
       </header>
 
+      <nav className="views" aria-label="view">
+        <button type="button" aria-pressed={view === "explore"} onClick={() => setView("explore")}>
+          Explore
+        </button>
+        <button type="button" aria-pressed={view === "verify"} onClick={() => setView("verify")}>
+          Verify
+          {store.derivations.length > 0 && ` (${store.derivations.length})`}
+        </button>
+        <span className="views-note">
+          {view === "explore"
+            ? "Seed a walk and follow recorded inputs and outputs."
+            : "Read the argument behind a finding, joined to the ledger it rests on."}
+        </span>
+      </nav>
+
       {/*
         Stated once, in the view rather than in a tooltip, because the misreading it prevents is
         the one a tidy picture invites: that the chain linked these inputs to these outputs.
@@ -163,37 +205,51 @@ export function App() {
         here — and nothing anywhere — should be read as saying that one paid the other.
       </p>
 
-      <main className="layout">
-        <section className="canvas">
-          {nodes.length === 0 ? (
-            <div className="empty">
-              <h2>{mode.kind === "probing" ? "Waiting for the server" : "No graph loaded"}</h2>
-              <p>
-                Drop a <code>graph.json</code> from <code>chainlens ui export</code> here, or along
-                with an overlay or a derivation. Several documents union by key, so loading a second
-                neighbourhood adds to the first.
-              </p>
-            </div>
-          ) : (
-            <GraphView
-              nodes={nodes}
-              edges={edges}
-              highlighted={highlighted}
-              withEvidence={withEvidence}
-              onSelect={(selection) => setStore((current) => select(current, selection))}
-            />
-          )}
-        </section>
+      {view === "verify" ? (
+        <VerifyView
+          store={store}
+          nodes={nodes}
+          edges={edges}
+          withEvidence={withEvidence}
+          onSelect={onSelect}
+          onSelectBranch={onSelectBranch}
+          onSelectClaim={onSelectClaim}
+        />
+      ) : (
+        <main className="layout">
+          <section className="canvas">
+            {nodes.length === 0 ? (
+              <div className="empty">
+                <h2>{mode.kind === "probing" ? "Waiting for the server" : "No graph loaded"}</h2>
+                <p>
+                  Drop a <code>graph.json</code> from <code>chainlens ui export</code> here, or
+                  along with an overlay or a derivation. Several documents union by key, so loading
+                  a second neighbourhood adds to the first.
+                </p>
+              </div>
+            ) : (
+              <GraphView
+                nodes={nodes}
+                edges={edges}
+                highlighted={highlighted}
+                withEvidence={withEvidence}
+                onSelect={onSelect}
+              />
+            )}
+          </section>
 
-        <aside className="panel">
-          <EvidencePanel
-            store={store}
-            evidence={selectedKey(store) !== null ? evidenceFor(store, selectedKey(store)!) : []}
-            missing={missing}
-            onSelectClaim={(id) => setStore((current) => select(current, { kind: "claim", id }))}
-          />
-        </aside>
-      </main>
+          <aside className="panel">
+            <EvidencePanel
+              store={store}
+              evidence={selectedKey(store) !== null ? evidenceFor(store, selectedKey(store)!) : []}
+              missing={missing}
+              onSelectClaim={onSelectClaim}
+              onSelectBranch={onSelectBranch}
+              onSelectRef={onSelectRef}
+            />
+          </aside>
+        </main>
+      )}
 
       {(notice || store.warnings.length > 0) && (
         <footer className="notices">

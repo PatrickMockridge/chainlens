@@ -13,17 +13,22 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { LedgerDocument, OverlayDocument } from "./schema/documents";
-import { classify } from "./schema/documents";
+import type { DerivationDocument, LedgerDocument, OverlayDocument } from "./schema/documents";
+import { asTree, classify } from "./schema/documents";
+import { walkTree } from "./derive/tree";
 import {
+  addDerivation,
   addLedger,
   addOverlay,
   emptyStore,
   evidenceFor,
+  highlightedBranches,
+  highlightedKeys,
   mergeCounts,
   refsForClaim,
   resolves,
   select,
+  selectBranch,
   selectedKey,
   unresolved,
 } from "./store";
@@ -31,11 +36,16 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(
   readFileSync(join(here, "..", "..", "tests", "ledger", "fixtures", "graph-document.json"), "utf8"),
-) as { ledgers: Record<string, LedgerDocument>; overlays: Record<string, OverlayDocument> };
+) as {
+  ledgers: Record<string, LedgerDocument>;
+  overlays: Record<string, OverlayDocument>;
+  derivations: Record<string, DerivationDocument>;
+};
 
 const bitcoin = fixtures.ledgers["bitcoin"]!;
 const evm = fixtures.ledgers["evm"]!;
 const overlay = fixtures.overlays["bitcoin"]!;
+const noRatio = fixtures.derivations["no_ratio"]!;
 
 describe("classifying a dropped file", () => {
   it("recognises each of the three documents", () => {
@@ -166,5 +176,100 @@ describe("selection", () => {
   it("can be cleared", () => {
     const cleared = select(select(emptyStore, { kind: "node", key: "x" }), null);
     expect(cleared.selection).toBeNull();
+  });
+});
+
+/**
+ * The join between the two views, read in both directions.
+ *
+ * These are the tests that make "the two panes are a pair" true rather than decorative. Both
+ * directions are read through the same helper — `refsOf` in one, `branchesTouching` in the other —
+ * so they cannot disagree about which keys a step rests on.
+ */
+describe("the two views, joined", () => {
+  // A graph and a derivation that is genuinely about it: the fixture derivation's refs name nodes
+  // and edges the fixture ledger holds.
+  const loaded = addDerivation(addLedger(emptyStore, "bitcoin.json", bitcoin), noRatio);
+  const tree = asTree(noRatio.root);
+  /**
+   * The step resting on a ledger key, found by what it rests on rather than by its id.
+   *
+   * The generated ids carry a list index (`…/evidence/transfer/0`) that is an implementation
+   * detail of the builder, so naming one here would pin the test to a spelling rather than to the
+   * relation under test — and would go stale silently, since it would still *look* like a step.
+   */
+  const stepRestingOn = (key: string): string => {
+    const found = walkTree(tree).find((node) =>
+      (node.graph_refs ?? []).some((ref) => ref.key === key),
+    );
+    if (found === undefined) throw new Error(`no step rests on ${key}`);
+    return found.id;
+  };
+  const evidence = stepRestingOn("tx1:out:0");
+
+  it("opens a step and highlights exactly the keys it rests on", () => {
+    const opened = selectBranch(loaded, evidence);
+    const keys = highlightedKeys(opened);
+    // The transfer step rests on the edge and the transaction; the arithmetic is on the document,
+    // not restated here.
+    expect(keys.has("tx1:out:0")).toBe(true);
+    expect(keys.has("transaction:bitcoin:tx1")).toBe(true);
+    // And nothing else: a highlight that spills past the step's own refs would be a claim about
+    // the evidence that the evidence does not make.
+    expect([...keys].length).toBeLessThan(bitcoin.nodes.length + bitcoin.edges.length);
+  });
+
+  it("points the other way: a selected key names the steps that rest on it", () => {
+    const selected = select(loaded, { kind: "node", key: "transaction:bitcoin:tx1" });
+    const branches = highlightedBranches(selected);
+    expect(branches.has(evidence)).toBe(true);
+    // The parent step's argument includes this one, so the parent is emphasised too.
+    expect(branches.has(`${noRatio.claim_id}/evidence`)).toBe(true);
+    // Both directions are the same relation, so a key reached one way is reached the other way.
+    const opened = highlightedKeys(selectBranch(loaded, evidence));
+    expect(opened.has("transaction:bitcoin:tx1")).toBe(true);
+  });
+
+  it("highlights nothing when nothing is selected", () => {
+    expect(highlightedKeys(loaded).size).toBe(0);
+    expect(highlightedBranches(loaded).size).toBe(0);
+  });
+
+  it("still highlights a step whose reference the graph does not hold", () => {
+    // The dangling reference is the step a reader most needs to see: it is the one that says the
+    // walk was too shallow. Dropping it from the answer would hide that, so an unresolvable ref is
+    // highlighted exactly like a resolvable one — and the tree says which it is.
+    const dangling = addDerivation(
+      addOverlay(addLedger(emptyStore, "bitcoin.json", bitcoin), overlay),
+      noRatio,
+    );
+    // The overlay holds a reference to an address the walk never reached. It is selected here as
+    // though a reader had followed it out of the panel.
+    const key = overlay.unjoined[0]!.key;
+    expect(resolves(dangling, key)).toBe(false);
+
+    // No step in the fixture derivation rests on it, so the answer is "no steps" rather than a
+    // failure — and the key is still in the graph's highlight set, so the colour follows the
+    // selection out of the panel.
+    const selected = select(dangling, { kind: "node", key });
+    expect(highlightedBranches(selected).size).toBe(0);
+    expect(highlightedKeys(selected).has(key)).toBe(true);
+  });
+
+  it("closes a branch again", () => {
+    expect(selectBranch(selectBranch(loaded, evidence), null).branch).toBeNull();
+  });
+
+  it("keeps a claim selection and a branch selection apart", () => {
+    // A branch and a graph key are selected *together* — that is what makes the views a pair — so
+    // folding them into one field would make a click in one pane clear the other.
+    const both = selectBranch(
+      select(loaded, { kind: "claim", id: noRatio.claim_id }),
+      evidence,
+    );
+    expect(both.selection).toEqual({ kind: "claim", id: noRatio.claim_id });
+    expect(both.branch).toBe(evidence);
+    // The branch wins for the graph highlight, because it is the more specific statement.
+    expect(highlightedKeys(both).has("tx1:out:0")).toBe(true);
   });
 });

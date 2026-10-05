@@ -98,6 +98,89 @@ body {
   min-height: 0;
 }
 
+/* -- the view switcher ---------------------------------------------------- */
+
+.views {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 6px;
+  padding: 6px 16px;
+}
+
+.views button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 3px 12px;
+}
+
+.views button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  color: var(--ink);
+}
+
+.views-note {
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+/* -- verify: the pair of panes ------------------------------------------- */
+
+/*
+ * The same grid as Explore, with one structural difference: the right pane is the argument rather
+ * than a detail panel, so it is wider. A derivation is read as a tree and a tree needs the width.
+ */
+.verify {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 1fr 460px;
+  min-height: 0;
+}
+
+.verify-empty {
+  display: flex;
+}
+
+.verify-empty .empty {
+  flex: 1;
+}
+
+.verify-argument {
+  border-left: 1px solid var(--line);
+}
+
+.claim-quote {
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--ink);
+  margin: 0 0 10px;
+  padding: 2px 0 2px 10px;
+  white-space: pre-wrap;
+}
+
+/*
+ * The line that says what the highlight means. It is not decoration: without it, a reader sees
+ * emphasis in one pane and has no way to know the other pane put it there.
+ */
+.pairing {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 6px;
+  color: var(--muted);
+  margin: 0 0 12px;
+  padding: 6px 8px;
+}
+
+.pairing strong {
+  color: var(--ink);
+}
+
+.pairing p {
+  margin: 0;
+}
+
 .canvas {
   min-height: 0;
   position: relative;
@@ -391,10 +474,38 @@ body {
   padding: 2px 0 2px 8px;
 }
 
+/* A step resting on what is selected in the graph. Stated with a background rather than a colour
+   change alone, so it reads at a glance in a long tree. */
+.tree-node.highlighted {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left-color: var(--accent);
+}
+
+/* The step the reader opened. Distinct from a highlight: one is "you are here", the other is
+   "this is what your selection in the graph touches". */
+.tree-node.selected {
+  border-left-color: var(--output);
+}
+
+.tree-node.selected > .tree-label {
+  color: var(--ink);
+}
+
 .tree-label {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
   display: flex;
   flex-wrap: wrap;
+  font: inherit;
   gap: 6px;
+  padding: 0;
+  text-align: left;
+}
+
+.tree-label:hover {
+  color: var(--ink);
 }
 
 .tree-kind {
@@ -404,9 +515,65 @@ body {
   text-transform: uppercase;
 }
 
+.tree-value {
+  color: var(--output);
+  font-variant-numeric: tabular-nums;
+}
+
 .tree-summary {
   color: var(--muted);
   margin: 0;
+}
+
+.tree-detail {
+  margin: 2px 0 4px;
+}
+
+/* The refs a step rests on, as chips. They are drawn rather than summarised so that a reference
+   to something outside the walk is visible as a specific key rather than as an absence. */
+.tree-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0;
+}
+
+.tree-refs-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ref-chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* A reference the loaded graph does not hold. Dashed like a change edge, and for the same reason:
+   the distinction has to survive a screenshot. */
+.ref-chip.ref-absent {
+  border-style: dashed;
+  color: var(--warn);
+}
+
+.tree-absent {
+  color: var(--warn);
+  font-size: 11px;
+  margin: 2px 0;
 }
 
 .band {
