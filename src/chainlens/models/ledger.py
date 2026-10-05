@@ -200,13 +200,20 @@ class LedgerTransactionNode(LensModel):
         vsize: virtual size, when known.
         n_inputs: how many inputs the transaction records.
         n_outputs: how many outputs it records. Compare with the drawn edges to see
-            whether the walk suppressed any — see ``is_collapsed``.
+            whether the walk suppressed any — see ``is_partial``.
         total_input_value: summed recorded inputs, or ``None`` if any input's value was
             not recorded. Never a partial sum presented as a total.
         total_output_value: summed recorded outputs, ``None`` on the same terms.
         value_complete: whether every input and output carried a value.
-        is_collapsed: whether edges were suppressed by the fan-out policy. The true
-            counts stay on this node, so the view can always say "312 outputs, 40 drawn".
+        is_partial: whether any of this transaction's recorded inputs or outputs were
+            **not drawn** — for any policy reason: a value floor, a fan-out cap, or an
+            excluded change output. The true ``n_inputs`` and ``n_outputs`` stay on the node,
+            so a view can always say "312 outputs, 40 drawn" rather than showing a
+            transaction that looks smaller than it is.
+
+            This exists because a transaction with its outputs filtered away is
+            *indistinguishable from a mint* to a renderer that only counts drawn edges — and
+            that is a statement about the chain the ledger never made.
         annotation_ids: user-declared annotations targeting this node.
     """
 
@@ -235,7 +242,7 @@ class LedgerTransactionNode(LensModel):
     total_output_value: int | None = Field(default=None, ge=0)
     value_complete: bool = True
 
-    is_collapsed: bool = False
+    is_partial: bool = False
 
     flags: tuple[str, ...] = ()
     annotation_ids: tuple[str, ...] = ()

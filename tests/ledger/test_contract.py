@@ -182,7 +182,7 @@ def test_the_fixture_covers_the_states_that_need_careful_rendering(
     nodes = _nodes(documents)
     assert any(node.get("is_coinbase") for node in nodes)
     assert any(node.get("is_coinjoin") for node in nodes)
-    assert any(node.get("is_collapsed") for node in nodes)
+    assert any(node.get("is_partial") for node in nodes)
     assert any(document["truncated"] for document in documents.values())
     # A seed with no history: the address node is there and nothing else is.
     assert any(

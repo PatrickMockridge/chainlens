@@ -289,13 +289,18 @@ class _Walk:
             self.degrees[key] = self.degrees.get(transaction_node_key(self.chain, txid), 0)
         return key
 
-    def mark_collapsed(self, txid: str) -> None:
-        """Note that a transaction's outputs were suppressed by the fan-out cap."""
+    def mark_partial(self, txid: str) -> None:
+        """Note that some of a transaction's recorded edges were not drawn.
+
+        One flag for every reason, because the thing a reader needs to know is the same in
+        each case: the drawn edges are fewer than the recorded ones. *Why* is in
+        ``stop_reasons``; a renderer that only counted edges would show a transaction with
+        filtered outputs as a mint.
+        """
         key = transaction_node_key(self.chain, txid)
         node = self.nodes.get(key)
-        if isinstance(node, LedgerTransactionNode) and not node.is_collapsed:
-            self.nodes[key] = node.model_copy(update={"is_collapsed": True})
-        self.note(POLICY_MAX_FAN_OUT)
+        if isinstance(node, LedgerTransactionNode) and not node.is_partial:
+            self.nodes[key] = node.model_copy(update={"is_partial": True})
 
 
 async def walk_ledger(
@@ -507,7 +512,8 @@ def _record(
     drawn = outputs
     if walk.policy.max_fan_out is not None and len(outputs) > walk.policy.max_fan_out:
         drawn = outputs[: walk.policy.max_fan_out]
-        walk.mark_collapsed(transaction.txid)
+        walk.mark_partial(transaction.txid)
+        walk.note(POLICY_MAX_FAN_OUT)
         # The suppressed outputs are still counted as addressless endpoints, so the
         # transaction node's own counts and the drawn edges can be told apart.
         for item in outputs[len(drawn) :]:
@@ -515,8 +521,12 @@ def _record(
 
     for item in drawn:
         if not walk.policy.include_change and item.address in senders:
+            walk.mark_partial(transaction.txid)
             continue
         if not exempt and _below_floor(walk, item, transaction):
+            # A transaction whose every output falls under the floor would otherwise draw as
+            # inputs only, which is what a mint looks like.
+            walk.mark_partial(transaction.txid)
             continue
         address = _edge(
             walk,

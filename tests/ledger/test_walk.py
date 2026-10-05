@@ -364,6 +364,46 @@ async def test_an_edge_budget_truncates_and_says_so() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_transaction_whose_outputs_all_fall_under_the_floor_is_marked_partial() -> None:
+    """Regression, found by walking a real address rather than a fixture.
+
+    The value floor can strip *every* output of a transaction, leaving input edges and no
+    outputs — which is exactly what a mint looks like. The fan-out cap set a flag and the floor
+    did not, so the one case a reader is most likely to misread was the one with no signal.
+    """
+    provider = _provider(
+        btc_transaction(
+            "tx1",
+            [out(0, BOB, 10), out(1, CAROL, 20)],
+            [inp(0, ALICE, 30)],
+            block_height=1,
+        )
+    )
+    graph = await _walk(provider, policy=LedgerPolicy(max_depth=1, min_value=1_000))
+
+    node = graph.node(transaction_node_key(Chain.BITCOIN, "tx1"))
+    assert isinstance(node, LedgerTransactionNode)
+    assert node.n_inputs == 1
+    assert node.n_outputs == 2, "the recorded counts survive the drawing decision"
+    assert node.is_partial
+    assert len(graph.outgoing(node.key)) == 0, "and no output was drawn"
+    assert not node.is_coinbase, "it is not a mint, and the node says so"
+
+
+@pytest.mark.anyio
+async def test_excluding_change_marks_the_transaction_partial() -> None:
+    provider = _provider(
+        btc_transaction(
+            "tx1", [out(0, BOB, 60), out(1, ALICE, 40)], [inp(0, ALICE, 100)], block_height=1
+        )
+    )
+    graph = await _walk(provider, policy=LedgerPolicy(max_depth=1, include_change=False))
+    node = graph.node(transaction_node_key(Chain.BITCOIN, "tx1"))
+    assert isinstance(node, LedgerTransactionNode)
+    assert node.is_partial
+
+
+@pytest.mark.anyio
 async def test_a_value_floor_drops_edges_and_counts_them() -> None:
     provider = _provider(
         btc_transaction(
@@ -381,7 +421,7 @@ async def test_a_value_floor_drops_edges_and_counts_them() -> None:
 
 
 @pytest.mark.anyio
-async def test_a_transaction_with_too_many_outputs_is_collapsed_not_quietly_shrunk() -> None:
+async def test_a_transaction_with_too_many_outputs_is_marked_partial_not_quietly_shrunk() -> None:
     """The true counts stay on the node, so a view can say "9 outputs, 3 drawn"."""
     provider = _provider(
         btc_transaction(
@@ -396,7 +436,7 @@ async def test_a_transaction_with_too_many_outputs_is_collapsed_not_quietly_shru
     node = graph.node(transaction_node_key(Chain.BITCOIN, "whale"))
     assert isinstance(node, LedgerTransactionNode)
     assert node.n_outputs == 9, "the true count is what lets the view say what is missing"
-    assert node.is_collapsed
+    assert node.is_partial
     assert len(graph.outgoing(node.key)) == 3
     assert graph.stop_reasons.get(POLICY_MAX_FAN_OUT, 0) >= 1
 
