@@ -1,0 +1,387 @@
+{
+  "$defs": {
+    "DetailEntry": {
+      "additionalProperties": false,
+      "description": "One labelled fact, in a form two languages can render identically.\n\nAttributes:\n    key: the checker's own key, unchanged.\n    kind: which scalar this is, so a renderer needs no narrowing.\n    value: the value, or ``None`` when ``kind`` is ``null``.\n    unit: an optional unit for a number, e.g. ``\"base units\"``.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DetailKind"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "kind"
+      ],
+      "title": "DetailEntry",
+      "type": "object"
+    },
+    "DetailKind": {
+      "description": "The six scalars a detail value can be.\n\nSix, not \"any\": a value that is none of these is refused rather than stringified,\nbecause stringifying is how a nested object becomes text that reads like a finding.",
+      "enum": [
+        "string",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "null"
+      ],
+      "title": "DetailKind",
+      "type": "string"
+    },
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "description": "One thing known about a node or an edge.\n\nAttributes:\n    kind: where it came from.\n    summary: a sentence for a reader.\n    detail: labelled facts in the tagged form a second language can render.\n    claim_id: the claim this belongs to, when it came from a finding, so the graph and\n        a derivation can highlight each other.\n    graph_refs: everything this item touches, with ``exists`` resolved against the\n        document it was joined onto.\n    provenance: where the fact came from, when a provider supplied it.\n    source: whose assertion it is, when it is a label of any kind.\n    confidence: only ever a *heuristic's* own confidence, never a declared one \u2014 see the\n        annotation model, which has no such field.",
+      "properties": {
+        "claim_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Claim Id"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "detail": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DetailEntry"
+          },
+          "title": "Detail",
+          "type": "array"
+        },
+        "graph_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GraphRef"
+          },
+          "title": "Graph Refs",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind"
+        },
+        "provenance": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "summary"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "description": "Where a piece of evidence came from.\n\nThe first four are computed by the library and the last is asserted by a person, and\nthey are separate members so a renderer cannot accidentally style them alike.",
+      "enum": [
+        "finding",
+        "label",
+        "entity",
+        "warning",
+        "annotation"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "GraphRef": {
+      "additionalProperties": false,
+      "description": "A pointer into a ledger document, which may or may not hold it.\n\nAttributes:\n    kind: whether the reference names a node or an edge.\n    key: the node or edge key. Node keys are ``address:``/``tx:``/``unparsed:``;\n        edge keys are ``{txid}:in|out|tok|int:{index}``.\n    exists: whether it was found in the document it was resolved against. ``None``\n        means nobody has looked \u2014 which is not the same as absent, and a front end\n        should offer to fetch rather than reporting nothing there.\n    note: why it was not found, when something knows.",
+      "properties": {
+        "exists": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exists"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/GraphRefKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "title": "GraphRef",
+      "type": "object"
+    },
+    "GraphRefKind": {
+      "description": "What a reference points at. An edge is addressable here, unlike in the flow view.",
+      "enum": [
+        "node",
+        "edge"
+      ],
+      "title": "GraphRefKind",
+      "type": "string"
+    },
+    "LabelSource": {
+      "description": "Provenance of a label attached to an address or entity.\n\nProvenance is what separates \"an exchange confirmed this address\" from \"a\nheuristic guessed it\", so it is recorded on every label.",
+      "enum": [
+        "provider",
+        "user",
+        "heuristic",
+        "imported"
+      ],
+      "title": "LabelSource",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where a retrieved fact came from.\n\n``fetched_at`` is always timezone-aware. ``cached`` and ``cache_mode`` record\nwhether the value came from the HTTP cache and in which mode, so a replay or\noffline run is never mistaken for a live observation.",
+      "properties": {
+        "cache_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Mode"
+        },
+        "cached": {
+          "default": false,
+          "title": "Cached",
+          "type": "boolean"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
+        "fetched_at": {
+          "format": "date-time",
+          "title": "Fetched At",
+          "type": "string"
+        },
+        "heuristic": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heuristic"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Version"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        }
+      },
+      "required": [
+        "provider",
+        "fetched_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Everything known about a graph's nodes and edges, keyed the way the graph is.\n\nAttributes:\n    schema_version: the contract version.\n    by_node: node key to the evidence about it, in a stable order.\n    by_edge: edge key to the evidence about it.\n    claim_refs: claim id to everything that claim touches, so selecting a claim in one\n        view can highlight it in the other.\n    unjoined: references that resolved to nothing here. **Reported, never dropped**: a\n        claim about an address outside the walked window would otherwise vanish, and \"we\n        hold evidence about something you cannot see \u2014 deepen the walk\" is both true and\n        actionable.\n    warnings: anything that qualified the join.",
+  "properties": {
+    "by_edge": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/EvidenceItem"
+        },
+        "type": "array"
+      },
+      "title": "By Edge",
+      "type": "object"
+    },
+    "by_node": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/EvidenceItem"
+        },
+        "type": "array"
+      },
+      "title": "By Node",
+      "type": "object"
+    },
+    "claim_refs": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/GraphRef"
+        },
+        "type": "array"
+      },
+      "title": "Claim Refs",
+      "type": "object"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "unjoined": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/GraphRef"
+      },
+      "title": "Unjoined",
+      "type": "array"
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "title": "EvidenceOverlay",
+  "type": "object"
+}

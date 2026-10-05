@@ -38,7 +38,7 @@ from chainlens.verify.verdicts import (
     VerificationFinding,
 )
 
-__all__ = ["PRIOR_LIMITATIONS", "claim_id", "derive_finding"]
+__all__ = ["PRIOR_LIMITATIONS", "claim_id", "derive_finding", "finding_refs"]
 
 #: What replaces the standard limitations when a posterior is rendered.
 #:
@@ -117,6 +117,48 @@ def _node(
         graph_refs=tuple(refs),
         children=tuple(children),
     )
+
+
+def finding_refs(finding: VerificationFinding) -> tuple[GraphRef, ...]:
+    """Every key a finding touches: its transactions, its endpoints, and its movements.
+
+    Public because two places need it and they must agree. The derivation tree puts each
+    reference on the step it belongs to, so a reader can see *which* fact rests on *which*
+    output; the evidence overlay puts them all on one item, because a finding is one
+    assertion. Sharing this function is what keeps the two from spelling a key differently —
+    and a disagreement would not look like a bug, it would look like a graph with no
+    evidence attached.
+
+    An edge reference is included where it can be named, which is the concrete thing the
+    bipartite view buys: ``ValueFlow`` keeps only its first contributor's index, so a flow
+    edge cannot point at one output, while ``{txid}:out:{index}`` can.
+    """
+    chain = _chain(finding)
+    if chain is None:
+        return ()
+
+    refs: list[GraphRef] = []
+    seen: set[str] = set()
+
+    def add(ref: GraphRef) -> None:
+        if ref.key not in seen:
+            seen.add(ref.key)
+            refs.append(ref)
+
+    for txid in finding.evidence.txids:
+        add(as_node_ref(transaction_node_key(chain, txid)))
+    for movement in finding.evidence.transfers:
+        add(as_edge_ref(movement.txid, movement.index, _EDGE_ROLE.get(movement.via.value, "out")))
+        add(as_node_ref(transaction_node_key(chain, movement.txid)))
+    for address in (
+        finding.elements.sender if finding.elements else None,
+        finding.elements.recipient if finding.elements else None,
+    ):
+        if address:
+            add(as_node_ref(address_node_key(chain, address)))
+    if finding.claim.txid:
+        add(as_node_ref(transaction_node_key(chain, finding.claim.txid)))
+    return tuple(refs)
 
 
 def _chain(finding: VerificationFinding) -> Chain | None:

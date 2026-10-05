@@ -31,6 +31,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from chainlens.models.annotate import EvidenceOverlay
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph
 
@@ -53,6 +54,7 @@ SCHEMA_DIR = Path("web/schema")
 DOCUMENTS: dict[str, type[BaseModel]] = {
     "ledger": LedgerGraph,
     "derivation": DerivationDocument,
+    "overlay": EvidenceOverlay,
 }
 
 

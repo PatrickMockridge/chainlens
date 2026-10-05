@@ -43,7 +43,6 @@ from chainlens.testing.in_memory import InMemoryProvider
 from chainlens.tracing import TraceBudget, Tracer
 
 LEDGER_SCHEMA = Path(SCHEMA_DIR) / "ledger.schema.json"
-DERIVATION_SCHEMA = Path(SCHEMA_DIR) / "derivation.schema.json"
 
 
 def _committed(path: Path) -> str:
@@ -84,10 +83,15 @@ def test_the_committed_schema_matches_a_fresh_render(name: str) -> None:
 
 
 def test_every_document_the_front_end_reads_has_a_schema() -> None:
-    """Two documents, so a schema per root rather than one file holding both."""
-    assert set(DOCUMENTS) == {"ledger", "derivation"}
-    assert LEDGER_SCHEMA.exists()
-    assert DERIVATION_SCHEMA.exists()
+    """Three documents — the graph, a derivation, and the evidence on the graph.
+
+    A schema per root rather than one file holding all three: a code generator emits a module
+    per file, and one file with three roots would need a hand-written entry point that nobody
+    would remember to extend.
+    """
+    assert set(DOCUMENTS) == {"ledger", "derivation", "overlay"}
+    for name in DOCUMENTS:
+        assert schema_path(name).exists(), f"{name}.schema.json is not committed"
 
 
 def test_the_committed_fixture_matches_a_fresh_render() -> None:
@@ -120,8 +124,8 @@ def test_the_schema_names_every_node_kind_and_edge_role() -> None:
 
 def test_the_schema_forbids_a_field_the_models_do_not_have() -> None:
     """``extra="forbid"`` has to reach the wire, or a consumer can send anything."""
-    assert document_schema("ledger")["additionalProperties"] is False
-    assert document_schema("derivation")["additionalProperties"] is False
+    for name in DOCUMENTS:
+        assert document_schema(name)["additionalProperties"] is False
 
 
 # --------------------------------------------------------------------------- #
@@ -311,6 +315,45 @@ def test_the_two_documents_agree_about_how_a_node_is_named(
     assert set(referenced) <= available, (
         f"references that do not resolve: {sorted(set(referenced) - available)}"
     )
+
+
+def test_the_overlay_fixture_covers_every_kind_of_evidence(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    """One sample of each, so a front end has something to render for every branch.
+
+    And one reference that resolves to nothing: the unjoined path is the one a naive join
+    gets wrong by dropping it, so it is a fixture rather than a hole.
+    """
+    del derivations  # the overlay fixture is read below; this keeps the signature honest
+    loaded = json.loads(fixture_module.render_all())
+    overlay_fixture = loaded["overlays"]["bitcoin"]
+
+    kinds = {
+        item["kind"]
+        for group in ("by_node", "by_edge")
+        for items in overlay_fixture[group].values()
+        for item in items
+    }
+    assert {"finding", "label", "entity", "annotation"} <= kinds
+    assert overlay_fixture["claim_refs"], "a claim must be resolvable to its nodes"
+    assert overlay_fixture["unjoined"], "the unjoined path has to be covered"
+    assert all(ref["exists"] is False for ref in overlay_fixture["unjoined"])
+
+
+def test_the_overlay_fixture_marks_its_user_assertions_as_user_assertions() -> None:
+    """The distinction has to survive serialisation, not just live in the model."""
+    loaded = json.loads(fixture_module.render_all())
+    overlay_fixture = loaded["overlays"]["bitcoin"]
+    annotations = [
+        item
+        for items in overlay_fixture["by_node"].values()
+        for item in items
+        if item["kind"] == "annotation"
+    ]
+    assert annotations
+    assert all(item["source"] == "user" for item in annotations)
+    assert all(item["confidence"] is None for item in annotations)
 
 
 def test_a_derivation_reference_can_address_a_single_output(

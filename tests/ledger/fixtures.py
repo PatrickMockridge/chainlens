@@ -23,14 +23,18 @@ from typing import Any
 
 import anyio
 
+from chainlens.ledger.annotate import overlay
 from chainlens.ledger.derive import derive_finding
 from chainlens.ledger.schema import strict_dumps
 from chainlens.ledger.walk import walk_ledger
+from chainlens.models.annotate import Annotation, AnnotationKind, EvidenceOverlay
 from chainlens.models.base import LensModel
 from chainlens.models.derive import DerivationDocument
-from chainlens.models.enums import AssetKind, Chain, FlowVia
+from chainlens.models.entities import Entity, Label
+from chainlens.models.enums import AssetKind, Chain, EntityKind, FlowVia, LabelSource
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.models.primitives import AssetRef
+from chainlens.models.wire import GraphRef, GraphRefKind
 from chainlens.providers.base import Provider
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.testing.factories import btc_transaction, eth_transaction, inp, out, transfer
@@ -278,6 +282,75 @@ DERIVATIONS: dict[str, Any] = {
     "with_ratio": _with_ratio_derivation,
 }
 
+#: An address deliberately *not* in the walked graph, so the overlay fixture exercises the
+#: unjoined path — the one a naive join gets wrong by dropping it. It must not be any of the
+#: addresses above, or the reference would resolve and the fixture would silently stop
+#: covering the case.
+OUTSIDE = "1CounterpartyXXXXXXXXXXXXXXXUWLpVr"
+
+
+async def _overlay_document() -> EvidenceOverlay:
+    """Everything known about the bitcoin fixture graph, joined onto its own keys.
+
+    Every source the overlay accepts appears once, so the front end has a sample of each
+    kind of evidence — and one reference that resolves to nothing, because reporting those
+    is the reason the join is a document rather than a rendering step.
+    """
+    graph = await _bitcoin_document()
+    engine = VerificationEngine(_bitcoin_provider(), estimator=_Pricing())
+    report = await engine.verify_post(_claim_post(), _claim_extraction())
+
+    return overlay(
+        graph,
+        findings=report.findings,
+        labels={
+            ALICE: (
+                Label(
+                    name="Example Exchange", source=LabelSource.PROVIDER, kind=EntityKind.EXCHANGE
+                ),
+                Label(name="looks like a deposit address", source=LabelSource.HEURISTIC),
+            )
+        },
+        entities=(
+            Entity(
+                id="e1",
+                chain=Chain.BITCOIN,
+                addresses=frozenset({ALICE, CAROL}),
+                confidence=0.95,
+                heuristics=("common-input-ownership",),
+            ),
+        ),
+        annotations=(
+            Annotation.create(
+                target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{ALICE}"),
+                kind=AnnotationKind.EXCHANGE,
+                assertion="a venue deposit address",
+                author="fixture",
+                basis="listed by the venue",
+                created_at=FIXTURE_INSTANT,
+            ),
+            Annotation.create(
+                target=GraphRef(kind=GraphRefKind.EDGE, key="tx1:out:0"),
+                kind=AnnotationKind.NOTE,
+                assertion="the payment the claim is about",
+                author="fixture",
+                basis="matched by amount and recipient",
+                created_at=FIXTURE_INSTANT,
+            ),
+            Annotation.create(
+                target=GraphRef(kind=GraphRefKind.NODE, key=f"address:{Chain.BITCOIN}:{OUTSIDE}"),
+                kind=AnnotationKind.NOTE,
+                assertion="seen in an earlier walk",
+                author="fixture",
+                basis="a previous export",
+                created_at=FIXTURE_INSTANT,
+            ),
+        ),
+    )
+
+
+OVERLAYS: dict[str, Any] = {"bitcoin": _overlay_document}
+
 
 #: Anything that reads as an instant, wherever it appears in a document. Provenance
 #: timestamps are recorded at fetch time and so differ on every run, in the middle of
@@ -328,9 +401,18 @@ def render_all() -> str:
     for name, build in DERIVATIONS.items():
         derivations[name] = _stable(anyio.run(build))
 
+    overlays: dict[str, Any] = {}
+    for name, build in OVERLAYS.items():
+        overlays[name] = _stable(anyio.run(build))
+
     return (
         json.dumps(
-            {"schema_version": 1, "ledgers": ledgers, "derivations": derivations},
+            {
+                "schema_version": 1,
+                "ledgers": ledgers,
+                "derivations": derivations,
+                "overlays": overlays,
+            },
             indent=2,
             sort_keys=True,
         )

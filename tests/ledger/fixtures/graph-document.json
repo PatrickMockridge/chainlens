@@ -2456,5 +2456,707 @@
       "warnings": []
     }
   },
+  "overlays": {
+    "bitcoin": {
+      "by_edge": {
+        "tx1:out:0": [
+          {
+            "claim_id": "claim:b6da67668bf55249",
+            "confidence": null,
+            "detail": [
+              {
+                "key": "has_ratio",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              },
+              {
+                "key": "priced_elements",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "recipient",
+                  "amount"
+                ]
+              },
+              {
+                "key": "provenance_strength",
+                "kind": "string",
+                "unit": null,
+                "value": "printout"
+              },
+              {
+                "key": "quote",
+                "kind": "string",
+                "unit": null,
+                "value": "carol moved ~30,000 sats to alice"
+              },
+              {
+                "key": "verdict",
+                "kind": "string",
+                "unit": null,
+                "value": "supported"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "transaction:bitcoin:tx1",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "tx1:out:0",
+                "kind": "edge",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                "kind": "node",
+                "note": null
+              }
+            ],
+            "kind": "finding",
+            "provenance": [
+              {
+                "cache_mode": null,
+                "cached": false,
+                "confidence": null,
+                "endpoint": "address",
+                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "heuristic": null,
+                "provider": "in-memory",
+                "provider_version": null,
+                "request_id": null
+              }
+            ],
+            "source": null,
+            "summary": "transfer claim: supported"
+          },
+          {
+            "claim_id": null,
+            "confidence": null,
+            "detail": [
+              {
+                "key": "annotation_id",
+                "kind": "string",
+                "unit": null,
+                "value": "annotation:3959b9c07ab76a2f"
+              },
+              {
+                "key": "assertion",
+                "kind": "string",
+                "unit": null,
+                "value": "the payment the claim is about"
+              },
+              {
+                "key": "author",
+                "kind": "string",
+                "unit": null,
+                "value": "fixture"
+              },
+              {
+                "key": "basis",
+                "kind": "string",
+                "unit": null,
+                "value": "matched by amount and recipient"
+              },
+              {
+                "key": "created_at",
+                "kind": "string",
+                "unit": null,
+                "value": "2026-01-01T00:00:00+00:00"
+              },
+              {
+                "key": "evidence_urls",
+                "kind": "list",
+                "unit": null,
+                "value": []
+              },
+              {
+                "key": "kind",
+                "kind": "string",
+                "unit": null,
+                "value": "note"
+              },
+              {
+                "key": "source",
+                "kind": "string",
+                "unit": null,
+                "value": "user"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "tx1:out:0",
+                "kind": "edge",
+                "note": null
+              }
+            ],
+            "kind": "annotation",
+            "provenance": [],
+            "source": "user",
+            "summary": "user-declared note: the payment the claim is about"
+          }
+        ]
+      },
+      "by_node": {
+        "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": [
+          {
+            "claim_id": "claim:b6da67668bf55249",
+            "confidence": null,
+            "detail": [
+              {
+                "key": "has_ratio",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              },
+              {
+                "key": "priced_elements",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "recipient",
+                  "amount"
+                ]
+              },
+              {
+                "key": "provenance_strength",
+                "kind": "string",
+                "unit": null,
+                "value": "printout"
+              },
+              {
+                "key": "quote",
+                "kind": "string",
+                "unit": null,
+                "value": "carol moved ~30,000 sats to alice"
+              },
+              {
+                "key": "verdict",
+                "kind": "string",
+                "unit": null,
+                "value": "supported"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "transaction:bitcoin:tx1",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "tx1:out:0",
+                "kind": "edge",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                "kind": "node",
+                "note": null
+              }
+            ],
+            "kind": "finding",
+            "provenance": [
+              {
+                "cache_mode": null,
+                "cached": false,
+                "confidence": null,
+                "endpoint": "address",
+                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "heuristic": null,
+                "provider": "in-memory",
+                "provider_version": null,
+                "request_id": null
+              }
+            ],
+            "source": null,
+            "summary": "transfer claim: supported"
+          },
+          {
+            "claim_id": null,
+            "confidence": 0.95,
+            "detail": [
+              {
+                "key": "address_count",
+                "kind": "int",
+                "unit": null,
+                "value": 2
+              },
+              {
+                "key": "confidence",
+                "kind": "float",
+                "unit": null,
+                "value": 0.95
+              },
+              {
+                "key": "entity_id",
+                "kind": "string",
+                "unit": null,
+                "value": "e1"
+              },
+              {
+                "key": "heuristics",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "common-input-ownership"
+                ]
+              },
+              {
+                "key": "this_address",
+                "kind": "string",
+                "unit": null,
+                "value": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+              }
+            ],
+            "graph_refs": [],
+            "kind": "entity",
+            "provenance": [],
+            "source": null,
+            "summary": "one of 2 addresses in a cluster (common-input-ownership)"
+          }
+        ],
+        "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": [
+          {
+            "claim_id": "claim:b6da67668bf55249",
+            "confidence": null,
+            "detail": [
+              {
+                "key": "has_ratio",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              },
+              {
+                "key": "priced_elements",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "recipient",
+                  "amount"
+                ]
+              },
+              {
+                "key": "provenance_strength",
+                "kind": "string",
+                "unit": null,
+                "value": "printout"
+              },
+              {
+                "key": "quote",
+                "kind": "string",
+                "unit": null,
+                "value": "carol moved ~30,000 sats to alice"
+              },
+              {
+                "key": "verdict",
+                "kind": "string",
+                "unit": null,
+                "value": "supported"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "transaction:bitcoin:tx1",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "tx1:out:0",
+                "kind": "edge",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                "kind": "node",
+                "note": null
+              }
+            ],
+            "kind": "finding",
+            "provenance": [
+              {
+                "cache_mode": null,
+                "cached": false,
+                "confidence": null,
+                "endpoint": "address",
+                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "heuristic": null,
+                "provider": "in-memory",
+                "provider_version": null,
+                "request_id": null
+              }
+            ],
+            "source": null,
+            "summary": "transfer claim: supported"
+          },
+          {
+            "claim_id": null,
+            "confidence": null,
+            "detail": [
+              {
+                "key": "address",
+                "kind": "string",
+                "unit": null,
+                "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+              },
+              {
+                "key": "kind",
+                "kind": "string",
+                "unit": null,
+                "value": "exchange"
+              },
+              {
+                "key": "name",
+                "kind": "string",
+                "unit": null,
+                "value": "Example Exchange"
+              },
+              {
+                "key": "source",
+                "kind": "string",
+                "unit": null,
+                "value": "provider"
+              },
+              {
+                "key": "url",
+                "kind": "null",
+                "unit": null,
+                "value": null
+              }
+            ],
+            "graph_refs": [],
+            "kind": "label",
+            "provenance": [],
+            "source": "provider",
+            "summary": "Example Exchange (provider)"
+          },
+          {
+            "claim_id": null,
+            "confidence": null,
+            "detail": [
+              {
+                "key": "address",
+                "kind": "string",
+                "unit": null,
+                "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+              },
+              {
+                "key": "kind",
+                "kind": "string",
+                "unit": null,
+                "value": "unknown"
+              },
+              {
+                "key": "name",
+                "kind": "string",
+                "unit": null,
+                "value": "looks like a deposit address"
+              },
+              {
+                "key": "source",
+                "kind": "string",
+                "unit": null,
+                "value": "heuristic"
+              },
+              {
+                "key": "url",
+                "kind": "null",
+                "unit": null,
+                "value": null
+              }
+            ],
+            "graph_refs": [],
+            "kind": "label",
+            "provenance": [],
+            "source": "heuristic",
+            "summary": "looks like a deposit address (heuristic)"
+          },
+          {
+            "claim_id": null,
+            "confidence": 0.95,
+            "detail": [
+              {
+                "key": "address_count",
+                "kind": "int",
+                "unit": null,
+                "value": 2
+              },
+              {
+                "key": "confidence",
+                "kind": "float",
+                "unit": null,
+                "value": 0.95
+              },
+              {
+                "key": "entity_id",
+                "kind": "string",
+                "unit": null,
+                "value": "e1"
+              },
+              {
+                "key": "heuristics",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "common-input-ownership"
+                ]
+              },
+              {
+                "key": "this_address",
+                "kind": "string",
+                "unit": null,
+                "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+              }
+            ],
+            "graph_refs": [],
+            "kind": "entity",
+            "provenance": [],
+            "source": null,
+            "summary": "one of 2 addresses in a cluster (common-input-ownership)"
+          },
+          {
+            "claim_id": null,
+            "confidence": null,
+            "detail": [
+              {
+                "key": "annotation_id",
+                "kind": "string",
+                "unit": null,
+                "value": "annotation:e1b41de9b1788800"
+              },
+              {
+                "key": "assertion",
+                "kind": "string",
+                "unit": null,
+                "value": "a venue deposit address"
+              },
+              {
+                "key": "author",
+                "kind": "string",
+                "unit": null,
+                "value": "fixture"
+              },
+              {
+                "key": "basis",
+                "kind": "string",
+                "unit": null,
+                "value": "listed by the venue"
+              },
+              {
+                "key": "created_at",
+                "kind": "string",
+                "unit": null,
+                "value": "2026-01-01T00:00:00+00:00"
+              },
+              {
+                "key": "evidence_urls",
+                "kind": "list",
+                "unit": null,
+                "value": []
+              },
+              {
+                "key": "kind",
+                "kind": "string",
+                "unit": null,
+                "value": "exchange"
+              },
+              {
+                "key": "source",
+                "kind": "string",
+                "unit": null,
+                "value": "user"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                "kind": "node",
+                "note": null
+              }
+            ],
+            "kind": "annotation",
+            "provenance": [],
+            "source": "user",
+            "summary": "user-declared exchange: a venue deposit address"
+          }
+        ],
+        "transaction:bitcoin:tx1": [
+          {
+            "claim_id": "claim:b6da67668bf55249",
+            "confidence": null,
+            "detail": [
+              {
+                "key": "has_ratio",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              },
+              {
+                "key": "priced_elements",
+                "kind": "list",
+                "unit": null,
+                "value": [
+                  "recipient",
+                  "amount"
+                ]
+              },
+              {
+                "key": "provenance_strength",
+                "kind": "string",
+                "unit": null,
+                "value": "printout"
+              },
+              {
+                "key": "quote",
+                "kind": "string",
+                "unit": null,
+                "value": "carol moved ~30,000 sats to alice"
+              },
+              {
+                "key": "verdict",
+                "kind": "string",
+                "unit": null,
+                "value": "supported"
+              }
+            ],
+            "graph_refs": [
+              {
+                "exists": true,
+                "key": "transaction:bitcoin:tx1",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "tx1:out:0",
+                "kind": "edge",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                "kind": "node",
+                "note": null
+              },
+              {
+                "exists": true,
+                "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                "kind": "node",
+                "note": null
+              }
+            ],
+            "kind": "finding",
+            "provenance": [
+              {
+                "cache_mode": null,
+                "cached": false,
+                "confidence": null,
+                "endpoint": "address",
+                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "heuristic": null,
+                "provider": "in-memory",
+                "provider_version": null,
+                "request_id": null
+              }
+            ],
+            "source": null,
+            "summary": "transfer claim: supported"
+          }
+        ]
+      },
+      "claim_refs": {
+        "claim:b6da67668bf55249": [
+          {
+            "exists": true,
+            "key": "transaction:bitcoin:tx1",
+            "kind": "node",
+            "note": null
+          },
+          {
+            "exists": true,
+            "key": "tx1:out:0",
+            "kind": "edge",
+            "note": null
+          },
+          {
+            "exists": true,
+            "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+            "kind": "node",
+            "note": null
+          },
+          {
+            "exists": true,
+            "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+            "kind": "node",
+            "note": null
+          }
+        ]
+      },
+      "schema_version": 1,
+      "unjoined": [
+        {
+          "exists": false,
+          "key": "address:bitcoin:1CounterpartyXXXXXXXXXXXXXXXUWLpVr",
+          "kind": "node",
+          "note": "node 'address:bitcoin:1CounterpartyXXXXXXXXXXXXXXXUWLpVr' is not in this document"
+        }
+      ],
+      "warnings": []
+    }
+  },
   "schema_version": 1
 }
