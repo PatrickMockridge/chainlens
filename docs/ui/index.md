@@ -95,6 +95,34 @@ the library ships no prior, and the posterior node names whoever supplied one. A
 finding that reports no ratio produces no posterior, and the command says so rather than writing a
 number the ratio cannot support.
 
+### Which findings carry a ratio, and what it rests on
+
+A likelihood ratio appears where its preconditions hold: a match was found, the scan was
+exhaustive, `k` is above the selection floor, the coincidence probability can be estimated, and
+the ratio is finite or explicitly unbounded. Otherwise the derivation carries the reason instead —
+and the reason is the estimator's own words, so "the claim names no window" and "the sample is too
+thin" read differently, because the remedy differs.
+
+The estimator prices one specific coincidence: **one of the sender's other movements
+coincidentally looking like the asserted payment**. That is the `within_sender` null model, and it
+is what a per-address provider can measure. The competing proposition — "a transfer of this shape
+is common network-wide" — needs a population-level sample that no free provider hands out, and is
+refused with its own reason rather than approximated from something else.
+
+Two things about the sample are stated on the document rather than left to a reader to assume:
+
+- **it is the sender's movements *outside* the claim's window.** The movements inside it are the
+  opportunities `k`; counting the asserted transfer among the transfers that would have to be
+  coincidences would be circular.
+- **it may be bounded.** The scan reads newest-first up to a ceiling, so a busy address gives the
+  *recent* history. The estimate's `population` then says so in words — "the sender's most recent
+  2,000 movements outside the window, which is as far back as the scan reached and not the whole
+  of their history" — and the derivation renders that string verbatim. A bounded sample never
+  reads as an exhaustive one.
+
+`--no-estimate` writes a document with no ratio at all, for a run that must not change when a
+sample does.
+
 ## The prior
 
 The library ships no default prior and reports no posterior, because choosing a base rate is not
