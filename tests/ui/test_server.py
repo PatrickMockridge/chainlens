@@ -508,3 +508,31 @@ def test_serve_passes_the_annotation_directory_through_as_the_write_switch(
     assert isinstance(read_only, ServeConfig)
     assert read_only.allow_writes is False
     assert read_only.annotations is None
+
+
+def test_open_opens_the_url_once_the_socket_is_listening(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--open` is a convenience, so the one thing it must not do is race the bind.
+
+    A browser pointed at a port nothing is listening on yet shows a connection error, which
+    reads as the tool having failed rather than as having been early.
+    """
+    import chainlens.ui.cli as cli
+
+    opened: list[str] = []
+
+    def fake_serve(config: ServeConfig, **kwargs: object) -> None:
+        on_ready = kwargs.get("on_ready")
+        assert callable(on_ready)
+        on_ready("http://127.0.0.1:8765/")
+
+    monkeypatch.setattr(cli, "_provider", lambda name, chain: _provider())
+    monkeypatch.setattr(cli, "serve", fake_serve)
+    # Patched on the `webbrowser` module rather than through the CLI's namespace: `setattr` on a
+    # module attribute is not a name the CLI re-exports, and mypy is right to say so.
+    monkeypatch.setattr("chainlens.ui.cli.webbrowser.open", opened.append)
+
+    assert main(["ui", "serve", "--seed", ALICE]) == 0
+    assert opened == [], "--open was not asked for, so nothing should have been opened"
+
+    assert main(["ui", "serve", "--seed", ALICE, "--open"]) == 0
+    assert opened == ["http://127.0.0.1:8765/"]

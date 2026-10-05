@@ -5,15 +5,19 @@ address, one edge per recorded input and per recorded output, with the evidence 
 layers computed joined onto the nodes it is about.
 
 ```console
-chainlens ui serve --seed bc1q... --open          # browse a live graph
+chainlens ui serve --seed bc1q... --open          # browse a graph, walking from an address
 chainlens ui export --seed bc1q... --out graph.json
-chainlens ui schema -o web/schema/                # the wire contract
+chainlens ui schema --out web/schema/             # the wire contract
 ```
 
-`serve` answers on `127.0.0.1` and reads the graph from the provider on each request, so the
-header says `live · mempool.space`. `export` writes a document to a file, which is what a reader
-without a server opens — the same code path builds both, so the offline and online views cannot
-differ in shape.
+`serve` binds `127.0.0.1` and walks the graph once, at startup; after that, **expansion and the
+evidence join are done on demand** — `POST /api/expand` walks on from an address, and
+`GET /api/overlay` re-joins what is known every time it is asked. `export` writes the same
+document to a file, which is what a reader without a server opens: the same code path builds both,
+so the offline and online views cannot differ in shape.
+
+The header says `live · <provider>` when a server answered and `static` when none did, so a
+snapshot is never mistaken for a fresh read.
 
 ## What it draws, and the one thing it must not be read as saying
 

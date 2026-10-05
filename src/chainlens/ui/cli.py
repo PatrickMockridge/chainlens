@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import webbrowser
 from pathlib import Path
 
 from chainlens.ledger.annotations import AnnotationStore
@@ -136,6 +137,10 @@ def _command_serve(args: argparse.Namespace) -> int:
     def announce(url: str) -> None:
         print(f"chainlens ui on {url} ({graph.node_count} nodes from {args.seed})")
         print("loopback only; press Ctrl-C to stop")
+        if args.open_browser:
+            # Opened here rather than before the bind, because a browser pointed at a port
+            # nothing is listening on shows a connection error that looks like the tool failed.
+            webbrowser.open(url)
 
     serve(
         config,
@@ -215,6 +220,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="an annotation directory; giving one is what allows the UI to record one",
     )
     serve_command.add_argument("--static", type=Path, help="serve a bundle from here instead")
+    serve_command.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="open the URL in a browser once it is listening",
+    )
     serve_command.set_defaults(handler=_command_serve)
 
     schema = ui_commands.add_parser("schema", help="write the wire schemas")

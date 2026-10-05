@@ -48,6 +48,22 @@ import {
 type Mode = { kind: "probing" } | { kind: "live"; provider: string } | { kind: "static" };
 
 /**
+ * When the served graph was walked, as a UTC clock time.
+ *
+ * `serve` walks once at startup and expands on demand, so what a reader is looking at is a
+ * snapshot — a recent one, but a snapshot. A header that said only `live` would let an hour-old
+ * walk read as a fresh read, which is the confusion the library's whole provenance discipline
+ * exists to prevent. The absolute time rather than "12m ago", because a relative label goes stale
+ * on a page nobody reloads, and a stale label is worse than none.
+ */
+function walkedAt(generated: unknown): string | null {
+  if (typeof generated !== "string") return null;
+  const parsed = new Date(generated);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return `${parsed.toISOString().slice(11, 16)}Z`;
+}
+
+/**
  * Which view a reader is in.
  *
  * Two views over one store rather than two apps: the graph is the same graph, the selection is the
@@ -67,6 +83,8 @@ export function App() {
     writable: false,
     reason: "no server is answering yet",
   });
+  /** When the served graph was walked, so `live` does not read as "read a moment ago". */
+  const [walked, setWalked] = useState<string | null>(null);
 
   const apply = useCallback((source: string, value: unknown) => {
     const classified = classify(value);
@@ -143,7 +161,10 @@ export function App() {
       const graph = await fetchDocument(controller.signal);
       if (cancelled) return;
       setMode({ kind: "live", provider: answered.provider });
-      if (graph !== null) apply("live", graph);
+      if (graph !== null) {
+        apply("live", graph);
+        setWalked(walkedAt((graph as { generated_at?: unknown }).generated_at));
+      }
       setWrite(await writePermission(controller.signal));
       if (cancelled) return;
       // The join, including any annotation already on disk — so a reload shows what was recorded
@@ -243,7 +264,10 @@ export function App() {
         </div>
         <div className="mode" data-mode={mode.kind}>
           {mode.kind === "probing" && "looking for a local server…"}
-          {mode.kind === "live" && `live · ${mode.provider}`}
+          {/* The provider, and — when the server said — when it walked. A server walks once at
+              startup, so `live` alone would let an hour-old graph read as a fresh one. */}
+          {mode.kind === "live" &&
+            `live · ${mode.provider}${walked !== null ? ` · walked ${walked}` : ""}`}
           {mode.kind === "static" && "static · no server answering"}
         </div>
       </header>

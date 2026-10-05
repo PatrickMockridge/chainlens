@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DerivationDocument, LedgerDocument } from "./schema/documents";
 import { App } from "./App";
@@ -18,7 +18,43 @@ import { App } from "./App";
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(
   readFileSync(join(here, "..", "..", "tests", "ledger", "fixtures", "graph-document.json"), "utf8"),
-) as { ledgers: Record<string, LedgerDocument>; derivations: Record<string, DerivationDocument> };
+) as {
+  ledgers: Record<string, LedgerDocument>;
+  overlays: Record<string, unknown>;
+  derivations: Record<string, DerivationDocument>;
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/**
+ * A server that answers, stubbed at the transport.
+ *
+ * The live path is where three things the front-end suite otherwise cannot reach live: the header
+ * saying which provider answered *and when it walked*, the write permission the server decides,
+ * and the overlay being read at boot. A live server walks once at startup, so a header saying only
+ * `live` would let an hour-old graph read as a fresh read — which is why the walk time is
+ * asserted rather than assumed.
+ */
+function serving(overrides: Record<string, unknown> = {}) {
+  const bodies: Record<string, unknown> = {
+    "/api/health": { status: "ok", mode: "live", provider: "in-memory", chain: "bitcoin", writes: false },
+    "/api/document": fixtures.ledgers["bitcoin"],
+    "/api/annotations": { annotations: [], writable: false },
+    "/api/overlay": fixtures.overlays["bitcoin"],
+    ...overrides,
+  };
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
+    const body = bodies[url];
+    if (body === undefined) return new Response("{}", { status: 404 });
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+}
 
 /** Drop a document on the app, the way a reader loads a committed export. */
 function drop(container: HTMLElement, name: string, document: unknown) {
@@ -56,5 +92,31 @@ describe("the app shell", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Verify \(1\)/ })).toBeInTheDocument(),
     );
+  });
+});
+
+describe("with a server answering", () => {
+  it("says which provider answered and when it walked", async () => {
+    serving();
+    render(<App />);
+    // The graph carries its own `generated_at`, and the server walks once at startup — so the
+    // header says when, rather than letting `live` stand in for "a moment ago".
+    await waitFor(() => expect(screen.getByText(/live · in-memory · walked/)).toBeInTheDocument());
+  });
+
+  it("loads the graph and the join the server serves", async () => {
+    serving();
+    render(<App />);
+    // The +N notice is what a loaded ledger document reports, so the graph arrived.
+    await waitFor(() => expect(screen.getByText(/Loaded live:/)).toBeInTheDocument());
+  });
+
+  it("stays static, with no walk time, when no server answers", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/static · no server answering/)).toBeInTheDocument());
+    expect(screen.queryByText(/walked/)).toBeNull();
   });
 });
