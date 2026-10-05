@@ -50,6 +50,7 @@ with chainlens.SyncClient() as client:
 ```console
 chainlens ui serve --seed bc1q... --open      # a browsable graph, on loopback
 chainlens ui export --seed bc1q... --out graph.json
+chainlens ui derive --claim claim.toml --out derivation.json
 ```
 
 The app draws the ledger as it was recorded — a node per transaction and a node per

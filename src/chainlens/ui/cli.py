@@ -8,11 +8,13 @@ user would trigger that on every invocation — including ``--help``. So the reg
 touched inside the command body, and importing this module has no effect beyond defining a
 parser.
 
-Two entry points rather than one because they answer different questions. ``export`` writes a
-document you can commit, diff and hand to somebody; ``serve`` answers questions about a chain
-you are looking at right now. Both walk through the same code, so the two cannot disagree
-about what a document looks like — and the document says which it was, because a replay
-mistaken for a live read is the failure this library's caching already works to prevent.
+Three entry points rather than one because they answer different questions. ``export`` writes a
+ledger you can commit, diff and hand to somebody; ``derive`` writes the argument behind one
+finding about a claim; ``serve`` answers questions about a chain you are looking at right now.
+They walk and verify through the same code as the rest of the library, so a command line and a
+notebook cannot disagree about what a document looks like — and each document says which it was,
+because a replay mistaken for a live read is the failure this library's caching already works to
+prevent.
 """
 
 from __future__ import annotations
@@ -23,13 +25,19 @@ import webbrowser
 from pathlib import Path
 
 from chainlens.ledger.annotations import AnnotationStore
-from chainlens.ledger.schema import SCHEMA_DIR, render_schemas
+from chainlens.ledger.derive import derive_finding
+from chainlens.ledger.schema import SCHEMA_DIR, render_schemas, strict_dumps
 from chainlens.ledger.walk import walk_ledger
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
 from chainlens.ui.server import LOOPBACK, ServeConfig, serve
+from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.parsing import parse_claim
+from chainlens.verify.records import ClaimRecord, RecordError, load_record
+from chainlens.verify.schema import Extraction
+from chainlens.verify.verdicts import VerificationReport
 
 __all__ = ["main"]
 
@@ -81,6 +89,85 @@ async def _walk_for_cli(provider: Provider, seed: str, policy: LedgerPolicy) -> 
     the sake of one caller.
     """
     return await walk_ledger(provider, seed_address=seed, policy=policy)
+
+
+async def _verify_for_cli(provider: Provider, record: ClaimRecord) -> VerificationReport:
+    """``anyio.run`` entry point for one claim record.
+
+    A positional wrapper for the same reason as :func:`_walk_for_cli`: ``anyio.run`` forwards
+    positional arguments only, and the engine would rather have keywords.
+    """
+    engine = VerificationEngine(provider)
+    return await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
+
+
+def _command_derive(args: argparse.Namespace) -> int:
+    """Write the argument behind one finding, as a document the app can render."""
+    import anyio
+
+    claim_path = Path(args.claim)
+    if not claim_path.is_file():
+        raise SystemExit(f"no such claim record: {claim_path}")
+    try:
+        record = load_record(
+            claim_path, corpus_dir=Path(args.corpus) if args.corpus is not None else None
+        )
+    except RecordError as exc:
+        # The loader's messages already name the file and the key; a traceback would bury them.
+        raise SystemExit(str(exc)) from exc
+
+    # The chain comes from the engine's own parser rather than from a flag, so a record cannot be
+    # pointed at a provider of a different chain than the one its claim names.
+    elements = parse_claim(record.claim).elements
+    chain = elements.chain.value if elements is not None else args.chain
+    provider = _provider(args.provider, chain)
+
+    if not provider.redistributable and not args.redistributable_ok:
+        raise SystemExit(
+            f"{provider.name!r} does not permit redistributing its data, and a derivation is "
+            "derived provider data: it carries the transactions, addresses and amounts the "
+            "finding rests on. Pass --redistributable-ok if you have the right to do this."
+        )
+
+    report = anyio.run(_verify_for_cli, provider, record)
+    for warning in report.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    if not report.findings:
+        # Writing an empty document would look like a successful run. It is not: the engine drops
+        # a claim whose quote is not in the post, because a verdict about a claim nobody made is
+        # worse than no verdict.
+        raise SystemExit(
+            "the claim was dropped before it was answered: its quote does not appear in the "
+            f"post's text, so the post does not make this claim. Quote: {record.quote!r}"
+        )
+
+    finding = report.findings[0]
+    try:
+        document = derive_finding(
+            finding,
+            prior=args.prior,
+            prior_supplied_by=args.prior_supplied_by or "the caller",
+        )
+    except ValueError as exc:
+        raise SystemExit(f"the finding cannot be rendered: {exc}") from exc
+
+    if args.prior is not None and not document.has_ratio:
+        print(
+            "warning: a prior was given, but this finding reports no ratio, so no posterior is "
+            "shown — a posterior is the ratio combined with the prior, and there is nothing to "
+            "combine. The document says which precondition failed.",
+            file=sys.stderr,
+        )
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(strict_dumps(document), encoding="utf-8")
+    print(
+        f"wrote {out}: {finding.verdict.value} by {finding.method}, "
+        f"{'with' if document.has_ratio else 'without'} a likelihood ratio"
+    )
+    return 0
 
 
 def _command_export(args: argparse.Namespace) -> int:
@@ -170,14 +257,51 @@ def _command_schema(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The argument parser. Defining it imports nothing provider-facing."""
-    parser = argparse.ArgumentParser(
-        prog="chainlens", description="Explore and verify on-chain claims."
-    )
-    subcommands = parser.add_subparsers(dest="command", required=True)
+    """The whole command line, defined without touching the registry.
 
-    ui = subcommands.add_parser("ui", help="build, serve and inspect graph documents")
+    Importing this module must not discover plugins (see the module docstring), so nothing here
+    calls :func:`_provider`; resolution happens in the handlers.
+    """
+    parser = argparse.ArgumentParser(prog="chainlens", description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    ui = commands.add_parser("ui", help="build, serve and inspect documents")
     ui_commands = ui.add_subparsers(dest="ui_command", required=True)
+
+    derive = ui_commands.add_parser(
+        "derive",
+        help="write the derivation behind one claim, as a document",
+        description=(
+            "Adjudicate one claim record and write the argument behind the finding: what was "
+            "claimed, what the chain shows, how the evidential weight was arrived at, and — where "
+            "no number is reported — which precondition failed."
+        ),
+    )
+    derive.add_argument("--claim", required=True, help="a claim record, as TOML")
+    derive.add_argument("--out", required=True, help="where to write the derivation")
+    derive.add_argument("--provider", help="a registered provider name")
+    derive.add_argument("--chain", help="a chain, when the claim names none to take it from")
+    derive.add_argument(
+        "--corpus",
+        help="the directory of captures a record's source.capture names; without it a record "
+        "that names a capture is refused rather than checked against nothing",
+    )
+    derive.add_argument(
+        "--prior",
+        type=float,
+        help="a base rate, if you have one. The library ships no prior and reports no posterior, "
+        "so this is the only way a posterior appears in this document — and it is yours",
+    )
+    derive.add_argument(
+        "--prior-supplied-by",
+        help="who chose the prior; recorded on the posterior node, because a posterior without "
+        "its author is a number nobody owns",
+    )
+    derive.add_argument(
+        "--redistributable-ok",
+        action="store_true",
+        help="confirm you may redistribute this provider's data",
+    )
+    derive.set_defaults(handler=_command_derive)
 
     def add_walk_options(target: argparse.ArgumentParser) -> None:
         target.add_argument("--seed", required=True, help="the address to walk from")

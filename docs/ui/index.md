@@ -7,6 +7,7 @@ layers computed joined onto the nodes it is about.
 ```console
 chainlens ui serve --seed bc1q... --open          # browse a graph, walking from an address
 chainlens ui export --seed bc1q... --out graph.json
+chainlens ui derive --claim claim.toml --out derivation.json
 chainlens ui schema --out web/schema/             # the wire contract
 ```
 
@@ -60,6 +61,39 @@ clicking a node or edge emphasises every step that rests on it, descendants incl
 The reference that is *not* in the loaded graph is the important one. It is counted on the step
 that rests on it and marked, never dropped: a step resting on a transaction this walk did not
 reach is the step that says the walk was too shallow.
+
+### Where a derivation comes from
+
+```console
+chainlens ui derive --claim claim.toml --out derivation.json
+```
+
+A derivation is written by running the engine over one **claim record** — the same TOML a case
+study uses to check that a verdict reproduces (see [Claim records](../explanation/claim-records.md)):
+
+```toml
+schema_version = 1
+quote = "carol moved ~30,000 sats to alice"
+
+[claim]
+type = "transfer"
+addresses = ["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"]
+amount_text = "~30,000 sats"
+
+[claim.window]
+start = 2026-09-01T00:00:00Z
+end = 2026-09-30T23:59:59Z
+```
+
+Drop the derivation on the app beside a `graph.json` for the same chain and the Verify view opens
+on it. A derivation carries no `exists` on its references: the *overlay* is what resolves a
+reference against a graph, so the document claims no lookup it did not make, and the app resolves
+each key against whatever it has loaded.
+
+`--prior` supplies a base rate, and is the only way a posterior appears in the written document —
+the library ships no prior, and the posterior node names whoever supplied one. A prior given to a
+finding that reports no ratio produces no posterior, and the command says so rather than writing a
+number the ratio cannot support.
 
 ## The prior
 
