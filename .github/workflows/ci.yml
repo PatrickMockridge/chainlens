@@ -30,7 +30,10 @@ jobs:
       - name: ruff format
         run: uv run ruff format --check .
       - name: mypy
-        run: uv run mypy src tests
+        # case-study/tools is type-checked here as well as in `make typecheck`:
+        # two different scopes would let a type error pass on one side and not the
+        # other, which is the divergence that makes a local green run untrustworthy.
+        run: uv run mypy src tests case-study/tools
 
   test:
     name: test (py${{ matrix.python-version }})
