@@ -72,6 +72,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
+      - name: lint
+        run: npm run lint
+        working-directory: web
       - name: typecheck
         run: npx tsc --noEmit
         working-directory: web

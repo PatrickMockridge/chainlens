@@ -8,6 +8,7 @@ toolchain and the dependency tree — does not ship.
 ```console
 npm ci            # once
 npm run dev       # a dev server, with the API proxied from `chainlens ui serve --port 8765`
+npm run lint      # oxlint
 npm test          # vitest
 npm run build     # writes ../src/chainlens/ui/static/ — commit the result
 npm run schema    # regenerates src/schema/*.gen.ts from ../web/schema/*.json
@@ -15,6 +16,25 @@ npm run schema    # regenerates src/schema/*.gen.ts from ../web/schema/*.json
 
 `make ui` and `make ui-check` from the repository root do the same thing from the Python side;
 `make contract` regenerates the JSON Schema, the zod modules and the golden fixtures in one go.
+
+## Why the linter is oxlint and not eslint
+
+Every published `typescript-eslint` — every stable release and every alpha — declares
+`typescript >=4.8.4 <6.1.0`, and this app is on **TypeScript 7.0.2**, the current `latest`. So
+eslint could only be installed by overriding the peer, and would then parse the source with a
+parser built for an older language version. A gate that silently checks something other than what
+it claims is worse than no gate, so the linter is `oxlint`, which carries its own parser and has no
+TypeScript peer to conflict with.
+
+`.oxlintrc.json` keeps the set narrow on purpose: `correctness` is an error, `suspicious` is a
+warning, and three rules are promoted explicitly. `no-unused-vars` is an error because `tsc` does
+not catch it here — `noUnusedLocals` is off — so an unused import or binding is invisible to every
+other check in the repository. `react-hooks/exhaustive-deps` is an error rather than a warning
+because a missing dependency is a stale value that renders as a correct-looking page; the one
+deliberate exception in `graph/GraphView.tsx` carries an `eslint-disable` comment saying why.
+
+`unicorn` and `import` were tried and dropped: their remaining findings here are stylistic
+preferences (`toSorted` over `sort`) and a false positive on the stylesheet import.
 
 ## The one rule
 

@@ -113,7 +113,9 @@ describe("what the form refuses", () => {
   });
 
   it("shows the server's refusal verbatim and keeps what was typed", async () => {
-    const onRecord = draw(
+    // The return value is not used: what this test is about is what the *form* does with a
+    // refusal, and the mock's own words are what it has to show.
+    draw(
       true,
       vi.fn<OnRecord>(async () =>
         "an annotation must state the basis it rests on; an assertion with no stated ground is not a record",

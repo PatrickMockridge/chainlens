@@ -84,9 +84,10 @@ ui:  ## Build the front-end bundle into the package
 	# committing it there is what makes `pip install` work without Node.
 	cd web && npm run build
 
-ui-check:  ## Typecheck, test and build the front end, and fail on a stale bundle
-	# The test run is not optional here: `ruff`, `mypy` and `pytest` do not see `web/`, so without
-	# it the front end would be the only ungated region in the tree.
+ui-check:  ## Lint, typecheck, test and build the front end, and fail on a stale bundle
+	# None of these are optional: `ruff`, `mypy` and `pytest` do not see `web/`, so without them the
+	# front end would be the only ungated region in the tree.
+	cd web && npm run lint
 	cd web && npm test
 	cd web && npm run build
 	@git diff --exit-code -- src/chainlens/ui/static || { \

@@ -26,7 +26,7 @@ import {
   type WritePermission,
 } from "./api";
 import { GraphView } from "./graph/GraphView";
-import type { AnnotationRequest, LedgerDocument } from "./schema/documents";
+import type { AnnotationRequest } from "./schema/documents";
 import { OverlayDocumentSchema, classify } from "./schema/documents";
 import { EvidencePanel } from "./panel/EvidencePanel";
 import { VerifyView } from "./views/VerifyView";
