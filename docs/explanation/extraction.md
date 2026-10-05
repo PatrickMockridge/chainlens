@@ -1,4 +1,15 @@
-# Reading a post with a model
+# Using a model, and the two things one is allowed to do
+
+There are exactly two places in this library where a language model is called, and both are bounded
+the same way: **a model may read, and a model may write prose about something already settled.** It
+never decides anything.
+
+| | what the model does | what stops it going further |
+|---|---|---|
+| reading (this page) | says what a post asserts | the shape it answers in has no field for a verdict; a quote is validated against the post |
+| narrating ([below](#writing-prose-about-a-report)) | says what a report shows | a figure in the prose must be a figure in the report, character for character |
+
+## Reading a post
 
 A post is prose. Deciding what it *asserts* — which addresses it names, which amount it states, what
 period it refers to — is the part of this library's job that a language model does genuinely well,
@@ -87,3 +98,35 @@ It is not extraction you can skip checking. A model reads prose, and prose is am
 a claim, split one into two, or read an address one character out. The library's defences are
 structural — a quote is validated, a verdict is impossible, an amount is text — and the residue is
 the model's error rate, which the report prints. A corpus built this way should say what read it.
+
+## Writing prose about a report
+
+```python
+from chainlens.report import Narrator
+from chainlens.verify.extract import AnthropicLLM
+
+narrative = await Narrator(AnthropicLLM()).narrate(report)
+print(narrative.format())
+```
+
+A verification report is precise and it is not readable, and an analyst writing a paragraph by hand
+reintroduces exactly the errors this library spends its effort preventing: a rounded ratio, a
+converted amount, a verdict softened into a phrase. So the prose is generated *from* the report and
+then held to it, paragraph by paragraph:
+
+- **every figure must appear in the report verbatim.** Not rounded, not converted, not summed — the
+  token itself, with its unit suffix. `~30k BTC` in a claim does not license `30,000 BTC` in a
+  sentence, and a ratio of `1905.1619467641099` does not license `about 1900`. If the report does
+  not hold the figure, the paragraph must describe it in words — the report's own verbal band
+  ("strong"), "the interval it reports" — and the prompt says so.
+- **every paragraph must name the findings it is about**, by the same content-addressed claim id the
+  graph overlay and the derivation use. A paragraph naming a finding that is not in the report is
+  prose about nothing.
+- **a paragraph that fails either rule is discarded, never rewritten.** Rewriting a sentence to fit
+  would produce text that disagrees with nothing, which is worse than text that disagrees with one.
+  The count is reported, and so is the tally of findings no surviving paragraph is about.
+- **the report's caveats leave with the prose.** A narrative carries the report's own
+  `limitations`, because prose travels further than the document it came from.
+
+The narrative is a *view*. Nothing in it can change a verdict, a ratio or an amount — it is a
+separate object built beside the report, and the report is what a reader quotes.

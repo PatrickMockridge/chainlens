@@ -57,7 +57,8 @@ chainlens ui derive --claim claim.toml --out derivation.json
 `ui extract` reads a post with a model and writes what it asserts as claim records; `ui derive`
 adjudicates one against the chain. The model reports what the post says and never what is true —
 the shape it answers in has no field for a verdict — and a claim whose quote is not in the post is
-dropped rather than repaired. See [Reading a post with a model](docs/explanation/extraction.md).
+dropped rather than repaired. A second, smaller use of a model writes prose *about* a report and
+holds it to the report's own figures. See [Using a model](docs/explanation/extraction.md).
 
 The app draws the ledger as it was recorded — a node per transaction and a node per
 address, one edge per input and per output — with the evidence the analysis layers
