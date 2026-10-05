@@ -286,12 +286,59 @@ async def test_a_self_transfer_is_dropped_by_default() -> None:
 
 @pytest.mark.anyio
 async def test_a_coinbase_produces_no_edge() -> None:
-    """Minted value has no sender, and the tracer does not invent one."""
+    """Minted value has no sender, and the tracer does not invent one.
+
+    Not drawable at all, not merely skipped: a ``FlowGraph`` node is an address or a
+    cluster of addresses, and a coinbase has no address to come from. Naming a miner
+    would be a fabrication, which is why the coinbase branch in ``_utxo_transfers``
+    leaves ``src`` as None — and why there is no node to attach the edge to.
+    """
     provider = InMemoryProvider(
         transactions=[btc_transaction("cb", [out(0, ALICE, HUNDRED)], is_coinbase=True)]
     )
     graph = await Tracer(provider).trace(ALICE, budget=TraceBudget(max_depth=5))
     assert graph.is_empty
+
+
+@pytest.mark.anyio
+async def test_a_kept_coinbase_is_reported_as_undrawable_rather_than_dropped() -> None:
+    """``skip_coinbase=False`` says what it cannot do instead of silently doing nothing.
+
+    Regression: ``_keep`` rejected any transfer with ``src is None`` *before* it
+    consulted ``skip_coinbase``, so the flag was dead configuration with no way to
+    observe that. It is still not drawable — there is no node kind for minted value —
+    but the trace now says so, once, rather than leaving a reader to conclude the
+    setting works.
+    """
+    provider = InMemoryProvider(
+        transactions=[
+            btc_transaction("cb", [out(0, ALICE, HUNDRED)], is_coinbase=True),
+            btc_transaction("cb2", [out(0, ALICE, HUNDRED)], is_coinbase=True),
+        ]
+    )
+    graph = await Tracer(provider).trace(
+        ALICE,
+        direction=Direction.IN,
+        policy=PruningPolicy(skip_coinbase=False),
+        budget=TraceBudget(max_depth=5),
+    )
+
+    assert graph.is_empty
+    undrawable = [warning for warning in graph.warnings if "minted value" in warning]
+    assert len(undrawable) == 1, "reported once per trace, not once per block reward"
+
+
+@pytest.mark.anyio
+async def test_the_default_policy_says_nothing_about_coinbase() -> None:
+    """The warning is for a policy that asked for something, not for the default."""
+    provider = InMemoryProvider(
+        transactions=[btc_transaction("cb", [out(0, ALICE, HUNDRED)], is_coinbase=True)]
+    )
+    graph = await Tracer(provider).trace(
+        ALICE, direction=Direction.IN, budget=TraceBudget(max_depth=5)
+    )
+    assert graph.is_empty
+    assert not any("minted value" in warning for warning in graph.warnings)
 
 
 # --------------------------------------------------------------------------- #

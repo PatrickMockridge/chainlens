@@ -141,6 +141,8 @@ class Tracer:
         self._expanded: set[str] = set()
         self._stop_counts: Counter[str] = Counter()
         self._warnings: list[str] = []
+        #: Set when a coinbase transfer survived the policy and could not be drawn.
+        self._undrawable_coinbase = False
         self._truncated = False
         self._expand_count = 0
 
@@ -242,10 +244,16 @@ class Tracer:
         maintainers: frozenset[str],
     ) -> bool:
         """Whether a movement survives the pruning policy and the requested direction."""
-        if transfer.src is None or transfer.dst is None:
-            return False  # minted value, or an output nobody owns
-        if self._policy.skip_coinbase and transfer.via is FlowVia.COINBASE:
-            return False
+        if transfer.via is FlowVia.COINBASE:
+            # Minted value has no sender *by construction*: ``src`` is None so that no
+            # miner is invented. Judging it here instead of by the endpoint guard below
+            # is what makes ``skip_coinbase`` mean anything -- the guard rejected every
+            # coinbase first, so the flag was dead configuration and minted value could
+            # not appear in a trace under any policy.
+            if self._policy.skip_coinbase or transfer.dst is None:
+                return False
+        elif transfer.src is None or transfer.dst is None:
+            return False  # an output nobody owns
         if self._policy.skip_change and transfer.is_change:
             return False
         if self._policy.skip_self and transfer.src == transfer.dst:
@@ -310,6 +318,15 @@ class Tracer:
     ) -> None:
         for transfer in transfers_from_transaction(transaction):
             if not self._keep(transfer, transaction=transaction, maintainers=maintainers):
+                continue
+
+            if transfer.via is FlowVia.COINBASE:
+                # Kept by policy and still not drawable: a `FlowGraph` node is an address
+                # or a cluster of addresses, and minted value has no address to come
+                # from. Naming a miner would be a fabrication, so the transfer is
+                # reported as undrawable rather than drawn from a node that does not
+                # exist. Recorded once per trace rather than once per block reward.
+                self._undrawable_coinbase = True
                 continue
 
             src_key = self._resolve_address(transfer.src)
@@ -505,6 +522,15 @@ class Tracer:
             for expansion in await self._expand_batch(batch):
                 self._absorb(expansion, frontier)
 
+        warnings = list(self._warnings)
+        if self._undrawable_coinbase:
+            warnings.append(
+                "minted value was kept by the policy but not drawn: a flow-graph node is "
+                "an address or a cluster of addresses, and a coinbase has none to come "
+                "from. The ledger view represents it, because a transaction there is a "
+                "node of its own"
+            )
+
         return FlowGraph(
             chain=self._chain,
             seed=self._nodes[self._seed_key],
@@ -514,6 +540,6 @@ class Tracer:
             expanded_addresses=self._expand_count,
             truncated=self._truncated,
             stop_reasons=dict(self._stop_counts),
-            warnings=tuple(self._warnings),
+            warnings=tuple(warnings),
             elapsed_seconds=round(time.monotonic() - started, 6),
         )

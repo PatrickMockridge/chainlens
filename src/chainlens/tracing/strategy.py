@@ -72,7 +72,14 @@ class PruningPolicy(LensModel):
         max_fan_out: stop expanding a node with more than this many distinct
             destinations; a node paying thousands of addresses is a service, and
             expanding it yields a hairball rather than an answer.
-        skip_coinbase: do not follow newly minted value.
+        skip_coinbase: do not follow newly minted value. Setting it False does **not**
+            currently produce a coinbase edge, and cannot: a
+            :class:`~chainlens.models.flows.FlowGraph` node is an address or a cluster
+            of addresses, and minted value has no address to come from — naming a miner
+            would be a fabrication. Under ``skip_coinbase=False`` a kept coinbase is
+            reported in the graph's ``warnings`` as undrawable, so the setting is
+            honest about what it does rather than silent. The ledger view represents
+            minted value properly, because a transaction there is a node of its own.
         skip_change: do not follow change back to the sender. Change is not a
             payment, and following it just walks back into the same wallet.
         skip_self: drop self-loops.
