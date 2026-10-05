@@ -22,10 +22,12 @@ import pytest
 
 from chainlens.graph.export import to_cytoscape_json, to_dot, to_graphml, to_mermaid
 from chainlens.ledger.schema import (
+    DOCUMENTS,
     SCHEMA_DIR,
     _non_finite,
     document_schema,
-    render_schema,
+    render_schemas,
+    schema_path,
     strict_dumps,
 )
 from chainlens.models.base import utcnow
@@ -40,7 +42,8 @@ from chainlens.testing.factories import btc_transaction, inp, out
 from chainlens.testing.in_memory import InMemoryProvider
 from chainlens.tracing import TraceBudget, Tracer
 
-SCHEMA_PATH = Path(SCHEMA_DIR) / "ledger.schema.json"
+LEDGER_SCHEMA = Path(SCHEMA_DIR) / "ledger.schema.json"
+DERIVATION_SCHEMA = Path(SCHEMA_DIR) / "derivation.schema.json"
 
 
 def _committed(path: Path) -> str:
@@ -66,16 +69,25 @@ def _minimal_document(**overrides: Any) -> LedgerGraph:
 # --------------------------------------------------------------------------- #
 # The committed contract matches the models
 # --------------------------------------------------------------------------- #
-def test_the_committed_schema_matches_a_fresh_render() -> None:
-    """The staleness check, and the whole reason the schema is generated.
+@pytest.mark.parametrize("name", sorted(DOCUMENTS))
+def test_the_committed_schema_matches_a_fresh_render(name: str) -> None:
+    """The staleness check, and the whole reason the schemas are generated.
 
-    A field added to a model without regenerating would otherwise be invisible: the
-    schema would describe a format the models no longer produce, and a front end would
-    validate against a lie.
+    A field added to a model without regenerating would otherwise be invisible: the schema
+    would describe a format the models no longer produce, and a front end would validate
+    against a lie.
     """
-    assert _committed(SCHEMA_PATH) == render_schema(), (
-        "web/schema/ledger.schema.json is out of date; run `make contract`"
+    rendered = render_schemas()
+    assert _committed(schema_path(name)) == rendered[schema_path(name).name], (
+        f"{schema_path(name).name} is out of date; run `make contract`"
     )
+
+
+def test_every_document_the_front_end_reads_has_a_schema() -> None:
+    """Two documents, so a schema per root rather than one file holding both."""
+    assert set(DOCUMENTS) == {"ledger", "derivation"}
+    assert LEDGER_SCHEMA.exists()
+    assert DERIVATION_SCHEMA.exists()
 
 
 def test_the_committed_fixture_matches_a_fresh_render() -> None:
@@ -91,13 +103,13 @@ def test_the_schema_is_described_by_definitions_rather_than_inlined() -> None:
     so the shape of the schema is a requirement rather than a preference. The root is the
     document itself; everything it references is named.
     """
-    schema = document_schema()
+    schema = document_schema("ledger")
     assert schema["title"] == "LedgerGraph"
     assert {"LedgerTransactionNode", "LedgerEdge", "LedgerPolicy"} <= set(schema["$defs"])
 
 
 def test_the_schema_names_every_node_kind_and_edge_role() -> None:
-    definitions = document_schema()["$defs"]
+    definitions = document_schema("ledger")["$defs"]
     kinds = {
         definitions[name]["properties"]["kind"]["const"]
         for name in ("LedgerAddressNode", "LedgerTransactionNode", "LedgerUnparsedNode")
@@ -108,7 +120,8 @@ def test_the_schema_names_every_node_kind_and_edge_role() -> None:
 
 def test_the_schema_forbids_a_field_the_models_do_not_have() -> None:
     """``extra="forbid"`` has to reach the wire, or a consumer can send anything."""
-    assert document_schema()["additionalProperties"] is False
+    assert document_schema("ledger")["additionalProperties"] is False
+    assert document_schema("derivation")["additionalProperties"] is False
 
 
 # --------------------------------------------------------------------------- #
@@ -116,7 +129,14 @@ def test_the_schema_forbids_a_field_the_models_do_not_have() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
 def documents() -> dict[str, dict[str, Any]]:
-    loaded: dict[str, dict[str, Any]] = json.loads(fixture_module.render_all())["documents"]
+    """The ledger walks, which is the family most of the coverage tests are about."""
+    loaded: dict[str, dict[str, Any]] = json.loads(fixture_module.render_all())["ledgers"]
+    return loaded
+
+
+@pytest.fixture(scope="module")
+def derivations() -> dict[str, dict[str, Any]]:
+    loaded: dict[str, dict[str, Any]] = json.loads(fixture_module.render_all())["derivations"]
     return loaded
 
 
@@ -178,8 +198,131 @@ def test_the_fixture_carries_a_contract_on_every_token_edge(
 def test_the_fixture_declares_the_version_it_was_written_against() -> None:
     loaded = json.loads(fixture_module.render_all())
     assert loaded["schema_version"] == 1
-    for document in loaded["documents"].values():
-        assert document["schema_version"] == 1
+    for family in ("ledgers", "derivations"):
+        for document in loaded[family].values():
+            assert document["schema_version"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# The derivations, and the vocabulary the two documents share
+# --------------------------------------------------------------------------- #
+def _walk_nodes(node: dict[str, Any]) -> list[dict[str, Any]]:
+    found = [node]
+    for child in node["children"]:
+        found.extend(_walk_nodes(child))
+    return found
+
+
+def _refs(document: dict[str, Any]) -> list[str]:
+    return [ref["key"] for node in _walk_nodes(document["root"]) for ref in node["graph_refs"]]
+
+
+def test_the_fixture_covers_both_derivation_shapes(derivations: dict[str, dict[str, Any]]) -> None:
+    """The no-ratio shape is the normal case today, so it is a fixture and not a gap."""
+    assert {document["has_ratio"] for document in derivations.values()} == {True, False}
+
+
+def test_the_no_ratio_derivation_draws_no_hypotheses(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    """The shape choice that keeps it from looking broken.
+
+    With no ratio there are no competing propositions. Drawing a first/alternative pair
+    above an empty ratio node would be the taller tree with holes, which is what almost
+    every real finding would look like while no estimator ships.
+    """
+    document = derivations["no_ratio"]
+    kinds = {node["kind"] for node in _walk_nodes(document["root"])}
+    assert "because" in kinds
+    assert "verdict" in kinds
+    assert "proposition" not in kinds
+    assert "likelihood_ratio" not in kinds
+
+
+def test_the_ratio_derivation_carries_the_whole_argument(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    document = derivations["with_ratio"]
+    kinds = {node["kind"] for node in _walk_nodes(document["root"])}
+    assert {
+        "proposition",
+        "quantity_k",
+        "quantity_p",
+        "likelihood_ratio",
+        "sensitivity",
+        "verbal_band",
+        "posterior",
+        "assumption",
+        "caveat",
+    } <= kinds
+
+
+def test_the_envelope_is_a_child_of_the_ratio_in_the_fixture_too(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    """A renderer reading the fixture should see the shape the design argues for."""
+    ratio = next(
+        node
+        for node in _walk_nodes(derivations["with_ratio"]["root"])
+        if node["kind"] == "likelihood_ratio"
+    )
+    assert [child["kind"] for child in ratio["children"]] == ["sensitivity"]
+
+
+def test_the_posterior_is_attributed_to_whoever_supplied_the_prior(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    """The library supplies no prior, so the artifact has to say whose it is."""
+    document = derivations["with_ratio"]
+    assert document["prior_supplied_by"] == "the fixture"
+    assert "the library's" in document["limitations"]
+
+    posterior = next(node for node in _walk_nodes(document["root"]) if node["kind"] == "posterior")
+    detail = {entry["key"]: entry["value"] for entry in posterior["detail"]}
+    assert detail["supplied_by"] == "the fixture"
+
+
+def test_the_derivation_fixture_has_no_posterior_without_a_prior(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    document = derivations["no_ratio"]
+    kinds = {node["kind"] for node in _walk_nodes(document["root"])}
+    assert "posterior" not in kinds
+    assert document["prior_supplied_by"] is None
+
+
+def test_the_two_documents_agree_about_how_a_node_is_named(
+    documents: dict[str, dict[str, Any]], derivations: dict[str, dict[str, Any]]
+) -> None:
+    """The cross-document check, and the reason references are worth emitting at all.
+
+    A derivation points into a ledger document by key. If the two ever disagreed about that
+    spelling every reference would silently stop resolving — the failure would look like a
+    graph with no evidence attached, not like a bug. The fixture uses the same addresses for
+    both families precisely so this can be asserted.
+    """
+    ledger = documents["bitcoin"]
+    available = {node["key"] for node in ledger["nodes"]} | {
+        edge["key"] for edge in ledger["edges"]
+    }
+    referenced = _refs(derivations["with_ratio"])
+
+    assert referenced, "a derivation that references nothing cannot be checked against a graph"
+    assert set(referenced) <= available, (
+        f"references that do not resolve: {sorted(set(referenced) - available)}"
+    )
+
+
+def test_a_derivation_reference_can_address_a_single_output(
+    derivations: dict[str, dict[str, Any]],
+) -> None:
+    """A specific output, which the flow view structurally cannot name.
+
+    ``ValueFlow`` keeps only its first contributor's index, so it cannot point at one
+    output; a bipartite edge key can, and this is what that buys.
+    """
+    referenced = _refs(derivations["with_ratio"])
+    assert any(key.startswith("tx1:out:") for key in referenced), referenced
 
 
 # --------------------------------------------------------------------------- #

@@ -1,5 +1,1325 @@
 {
-  "documents": {
+  "derivations": {
+    "no_ratio": {
+      "claim_id": "claim:b6da67668bf55249",
+      "claim_quote": "carol moved ~30,000 sats to alice",
+      "has_ratio": false,
+      "limitations": "A verdict is about the match structure, not about belief. SUPPORTED means the\nchain data is consistent with the claim; it does not mean the post is honest, and\nit cannot: the chain data inside a doctored screenshot is real regardless of\nwhether the post is.\n\nA likelihood ratio, where one is reported, is the weight of the evidence for the\nobserved transfer being the *specific payment asserted* rather than a coincidental\none by the same sender. It is not the probability that the claim is true, and it\nis not robust to how the claim was selected: a forensic ratio is computed for a\nproposition chosen without regard to the evidence, and a claim harvested from a\npost was not.\n\nUNVERIFIABLE means no method here exists for that class of claim -- it is not a\nstatement that the claim is false, and not a statement that it is true.\nINSUFFICIENT_DATA means the class is checkable and the data was missing; the two\nare reported separately because only one of them can be fixed.\n",
+      "method": "transfer",
+      "prior_supplied_by": null,
+      "root": {
+        "band": null,
+        "children": [
+          {
+            "band": null,
+            "children": [
+              {
+                "band": null,
+                "children": [
+                  {
+                    "band": null,
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "amount",
+                        "kind": "int",
+                        "unit": null,
+                        "value": 30000
+                      },
+                      {
+                        "key": "amount_basis",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "recorded"
+                      },
+                      {
+                        "key": "dst",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+                      },
+                      {
+                        "key": "index",
+                        "kind": "int",
+                        "unit": null,
+                        "value": 0
+                      },
+                      {
+                        "key": "src",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+                      },
+                      {
+                        "key": "txid",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "tx1"
+                      },
+                      {
+                        "key": "via",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "utxo"
+                      }
+                    ],
+                    "graph_refs": [
+                      {
+                        "exists": null,
+                        "key": "tx1:out:0",
+                        "kind": "edge",
+                        "note": null
+                      },
+                      {
+                        "exists": null,
+                        "key": "transaction:bitcoin:tx1",
+                        "kind": "node",
+                        "note": null
+                      }
+                    ],
+                    "id": "claim:b6da67668bf55249/evidence/transfer/0",
+                    "kind": "evidence",
+                    "label": "transfer 30000 in tx1\u2026",
+                    "summary": "the amount is the recorded value of this movement",
+                    "unit": "base units",
+                    "value": 30000.0
+                  },
+                  {
+                    "band": null,
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "endpoint",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "get_address_transactions"
+                      },
+                      {
+                        "key": "fetched_at",
+                        "kind": "list",
+                        "unit": null,
+                        "value": [
+                          "2026-01-01T00:00:00+00:00"
+                        ]
+                      },
+                      {
+                        "key": "provenance_strength",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "printout"
+                      },
+                      {
+                        "key": "provider",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "in-memory"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim:b6da67668bf55249/evidence/provider",
+                    "kind": "evidence",
+                    "label": "read from in-memory",
+                    "summary": "a fetch carries the provider's own say-so that it served this; a hand-supplied artifact does not, and the strength is recorded separately from the verdict",
+                    "unit": null,
+                    "value": null
+                  },
+                  {
+                    "band": null,
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "scan_complete",
+                        "kind": "bool",
+                        "unit": null,
+                        "value": true
+                      },
+                      {
+                        "key": "transfers_truncated",
+                        "kind": "bool",
+                        "unit": null,
+                        "value": false
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim:b6da67668bf55249/evidence/scan",
+                    "kind": "evidence",
+                    "label": "the scan was exhaustive",
+                    "summary": "an exhaustive scan is what licenses the first proposition's probability of 1",
+                    "unit": null,
+                    "value": null
+                  }
+                ],
+                "detail": [
+                  {
+                    "key": "matching_transfers",
+                    "kind": "int",
+                    "unit": null,
+                    "value": 1
+                  },
+                  {
+                    "key": "priced_elements",
+                    "kind": "list",
+                    "unit": null,
+                    "value": [
+                      "recipient",
+                      "amount"
+                    ]
+                  },
+                  {
+                    "key": "txids",
+                    "kind": "list",
+                    "unit": null,
+                    "value": [
+                      "tx1"
+                    ]
+                  }
+                ],
+                "graph_refs": [
+                  {
+                    "exists": null,
+                    "key": "transaction:bitcoin:tx1",
+                    "kind": "node",
+                    "note": null
+                  },
+                  {
+                    "exists": null,
+                    "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                    "kind": "node",
+                    "note": null
+                  },
+                  {
+                    "exists": null,
+                    "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                    "kind": "node",
+                    "note": null
+                  }
+                ],
+                "id": "claim:b6da67668bf55249/evidence",
+                "kind": "evidence",
+                "label": "1 matching transfer(s)",
+                "summary": "every fact the finding rests on, each checkable on its own",
+                "unit": null,
+                "value": null
+              },
+              {
+                "band": null,
+                "children": [],
+                "detail": [
+                  {
+                    "key": "reason",
+                    "kind": "string",
+                    "unit": null,
+                    "value": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate"
+                  }
+                ],
+                "graph_refs": [],
+                "id": "claim:b6da67668bf55249/because",
+                "kind": "because",
+                "label": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
+                "summary": "the engine's own wording, reproduced rather than paraphrased \u2014 the refusal reasons are specific and substituting a summary would lose the distinction between them",
+                "unit": null,
+                "value": null
+              }
+            ],
+            "detail": [
+              {
+                "key": "is_informative",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/verdict",
+            "kind": "verdict",
+            "label": "supported",
+            "summary": "what the chain shows, which is a categorical finding and not a probability",
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/0",
+            "kind": "assumption",
+            "label": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "the sender's whole transaction history was walked"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/1",
+            "kind": "assumption",
+            "label": "the sender's whole transaction history was walked",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "amount tolerance: hedge word in the claim; band widened by 5% of the amount, which is a convention of this library and not a stated precision"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/2",
+            "kind": "assumption",
+            "label": "amount tolerance: hedge word in the claim; band widened by 5% of the amount, which is a convention of this library and not a stated precision",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "caveat",
+                "kind": "string",
+                "unit": null,
+                "value": "a match shows the chain is consistent with the claim; it does not show the post is honest, and it does not show the sender is who the post says"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/caveat/0",
+            "kind": "caveat",
+            "label": "a match shows the chain is consistent with the claim; it does not show the post is honest, and it does not show the sender is who the post says",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "caveat",
+                "kind": "string",
+                "unit": null,
+                "value": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/caveat/1",
+            "kind": "caveat",
+            "label": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output",
+            "summary": null,
+            "unit": null,
+            "value": null
+          }
+        ],
+        "detail": [
+          {
+            "key": "addresses",
+            "kind": "list",
+            "unit": null,
+            "value": [
+              "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+              "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+            ]
+          },
+          {
+            "key": "amount_text",
+            "kind": "string",
+            "unit": null,
+            "value": "~30,000 sats"
+          },
+          {
+            "key": "priced_elements",
+            "kind": "list",
+            "unit": null,
+            "value": [
+              "recipient",
+              "amount"
+            ]
+          },
+          {
+            "key": "provenance_strength",
+            "kind": "string",
+            "unit": null,
+            "value": "printout"
+          },
+          {
+            "key": "txid",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          },
+          {
+            "key": "type",
+            "kind": "string",
+            "unit": null,
+            "value": "transfer"
+          },
+          {
+            "key": "window_end",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          },
+          {
+            "key": "window_start",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          }
+        ],
+        "graph_refs": [],
+        "id": "claim:b6da67668bf55249",
+        "kind": "claim",
+        "label": "transfer claim",
+        "summary": "carol moved ~30,000 sats to alice",
+        "unit": null,
+        "value": null
+      },
+      "schema_version": 1,
+      "verdict": "supported"
+    },
+    "with_ratio": {
+      "claim_id": "claim:b6da67668bf55249",
+      "claim_quote": "carol moved ~30,000 sats to alice",
+      "has_ratio": true,
+      "limitations": "A posterior probability is shown, and it is **not** the library's. The likelihood ratio is\nthe weight of the evidence; the prior is an assumption supplied by the reader, and the\nposterior is those two combined. Change the prior and the posterior changes with it while\nthe ratio does not, which is why the ratio is the quantity a forensic report gives and the\nprior is the decision-maker's to choose.\n\nThe ratio itself is not robust to how the claim was selected: a forensic ratio is computed\nfor a proposition chosen without regard to the evidence, and a claim harvested from a post\nwas not. Nothing here identifies a person.\n",
+      "method": "transfer",
+      "prior_supplied_by": "the fixture",
+      "root": {
+        "band": null,
+        "children": [
+          {
+            "band": null,
+            "children": [
+              {
+                "band": null,
+                "children": [],
+                "detail": [
+                  {
+                    "key": "proposition",
+                    "kind": "string",
+                    "unit": null,
+                    "value": "first"
+                  }
+                ],
+                "graph_refs": [],
+                "id": "claim:b6da67668bf55249/hypothesis/first",
+                "kind": "proposition",
+                "label": "first proposition",
+                "summary": "the observed transfer is the specific payment the claim asserts",
+                "unit": null,
+                "value": null
+              },
+              {
+                "band": null,
+                "children": [
+                  {
+                    "band": null,
+                    "children": [
+                      {
+                        "band": null,
+                        "children": [],
+                        "detail": [
+                          {
+                            "key": "amount",
+                            "kind": "int",
+                            "unit": null,
+                            "value": 30000
+                          },
+                          {
+                            "key": "amount_basis",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "recorded"
+                          },
+                          {
+                            "key": "dst",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+                          },
+                          {
+                            "key": "index",
+                            "kind": "int",
+                            "unit": null,
+                            "value": 0
+                          },
+                          {
+                            "key": "src",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+                          },
+                          {
+                            "key": "txid",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "tx1"
+                          },
+                          {
+                            "key": "via",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "utxo"
+                          }
+                        ],
+                        "graph_refs": [
+                          {
+                            "exists": null,
+                            "key": "tx1:out:0",
+                            "kind": "edge",
+                            "note": null
+                          },
+                          {
+                            "exists": null,
+                            "key": "transaction:bitcoin:tx1",
+                            "kind": "node",
+                            "note": null
+                          }
+                        ],
+                        "id": "claim:b6da67668bf55249/evidence/transfer/0",
+                        "kind": "evidence",
+                        "label": "transfer 30000 in tx1\u2026",
+                        "summary": "the amount is the recorded value of this movement",
+                        "unit": "base units",
+                        "value": 30000.0
+                      },
+                      {
+                        "band": null,
+                        "children": [],
+                        "detail": [
+                          {
+                            "key": "endpoint",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "get_address_transactions"
+                          },
+                          {
+                            "key": "fetched_at",
+                            "kind": "list",
+                            "unit": null,
+                            "value": [
+                              "2026-01-01T00:00:00+00:00"
+                            ]
+                          },
+                          {
+                            "key": "provenance_strength",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "printout"
+                          },
+                          {
+                            "key": "provider",
+                            "kind": "string",
+                            "unit": null,
+                            "value": "in-memory"
+                          }
+                        ],
+                        "graph_refs": [],
+                        "id": "claim:b6da67668bf55249/evidence/provider",
+                        "kind": "evidence",
+                        "label": "read from in-memory",
+                        "summary": "a fetch carries the provider's own say-so that it served this; a hand-supplied artifact does not, and the strength is recorded separately from the verdict",
+                        "unit": null,
+                        "value": null
+                      },
+                      {
+                        "band": null,
+                        "children": [],
+                        "detail": [
+                          {
+                            "key": "scan_complete",
+                            "kind": "bool",
+                            "unit": null,
+                            "value": true
+                          },
+                          {
+                            "key": "transfers_truncated",
+                            "kind": "bool",
+                            "unit": null,
+                            "value": false
+                          }
+                        ],
+                        "graph_refs": [],
+                        "id": "claim:b6da67668bf55249/evidence/scan",
+                        "kind": "evidence",
+                        "label": "the scan was exhaustive",
+                        "summary": "an exhaustive scan is what licenses the first proposition's probability of 1",
+                        "unit": null,
+                        "value": null
+                      }
+                    ],
+                    "detail": [
+                      {
+                        "key": "matching_transfers",
+                        "kind": "int",
+                        "unit": null,
+                        "value": 1
+                      },
+                      {
+                        "key": "priced_elements",
+                        "kind": "list",
+                        "unit": null,
+                        "value": [
+                          "recipient",
+                          "amount"
+                        ]
+                      },
+                      {
+                        "key": "txids",
+                        "kind": "list",
+                        "unit": null,
+                        "value": [
+                          "tx1"
+                        ]
+                      }
+                    ],
+                    "graph_refs": [
+                      {
+                        "exists": null,
+                        "key": "transaction:bitcoin:tx1",
+                        "kind": "node",
+                        "note": null
+                      },
+                      {
+                        "exists": null,
+                        "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                        "kind": "node",
+                        "note": null
+                      },
+                      {
+                        "exists": null,
+                        "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+                        "kind": "node",
+                        "note": null
+                      }
+                    ],
+                    "id": "claim:b6da67668bf55249/evidence",
+                    "kind": "evidence",
+                    "label": "1 matching transfer(s)",
+                    "summary": "every fact the finding rests on, each checkable on its own",
+                    "unit": null,
+                    "value": null
+                  }
+                ],
+                "detail": [
+                  {
+                    "key": "null_model",
+                    "kind": "string",
+                    "unit": null,
+                    "value": "within_sender"
+                  },
+                  {
+                    "key": "proposition",
+                    "kind": "string",
+                    "unit": null,
+                    "value": "alternative"
+                  }
+                ],
+                "graph_refs": [],
+                "id": "claim:b6da67668bf55249/hypothesis/alternative",
+                "kind": "proposition",
+                "label": "alternative proposition",
+                "summary": "one of the sender's own other transfers coincidentally looks like the asserted payment",
+                "unit": null,
+                "value": null
+              }
+            ],
+            "detail": [
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "transfer"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/hypothesis",
+            "kind": "proposition",
+            "label": "supported",
+            "summary": "two propositions are weighed against each other; neither is asserted",
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "candidates_considered",
+                "kind": "int",
+                "unit": null,
+                "value": 5
+              },
+              {
+                "key": "is_lower_bound",
+                "kind": "bool",
+                "unit": null,
+                "value": false
+              },
+              {
+                "key": "scan_complete",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim/quantity/k",
+            "kind": "quantity_k",
+            "label": "k = 5 opportunities",
+            "summary": "the sender's transfers in the window, which is the space a coincidence could have come from",
+            "unit": "transfers",
+            "value": 5.0
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "ci_lower",
+                "kind": "float",
+                "unit": null,
+                "value": 3.4009593858307005e-05
+              },
+              {
+                "key": "ci_upper",
+                "kind": "float",
+                "unit": null,
+                "value": 0.00029399703269986923
+              },
+              {
+                "key": "is_sparse",
+                "kind": "bool",
+                "unit": null,
+                "value": true
+              },
+              {
+                "key": "is_upper_bound",
+                "kind": "bool",
+                "unit": null,
+                "value": false
+              },
+              {
+                "key": "method",
+                "kind": "string",
+                "unit": null,
+                "value": "empirical_joint"
+              },
+              {
+                "key": "null_model",
+                "kind": "string",
+                "unit": null,
+                "value": "within_sender"
+              },
+              {
+                "key": "p",
+                "kind": "float",
+                "unit": null,
+                "value": 0.000105
+              },
+              {
+                "key": "p_is_upper_bound",
+                "kind": "bool",
+                "unit": null,
+                "value": false
+              },
+              {
+                "key": "population",
+                "kind": "string",
+                "unit": null,
+                "value": "the sender's own out-of-window transfers"
+              },
+              {
+                "key": "successes",
+                "kind": "int",
+                "unit": null,
+                "value": 3
+              },
+              {
+                "key": "trials",
+                "kind": "int",
+                "unit": null,
+                "value": 30000
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim/quantity/p",
+            "kind": "quantity_p",
+            "label": "p = 0.000105",
+            "summary": "estimated from a finite sample, so it carries an interval rather than being a known constant",
+            "unit": null,
+            "value": 0.000105
+          },
+          {
+            "band": "strong",
+            "children": [
+              {
+                "band": null,
+                "children": [
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 1905.1619467641099
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "p:claim's own tolerance"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/p:claim's own tolerance",
+                    "kind": "sensitivity",
+                    "label": "p:claim's own tolerance: LR 1905.16",
+                    "summary": null,
+                    "unit": null,
+                    "value": 1905.1619467641099
+                  },
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 1951.6195531972232
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "p:tighter"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/p:tighter",
+                    "kind": "sensitivity",
+                    "label": "p:tighter: LR 1951.62",
+                    "summary": null,
+                    "unit": null,
+                    "value": 1951.6195531972232
+                  },
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 1818.581862184238
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "p:looser"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/p:looser",
+                    "kind": "sensitivity",
+                    "label": "p:looser: LR 1818.58",
+                    "summary": null,
+                    "unit": null,
+                    "value": 1818.581862184238
+                  },
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 1333.733393337833
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "p:much looser"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/p:much looser",
+                    "kind": "sensitivity",
+                    "label": "p:much looser: LR 1333.73",
+                    "summary": null,
+                    "unit": null,
+                    "value": 1333.733393337833
+                  },
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 2381.3274137666035
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "k:4"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/k:4",
+                    "kind": "sensitivity",
+                    "label": "k:4: LR 2381.33",
+                    "summary": null,
+                    "unit": null,
+                    "value": 2381.3274137666035
+                  },
+                  {
+                    "band": "strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "lr",
+                        "kind": "float",
+                        "unit": null,
+                        "value": 1587.7183050126002
+                      },
+                      {
+                        "key": "sweep",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "k:6"
+                      },
+                      {
+                        "key": "verbal",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/k:6",
+                    "kind": "sensitivity",
+                    "label": "k:6: LR 1587.72",
+                    "summary": null,
+                    "unit": null,
+                    "value": 1587.7183050126002
+                  },
+                  {
+                    "band": "moderately strong",
+                    "children": [],
+                    "detail": [
+                      {
+                        "key": "fragile",
+                        "kind": "bool",
+                        "unit": null,
+                        "value": true
+                      },
+                      {
+                        "key": "straddled",
+                        "kind": "list",
+                        "unit": null,
+                        "value": [
+                          "moderately strong",
+                          "strong"
+                        ]
+                      },
+                      {
+                        "key": "verbal_lower",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "moderately strong"
+                      },
+                      {
+                        "key": "verbal_point",
+                        "kind": "string",
+                        "unit": null,
+                        "value": "strong"
+                      }
+                    ],
+                    "graph_refs": [],
+                    "id": "claim/sensitivity/band",
+                    "kind": "verbal_band",
+                    "label": "\"moderately strong\"",
+                    "summary": "read off the lower bound, because the sweeps disagree about the band",
+                    "unit": null,
+                    "value": null
+                  }
+                ],
+                "detail": [
+                  {
+                    "key": "confidence",
+                    "kind": "float",
+                    "unit": null,
+                    "value": 0.95
+                  },
+                  {
+                    "key": "fragile",
+                    "kind": "bool",
+                    "unit": null,
+                    "value": true
+                  },
+                  {
+                    "key": "lower_lr",
+                    "kind": "float",
+                    "unit": null,
+                    "value": 744.4274193865812
+                  },
+                  {
+                    "key": "point_lr",
+                    "kind": "float",
+                    "unit": null,
+                    "value": 1905.1619467641099
+                  },
+                  {
+                    "key": "sweeps",
+                    "kind": "list",
+                    "unit": null,
+                    "value": [
+                      "p:claim's own tolerance",
+                      "p:tighter",
+                      "p:looser",
+                      "p:much looser",
+                      "k:4",
+                      "k:6"
+                    ]
+                  },
+                  {
+                    "key": "upper_lr",
+                    "kind": "float",
+                    "unit": null,
+                    "value": 7005.315817768285
+                  }
+                ],
+                "graph_refs": [],
+                "id": "claim/sensitivity",
+                "kind": "sensitivity",
+                "label": "fragile",
+                "summary": "every sweep recomputed, because a point estimate invites more confidence than it has earned",
+                "unit": null,
+                "value": 1905.1619467641099
+              }
+            ],
+            "detail": [
+              {
+                "key": "log10_lr",
+                "kind": "float",
+                "unit": null,
+                "value": 3.279931898435075
+              },
+              {
+                "key": "lr",
+                "kind": "float",
+                "unit": null,
+                "value": 1905.1619467641099
+              },
+              {
+                "key": "lr_at_least",
+                "kind": "bool",
+                "unit": null,
+                "value": false
+              },
+              {
+                "key": "null_model",
+                "kind": "string",
+                "unit": null,
+                "value": "within_sender"
+              },
+              {
+                "key": "p_is_upper_bound",
+                "kind": "bool",
+                "unit": null,
+                "value": false
+              },
+              {
+                "key": "supports",
+                "kind": "string",
+                "unit": null,
+                "value": "first"
+              },
+              {
+                "key": "verbal",
+                "kind": "string",
+                "unit": null,
+                "value": "strong"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim/ratio",
+            "kind": "likelihood_ratio",
+            "label": "LR = 1905.16",
+            "summary": "a weight, not a probability: it says how much more likely the finding is under one proposition than the other",
+            "unit": null,
+            "value": 1905.1619467641099
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "log10_lr",
+                "kind": "float",
+                "unit": null,
+                "value": 3.279931898435075
+              },
+              {
+                "key": "posterior_probability",
+                "kind": "float",
+                "unit": null,
+                "value": 0.6560109187047536
+              },
+              {
+                "key": "prior_probability",
+                "kind": "float",
+                "unit": null,
+                "value": 0.001
+              },
+              {
+                "key": "supplied_by",
+                "kind": "string",
+                "unit": null,
+                "value": "the fixture"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim/posterior",
+            "kind": "posterior",
+            "label": "posterior 0.656",
+            "summary": "from a prior of 0.001 supplied by the fixture \u2014 not the library's",
+            "unit": null,
+            "value": 0.6560109187047536
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/0",
+            "kind": "assumption",
+            "label": "the sender's transfers in the window were walked, which is what licenses the claim's own transfer being among them",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "the sender's whole transaction history was walked"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/1",
+            "kind": "assumption",
+            "label": "the sender's whole transaction history was walked",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "assumption",
+                "kind": "string",
+                "unit": null,
+                "value": "amount tolerance: hedge word in the claim; band widened by 5% of the amount, which is a convention of this library and not a stated precision"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/assumption/2",
+            "kind": "assumption",
+            "label": "amount tolerance: hedge word in the claim; band widened by 5% of the amount, which is a convention of this library and not a stated precision",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "caveat",
+                "kind": "string",
+                "unit": null,
+                "value": "a match shows the chain is consistent with the claim; it does not show the post is honest, and it does not show the sender is who the post says"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/caveat/0",
+            "kind": "caveat",
+            "label": "a match shows the chain is consistent with the claim; it does not show the post is honest, and it does not show the sender is who the post says",
+            "summary": null,
+            "unit": null,
+            "value": null
+          },
+          {
+            "band": null,
+            "children": [],
+            "detail": [
+              {
+                "key": "caveat",
+                "kind": "string",
+                "unit": null,
+                "value": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output"
+              }
+            ],
+            "graph_refs": [],
+            "id": "claim:b6da67668bf55249/caveat/1",
+            "kind": "caveat",
+            "label": "amounts apportioned across several co-funding inputs are an inference, so an attributed share may be off by up to one base unit per output",
+            "summary": null,
+            "unit": null,
+            "value": null
+          }
+        ],
+        "detail": [
+          {
+            "key": "addresses",
+            "kind": "list",
+            "unit": null,
+            "value": [
+              "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+              "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+            ]
+          },
+          {
+            "key": "amount_text",
+            "kind": "string",
+            "unit": null,
+            "value": "~30,000 sats"
+          },
+          {
+            "key": "priced_elements",
+            "kind": "list",
+            "unit": null,
+            "value": [
+              "recipient",
+              "amount"
+            ]
+          },
+          {
+            "key": "provenance_strength",
+            "kind": "string",
+            "unit": null,
+            "value": "printout"
+          },
+          {
+            "key": "txid",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          },
+          {
+            "key": "type",
+            "kind": "string",
+            "unit": null,
+            "value": "transfer"
+          },
+          {
+            "key": "window_end",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          },
+          {
+            "key": "window_start",
+            "kind": "null",
+            "unit": null,
+            "value": null
+          }
+        ],
+        "graph_refs": [],
+        "id": "claim:b6da67668bf55249",
+        "kind": "claim",
+        "label": "transfer claim",
+        "summary": "carol moved ~30,000 sats to alice",
+        "unit": null,
+        "value": null
+      },
+      "schema_version": 1,
+      "verdict": "supported"
+    }
+  },
+  "ledgers": {
     "bitcoin": {
       "assets": [
         {
@@ -29,7 +1349,7 @@
           "block_height": 1,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1CarolAddr",
+          "dst": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "index": 0,
           "is_change": false,
           "key": "cb0:out:0",
@@ -64,7 +1384,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1CarolAddr",
+          "src": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "txid": "tx1",
           "via": "utxo"
         },
@@ -83,7 +1403,7 @@
           "block_height": 2,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1AliceAddr",
+          "dst": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "index": 0,
           "is_change": false,
           "key": "tx1:out:0",
@@ -110,7 +1430,7 @@
           "block_height": 2,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1CarolAddr",
+          "dst": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "index": 1,
           "is_change": true,
           "key": "tx1:out:1",
@@ -145,7 +1465,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1AliceAddr",
+          "src": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "txid": "tx2",
           "via": "utxo"
         },
@@ -164,7 +1484,7 @@
           "block_height": 3,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1BobAddr",
+          "dst": "address:bitcoin:3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "index": 0,
           "is_change": false,
           "key": "tx2:out:0",
@@ -219,7 +1539,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1AliceAddr",
+          "src": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "txid": "tx3",
           "via": "utxo"
         },
@@ -246,7 +1566,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1DaveAddr",
+          "src": "address:bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
           "txid": "tx3",
           "via": "utxo"
         },
@@ -273,7 +1593,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1CarolAddr",
+          "src": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "txid": "tx3",
           "via": "utxo"
         },
@@ -292,7 +1612,7 @@
           "block_height": 4,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1MalloryAddr",
+          "dst": "address:bitcoin:3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
           "index": 0,
           "is_change": false,
           "key": "tx3:out:0",
@@ -319,7 +1639,7 @@
           "block_height": 4,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1DaveAddr",
+          "dst": "address:bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
           "index": 1,
           "is_change": true,
           "key": "tx3:out:1",
@@ -354,7 +1674,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1BobAddr",
+          "src": "address:bitcoin:3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "txid": "tx4",
           "via": "utxo"
         },
@@ -373,7 +1693,7 @@
           "block_height": 5,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1DaveAddr",
+          "dst": "address:bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
           "index": 0,
           "is_change": false,
           "key": "tx4:out:0",
@@ -388,67 +1708,67 @@
       ],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00Z",
+      "generated_at": "2026-01-01T00:00:00+00:00",
       "nodes": [
         {
-          "address": "1AliceAddr",
+          "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+          "annotation_ids": [],
+          "balance": null,
+          "chain": "bitcoin",
+          "depth": 1,
+          "flags": [],
+          "is_seed": false,
+          "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+          "kind": "address",
+          "tx_count": 3
+        },
+        {
+          "address": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "annotation_ids": [],
           "balance": null,
           "chain": "bitcoin",
           "depth": 0,
           "flags": [],
           "is_seed": true,
-          "key": "address:bitcoin:1AliceAddr",
+          "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "kind": "address",
           "tx_count": 3
         },
         {
-          "address": "1BobAddr",
+          "address": "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "annotation_ids": [],
           "balance": null,
           "chain": "bitcoin",
           "depth": 1,
           "flags": [],
           "is_seed": false,
-          "key": "address:bitcoin:1BobAddr",
+          "key": "address:bitcoin:3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "kind": "address",
           "tx_count": 1
         },
         {
-          "address": "1CarolAddr",
+          "address": "3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
           "annotation_ids": [],
           "balance": null,
           "chain": "bitcoin",
           "depth": 1,
           "flags": [],
           "is_seed": false,
-          "key": "address:bitcoin:1CarolAddr",
-          "kind": "address",
-          "tx_count": 3
-        },
-        {
-          "address": "1DaveAddr",
-          "annotation_ids": [],
-          "balance": null,
-          "chain": "bitcoin",
-          "depth": 1,
-          "flags": [],
-          "is_seed": false,
-          "key": "address:bitcoin:1DaveAddr",
-          "kind": "address",
-          "tx_count": 2
-        },
-        {
-          "address": "1MalloryAddr",
-          "annotation_ids": [],
-          "balance": null,
-          "chain": "bitcoin",
-          "depth": 1,
-          "flags": [],
-          "is_seed": false,
-          "key": "address:bitcoin:1MalloryAddr",
+          "key": "address:bitcoin:3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
           "kind": "address",
           "tx_count": 0
+        },
+        {
+          "address": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+          "annotation_ids": [],
+          "balance": null,
+          "chain": "bitcoin",
+          "depth": 1,
+          "flags": [],
+          "is_seed": false,
+          "key": "address:bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+          "kind": "address",
+          "tx_count": 2
         },
         {
           "annotation_ids": [],
@@ -600,7 +1920,7 @@
       "provider_version": null,
       "redistributable": true,
       "schema_version": 1,
-      "seed": "address:bitcoin:1AliceAddr",
+      "seed": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
       "stop_reasons": {
         "policy_max_fan_out": 1
       },
@@ -614,7 +1934,7 @@
       "edges": [],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00Z",
+      "generated_at": "2026-01-01T00:00:00+00:00",
       "nodes": [
         {
           "address": "1NobodyAddr",
@@ -792,7 +2112,7 @@
         "address:ethereum:0xccc",
         "address:ethereum:0xcontract"
       ],
-      "generated_at": "2026-01-01T00:00:00Z",
+      "generated_at": "2026-01-01T00:00:00+00:00",
       "nodes": [
         {
           "address": "0xaaa",
@@ -928,7 +2248,7 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1CarolAddr",
+          "src": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "txid": "tx1",
           "via": "utxo"
         },
@@ -947,7 +2267,7 @@
           "block_height": 2,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1AliceAddr",
+          "dst": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "index": 0,
           "is_change": false,
           "key": "tx1:out:0",
@@ -974,7 +2294,7 @@
           "block_height": 2,
           "block_time": null,
           "chain": "bitcoin",
-          "dst": "address:bitcoin:1CarolAddr",
+          "dst": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
           "index": 1,
           "is_change": true,
           "key": "tx1:out:1",
@@ -1009,50 +2329,50 @@
           "script_type": null,
           "spent": null,
           "spent_by_txid": null,
-          "src": "address:bitcoin:1AliceAddr",
+          "src": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "txid": "tx2",
           "via": "utxo"
         }
       ],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00Z",
+      "generated_at": "2026-01-01T00:00:00+00:00",
       "nodes": [
         {
-          "address": "1AliceAddr",
+          "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+          "annotation_ids": [],
+          "balance": null,
+          "chain": "bitcoin",
+          "depth": 1,
+          "flags": [],
+          "is_seed": false,
+          "key": "address:bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+          "kind": "address",
+          "tx_count": 1
+        },
+        {
+          "address": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "annotation_ids": [],
           "balance": null,
           "chain": "bitcoin",
           "depth": 0,
           "flags": [],
           "is_seed": true,
-          "key": "address:bitcoin:1AliceAddr",
+          "key": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
           "kind": "address",
           "tx_count": 2
         },
         {
-          "address": "1BobAddr",
+          "address": "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "annotation_ids": [],
           "balance": null,
           "chain": "bitcoin",
           "depth": 1,
           "flags": [],
           "is_seed": false,
-          "key": "address:bitcoin:1BobAddr",
+          "key": "address:bitcoin:3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",
           "kind": "address",
           "tx_count": 0
-        },
-        {
-          "address": "1CarolAddr",
-          "annotation_ids": [],
-          "balance": null,
-          "chain": "bitcoin",
-          "depth": 1,
-          "flags": [],
-          "is_seed": false,
-          "key": "address:bitcoin:1CarolAddr",
-          "kind": "address",
-          "tx_count": 1
         },
         {
           "annotation_ids": [],
@@ -1127,7 +2447,7 @@
       "provider_version": null,
       "redistributable": true,
       "schema_version": 1,
-      "seed": "address:bitcoin:1AliceAddr",
+      "seed": "address:bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
       "stop_reasons": {
         "budget_edges": 2,
         "budget_nodes": 1

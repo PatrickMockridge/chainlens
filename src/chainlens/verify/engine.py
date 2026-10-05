@@ -252,15 +252,19 @@ class VerificationEngine:
                 "sample is too thin to price a match of this shape"
             )
 
-        band = elements.band
-        variants = (
-            {
-                name: float(band.scaled(factor).tolerance)
-                for name, factor in _TOLERANCE_VARIANTS.items()
-            }
-            if band is not None
-            else None
-        )
+        # The tolerance sweep is priced by the estimator, one variant at a time.
+        #
+        # `sensitivity_report`'s `variants` are alternative *probabilities* — each becomes
+        # `Sweep(name=f"p:{name}")` and is fed straight to `likelihood_ratio` — so passing a
+        # tolerance in base units crashed `coincidence_probability`'s range check. It went
+        # unnoticed because the only test that reached this line used an exactly-stated
+        # amount, whose tolerance is zero and whose variants were therefore all zero: a
+        # sweep that varied nothing and passed. A hedged claim is the case the sweep exists
+        # for, and it is the case that broke.
+        #
+        # Re-pricing is the estimator's job and cannot be the engine's: how much a wider
+        # band raises the coincidence rate depends on the sample it was drawn from.
+        variants = await self._tolerance_variants(elements)
         ratio = evaluate_likelihood(
             k=candidates,
             component=estimate.component,
@@ -271,3 +275,29 @@ class VerificationEngine:
             provenance=outcome.evidence.provenance,
         )
         return ratio, None
+
+    async def _tolerance_variants(self, elements: ClaimElements) -> dict[str, float] | None:
+        """Price each tolerance variant, so the sweep varies a probability.
+
+        The first variant is the claim's own band, which re-prices to the estimate already
+        computed; it is kept because the sweep is reported as a list and a reader expects
+        the claim's own tolerance to appear among the alternatives rather than to be
+        silently the baseline.
+        """
+        band = elements.band
+        if band is None or self._estimator is None:
+            return None
+        if band.tolerance == 0 and not band.at_least:
+            # Nothing to vary. Four identical variants would be reported as four sweeps,
+            # which reads as "the tolerance was tested and it did not matter" when in fact
+            # no tolerance was stated. A one-sided band is the exception: its tolerance is
+            # zero but widening the band still opens it further.
+            return None
+
+        variants: dict[str, float] = {}
+        for name, factor in _TOLERANCE_VARIANTS.items():
+            scaled = elements.model_copy(update={"band": band.scaled(factor)})
+            priced = await self._estimator.estimate(scaled, provider=self._provider)
+            if priced is not None:
+                variants[name] = priced.component.value
+        return variants or None

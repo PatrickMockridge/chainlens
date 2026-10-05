@@ -31,14 +31,29 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph
 
-__all__ = ["document_schema", "render_schema", "strict_dumps"]
+__all__ = [
+    "DOCUMENTS",
+    "SCHEMA_DIR",
+    "document_schema",
+    "render_schemas",
+    "schema_path",
+    "strict_dumps",
+]
 
-#: Where the generated schema lives. It sits beside the front-end source rather than with
-#: the Python package because the front end is what reads it, and because a schema nobody
+#: Where the generated schemas live. They sit beside the front-end source rather than with
+#: the Python package because the front end is what reads them, and because a schema nobody
 #: can find is a schema nobody regenerates.
 SCHEMA_DIR = Path("web/schema")
+
+#: Every document the front end reads, by the name its schema file is called. Adding one
+#: here is all it takes for it to be emitted, committed and checked for staleness.
+DOCUMENTS: dict[str, type[BaseModel]] = {
+    "ledger": LedgerGraph,
+    "derivation": DerivationDocument,
+}
 
 
 def _reject_constant(name: str) -> Any:
@@ -113,11 +128,31 @@ def strict_dumps(document: BaseModel) -> str:
     return text
 
 
-def document_schema() -> dict[str, Any]:
-    """The JSON Schema for a ledger document, straight from the models."""
-    return LedgerGraph.model_json_schema()
+def document_schema(name: str) -> dict[str, Any]:
+    """The JSON Schema for one of the documents, straight from its model.
+
+    Raises:
+        KeyError: the name is not a document this module knows. Named rather than swallowed,
+            because a silently empty schema is a front end validating against nothing.
+    """
+    return DOCUMENTS[name].model_json_schema()
 
 
-def render_schema() -> str:
-    """The schema, formatted for committing. Sorted keys so a diff is reviewable."""
-    return json.dumps(document_schema(), indent=2, sort_keys=True) + "\n"
+def schema_path(name: str) -> Path:
+    """Where the committed schema for ``name`` lives."""
+    return SCHEMA_DIR / f"{name}.schema.json"
+
+
+def render_schemas() -> dict[str, str]:
+    """Every schema, formatted for committing.
+
+    One file per document rather than one file holding both: a code generator emits a module
+    per file, and a single file with two roots would need a hand-written entry point that
+    nobody would remember to extend when a third document appears.
+
+    Sorted keys, so a diff shows the change rather than the key ordering.
+    """
+    return {
+        schema_path(name).name: json.dumps(document_schema(name), indent=2, sort_keys=True) + "\n"
+        for name in DOCUMENTS
+    }

@@ -1,0 +1,324 @@
+{
+  "$defs": {
+    "ClaimVerdict": {
+      "description": "The categorical finding about a claim.\n\nDeliberately about the *match structure* rather than about probability. The\nlikelihood ratio is a separate quantity attached alongside; deriving a verdict\nfrom it would conflate \"what the chain shows\" with \"how much that is worth\",\nwhich the verification layer keeps strictly apart.",
+      "enum": [
+        "supported",
+        "contradicted",
+        "unverifiable",
+        "insufficient_data"
+      ],
+      "title": "ClaimVerdict",
+      "type": "string"
+    },
+    "DerivationKind": {
+      "description": "What one node of the derivation is.\n\nThe kinds are the *vocabulary of the argument*, not of the data: ``QUANTITY_K`` and\n``QUANTITY_P`` are separate from ``EVIDENCE`` because a measured number and the finding\nthat produced it are different claims, and ``BECAUSE`` exists so the refusal case has a\nnode of its own rather than being smuggled into a verdict's label.",
+      "enum": [
+        "claim",
+        "verdict",
+        "proposition",
+        "evidence",
+        "quantity_k",
+        "quantity_p",
+        "likelihood_ratio",
+        "sensitivity",
+        "verbal_band",
+        "posterior",
+        "assumption",
+        "caveat",
+        "because"
+      ],
+      "title": "DerivationKind",
+      "type": "string"
+    },
+    "DerivationNode": {
+      "additionalProperties": false,
+      "description": "One step of a derivation, and everything a reader needs to disagree with it.\n\nAttributes:\n    id: a path-derived identifier, stable across runs \u2014 ``claim``,\n        ``claim/evidence/0`` \u2014 so a renderer can key nodes and a fixture can be\n        compared.\n    kind: what this step is.\n    label: the short thing to show on the node. Written here rather than in the\n        renderer, because a label the renderer invents is a claim the library did not\n        make.\n    summary: a sentence, when the label is not enough.\n    detail: labelled facts, in the tagged form a second language can render.\n    value: the number this step is about, when it is about one.\n    unit: what that number is counted in.\n    band: the verbal band, on the band and posterior nodes.\n    graph_refs: the ledger nodes and edges this step rests on. Carried whether or not\n        they resolve \u2014 see :class:`~chainlens.models.wire.GraphRef`.\n    children: the steps below this one.",
+      "properties": {
+        "band": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerbalScale"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DerivationNode"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "detail": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DetailEntry"
+          },
+          "title": "Detail",
+          "type": "array"
+        },
+        "graph_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GraphRef"
+          },
+          "title": "Graph Refs",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DerivationKind"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label"
+      ],
+      "title": "DerivationNode",
+      "type": "object"
+    },
+    "DetailEntry": {
+      "additionalProperties": false,
+      "description": "One labelled fact, in a form two languages can render identically.\n\nAttributes:\n    key: the checker's own key, unchanged.\n    kind: which scalar this is, so a renderer needs no narrowing.\n    value: the value, or ``None`` when ``kind`` is ``null``.\n    unit: an optional unit for a number, e.g. ``\"base units\"``.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DetailKind"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "kind"
+      ],
+      "title": "DetailEntry",
+      "type": "object"
+    },
+    "DetailKind": {
+      "description": "The six scalars a detail value can be.\n\nSix, not \"any\": a value that is none of these is refused rather than stringified,\nbecause stringifying is how a nested object becomes text that reads like a finding.",
+      "enum": [
+        "string",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "null"
+      ],
+      "title": "DetailKind",
+      "type": "string"
+    },
+    "GraphRef": {
+      "additionalProperties": false,
+      "description": "A pointer into a ledger document, which may or may not hold it.\n\nAttributes:\n    kind: whether the reference names a node or an edge.\n    key: the node or edge key. Node keys are ``address:``/``tx:``/``unparsed:``;\n        edge keys are ``{txid}:in|out|tok|int:{index}``.\n    exists: whether it was found in the document it was resolved against. ``None``\n        means nobody has looked \u2014 which is not the same as absent, and a front end\n        should offer to fetch rather than reporting nothing there.\n    note: why it was not found, when something knows.",
+      "properties": {
+        "exists": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exists"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/GraphRefKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "title": "GraphRef",
+      "type": "object"
+    },
+    "GraphRefKind": {
+      "description": "What a reference points at. An edge is addressable here, unlike in the flow view.",
+      "enum": [
+        "node",
+        "edge"
+      ],
+      "title": "GraphRefKind",
+      "type": "string"
+    },
+    "VerbalScale": {
+      "description": "Belief in a proposition, on the ENFSI verbal scale.\n\nTaken from the appendix of the *ENFSI Guideline for Evaluative Reporting in\nForensic Science* (2015). The guideline treats the verbal scale as optional\nand jurisdiction-dependent and prefers the numeric ratio where one can be\ngiven, so the boundaries behind these bands are configurable -- see\n:class:`~chainlens.verify.scale.VerbalThresholds` -- and these labels are the\ndefault rather than a universal standard.",
+      "enum": [
+        "none",
+        "slight",
+        "moderate",
+        "moderately strong",
+        "strong",
+        "very strong"
+      ],
+      "title": "VerbalScale",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One finding's derivation, as a document a front end can render.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    claim_id: derived from the claim, so a graph overlay can group findings by claim.\n    claim_quote: the verbatim span the claim was read from, so a reader can see what is\n        being adjudicated without the graph.\n    verdict: the categorical finding, repeated at the root because it is the thing the\n        tree explains.\n    method: which checker produced the verdict.\n    has_ratio: whether a likelihood ratio was reported. The tree's shape differs, and a\n        renderer should not have to walk it to find out.\n    root: the tree.\n    limitations: the standing caveats. **Replaced when a prior was supplied**, because\n        the standard text says the library reports no posterior and a rendered posterior\n        beside it would make the artifact contradict itself.\n    prior_supplied_by: who supplied the prior, when one was.",
+  "properties": {
+    "claim_id": {
+      "title": "Claim Id",
+      "type": "string"
+    },
+    "claim_quote": {
+      "title": "Claim Quote",
+      "type": "string"
+    },
+    "has_ratio": {
+      "default": false,
+      "title": "Has Ratio",
+      "type": "boolean"
+    },
+    "limitations": {
+      "title": "Limitations",
+      "type": "string"
+    },
+    "method": {
+      "title": "Method",
+      "type": "string"
+    },
+    "prior_supplied_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prior Supplied By"
+    },
+    "root": {
+      "$ref": "#/$defs/DerivationNode"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "verdict": {
+      "$ref": "#/$defs/ClaimVerdict"
+    }
+  },
+  "required": [
+    "claim_id",
+    "claim_quote",
+    "verdict",
+    "method",
+    "root",
+    "limitations"
+  ],
+  "title": "DerivationDocument",
+  "type": "object"
+}

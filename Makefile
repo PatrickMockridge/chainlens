@@ -61,11 +61,11 @@ contract:  ## Regenerate the wire schema and the golden fixture
 	# test in `make check` fails when either is stale, so this is a convenience rather
 	# than the guard.
 	uv run python -c "\
-from pathlib import Path; \
-from chainlens.ledger.schema import render_schema; \
-Path('web/schema').mkdir(parents=True, exist_ok=True); \
-Path('web/schema/ledger.schema.json').write_text(render_schema(), encoding='utf-8'); \
-print('wrote web/schema/ledger.schema.json')"
+from chainlens.ledger.schema import SCHEMA_DIR, render_schemas; \
+SCHEMA_DIR.mkdir(parents=True, exist_ok=True); \
+[ (SCHEMA_DIR / name).write_text(text, encoding='utf-8') for name, text in render_schemas().items() ]; \
+print('wrote', *sorted(p.name for p in SCHEMA_DIR.glob('*.json')))"
+
 	uv run python tests/ledger/fixtures.py
 
 ingest:  ## Digest everything dropped in case-study/inbox (ARGS="--dry-run" to preview)
