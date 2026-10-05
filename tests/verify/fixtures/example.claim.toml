@@ -1,0 +1,19 @@
+# A worked claim record, for the tests and for anyone learning the format.
+#
+# It is **not** in `case-study/claims/`: that directory is the pre-registered corpus, where a
+# record asserts that the engine reproduced a verdict on real captured material. An example
+# belongs here, with the tests, and carries neither a capture nor an expectation.
+#
+# `chainlens ui derive --claim <this file>` produces a derivation document from it.
+schema_version = 1
+id = "example"
+quote = "carol moved ~30,000 sats to alice"
+
+[claim]
+type = "transfer"
+addresses = ["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"]
+amount_text = "~30,000 sats"
+
+[claim.window]
+start = 2026-09-01T00:00:00Z
+end = 2026-09-30T23:59:59Z

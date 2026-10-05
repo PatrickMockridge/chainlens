@@ -77,6 +77,7 @@ nav:
       - UTXO vs account models: explanation/utxo-vs-account.md
       - Forensic limits: explanation/forensic-limits.md
       - Data licensing: explanation/data-licensing.md
+      - Claim records: explanation/claim-records.md
   - Plugins:
       - Writing a provider: plugins/writing-a-provider.md
   - API reference: reference/

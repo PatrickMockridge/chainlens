@@ -49,6 +49,7 @@ from chainlens.verify.parsing import (
     parse_amount,
     parse_claim,
 )
+from chainlens.verify.records import ClaimRecord, RecordError, load_record, load_records
 from chainlens.verify.scale import (
     DEFAULT_THRESHOLDS,
     VerbalBand,
@@ -82,6 +83,7 @@ __all__ = [
     "Claim",
     "ClaimElements",
     "ClaimEvidence",
+    "ClaimRecord",
     "ClaimType",
     "CoincidenceEstimator",
     "ComponentEstimate",
@@ -92,6 +94,7 @@ __all__ = [
     "ParsedClaim",
     "QuoteValidation",
     "RateEstimate",
+    "RecordError",
     "SensitivityReport",
     "Sweep",
     "VerbalBand",
@@ -105,6 +108,8 @@ __all__ = [
     "evaluate_likelihood",
     "likelihood_ratio",
     "linearisation_relative_error",
+    "load_record",
+    "load_records",
     "normalise_address",
     "parse_amount",
     "parse_claim",

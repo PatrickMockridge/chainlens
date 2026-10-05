@@ -16,173 +16,62 @@ the corpus, which is gitignored: quote validation compares each claim's quote ag
 the captured text, so a record cannot be checked without the capture it came from.
 Drop the posts into ``case-study/inbox`` and run ``make ingest`` first.
 
-A text capture is its own transcription. A printout or a screenshot carries its text
-in a sidecar — ``corpus/<key>.txt``, which ``make ingest`` writes for a PDF and which
-somebody has to write for a screenshot — because nothing here reads text out of
-images yet.
+**The parser is the library's** (:mod:`chainlens.verify.records`), because the format
+is not the case study's alone — `chainlens ui derive --claim` reads the same records.
+What stays here are the two rules that make a record *evidence in a pre-registered
+study* rather than merely well-formed: a falsifier, and a verdict recorded before the
+engine was run. Both are requirements of this corpus, not of the format.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
-import tomllib
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import anyio
 
-from chainlens.models.base import utcnow
 from chainlens.models.enums import Chain, ClaimVerdict
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
-from chainlens.social.models import Post, ProvenanceStrength, SourceRef
-from chainlens.verify.claims import ActivityWindow
 from chainlens.verify.engine import VerificationEngine
 from chainlens.verify.parsing import parse_claim
-from chainlens.verify.schema import Claim, ClaimType, Extraction
+from chainlens.verify.records import ClaimRecord, RecordError
+from chainlens.verify.records import load_records as _load_records
+from chainlens.verify.schema import Extraction
 
 HERE = Path(__file__).resolve().parent
 CASE_STUDY = HERE.parent
 CORPUS = CASE_STUDY / "corpus"
 CLAIMS = CASE_STUDY / "claims"
 
-SCHEMA_VERSION = 1
 
+def load_records(claims_dir: Path = CLAIMS, *, prefix: str | None = None) -> list[ClaimRecord]:
+    """Every record in this corpus, with the study's own requirements applied.
 
-class RecordError(Exception):
-    """A record is malformed, which is a defect in the artifact and not in the chain."""
-
-
-@dataclass
-class Record:
-    """One committed claim record, parsed."""
-
-    path: Path
-    id: str
-    claim: Claim
-    post: Post
-    expected: ClaimVerdict
-    assertion: str = ""
-    falsifier: str = ""
-    quote: str = ""
-    notes: list[str] = field(default_factory=list)
-
-
-def _require(mapping: dict[str, Any], key: str, where: str) -> Any:
-    if key not in mapping:
-        raise RecordError(f"{where}: missing required key {key!r}")
-    return mapping[key]
-
-
-def _window(raw: dict[str, Any] | None) -> ActivityWindow | None:
-    if not raw:
-        return None
-    return ActivityWindow(start=raw["start"], end=raw["end"])
-
-
-def load_record(path: Path) -> Record:
-    """Parse one claim record.
-
-    The record is the engine's *inputs* plus the verdict they produced, so this
-    function's real job is to refuse anything that would let a record claim a result
-    it cannot reproduce: a missing falsifier, an unknown schema version, a verdict
-    that is not a verdict, an extraction with a field the engine never reads.
+    The library's loader validates the *shape*. This adds the two rules that make a record
+    checkable in a pre-registered study — a falsifier, and the expectation the re-run must
+    reproduce — and both are refused here rather than in the format, because a record written to
+    ask what the chain says has neither.
     """
-    where = path.name
-    try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as exc:
-        raise RecordError(f"{where}: not valid TOML: {exc}") from exc
-
-    version = raw.get("schema_version")
-    if version != SCHEMA_VERSION:
-        raise RecordError(
-            f"{where}: schema_version {version!r} is not {SCHEMA_VERSION}; see AMENDMENTS.md "
-            "before changing it"
-        )
-
-    falsifier = raw.get("falsifier", "").strip()
-    if not falsifier:
-        raise RecordError(
-            f"{where}: no falsifier. A claim with no conceivable counter-evidence is not a "
-            "checkable claim and does not belong in this corpus"
-        )
-
-    source = _require(raw, "source", where)
-    capture = _require(source, "capture", where)
-    corpus_path = CORPUS / capture
-    transcription = CORPUS / f"{capture}.txt"
-
-    if not corpus_path.exists() and not transcription.exists():
-        raise RecordError(
-            f"{where}: the capture {capture!r} is not in {CORPUS}. The corpus is gitignored; "
-            "drop the post into case-study/inbox and run `make ingest`, or capture the "
-            "manifest's URL with tools/capture.py"
-        )
-
-    # A text capture *is* its own transcription. Anything else — a printout, a
-    # screenshot — carries its text in a sidecar, because reading a PDF's bytes as
-    # text would compare the quote against garbage and pass or fail meaninglessly.
-    if corpus_path.suffix.lower() in {".txt", ".md"}:
-        text = corpus_path.read_text(encoding="utf-8", errors="replace")
-    else:
-        if not transcription.exists():
+    records = _load_records(claims_dir, corpus_dir=CORPUS, prefix=prefix)
+    for record in records:
+        where = record.path.name
+        if not record.falsifier:
             raise RecordError(
-                f"{where}: {capture!r} is not a text capture and has no transcription at "
-                f"{transcription.name}, so the claim's quote cannot be checked against "
-                "anything. `make ingest` writes one for a PDF printout"
+                f"{where}: no falsifier. A claim with no conceivable counter-evidence is not a "
+                "checkable claim and does not belong in this corpus"
             )
-        text = transcription.read_text(encoding="utf-8")
-
-    strength = ProvenanceStrength(source.get("strength", "paste"))
-    post = Post(
-        id=raw.get("id", path.stem),
-        text=text,
-        source=SourceRef(
-            strength=strength,
-            captured_at=source.get("captured_at") or utcnow(),
-            url=source.get("url"),
-            post_id=source.get("post_id"),
-            provider="case-study",
-        ),
-    )
-
-    claim_raw = _require(raw, "claim", where)
-    claim = Claim(
-        type=ClaimType(claim_raw["type"]),
-        quote=raw.get("quote", "").strip(),
-        addresses=tuple(claim_raw.get("addresses", ())),
-        txid=claim_raw.get("txid"),
-        amount_text=claim_raw.get("amount_text"),
-        window=_window(claim_raw.get("window")),
-        media_indexes=tuple(claim_raw.get("media_indexes", ())),
-    )
-
-    expected_raw = _require(raw, "expected", where)
-    expected = ClaimVerdict(_require(expected_raw, "verdict", where))
-
-    return Record(
-        path=path,
-        id=raw.get("id", path.stem),
-        claim=claim,
-        post=post,
-        expected=expected,
-        assertion=raw.get("assertion", ""),
-        falsifier=falsifier,
-        quote=raw.get("quote", ""),
-    )
-
-
-def load_records(claims_dir: Path = CLAIMS, *, prefix: str | None = None) -> list[Record]:
-    """Every claim record, in id order. An empty corpus is not an error."""
-    paths = sorted(p for p in claims_dir.glob("*.toml") if p.name != "README.md")
-    if prefix:
-        paths = [p for p in paths if p.name.startswith(prefix)]
-    return [load_record(path) for path in paths]
+        if record.expected is None:
+            raise RecordError(
+                f"{where}: no expected.verdict. A record in this corpus pre-registers the verdict "
+                "the engine must reproduce; `chainlens ui derive` reads the same format without "
+                "requiring one"
+            )
+    return list(records)
 
 
 def _provider_for(chain: Chain, override: str | None, cache: dict[Any, Provider]) -> Provider:
@@ -199,7 +88,7 @@ def _provider_for(chain: Chain, override: str | None, cache: dict[Any, Provider]
 
 
 async def check(
-    records: list[Record], *, provider_name: str | None = None
+    records: list[ClaimRecord], *, provider_name: str | None = None
 ) -> tuple[int, list[str]]:
     """Run every record and return how many reproduced, plus the failures."""
     failures: list[str] = []
@@ -207,6 +96,13 @@ async def check(
     checked = 0
 
     for record in records:
+        expected: ClaimVerdict | None = record.expected
+        if expected is None:
+            # `load_records` refuses these, so this is unreachable through `main` — and it is a
+            # guard rather than a branch, because a missing expectation silently compared as
+            # "not equal" would be reported as a reproduction failure.
+            raise RecordError(f"{record.id}: no expected verdict to reproduce")
+
         # The chain is taken from the engine's own parser rather than guessed from
         # the record, so a record cannot steer itself to a provider of its choosing.
         elements = parse_claim(record.claim).elements
@@ -227,17 +123,17 @@ async def check(
             continue
 
         actual = report.findings[0].verdict
-        marker = "ok  " if actual is record.expected else "FAIL"
-        print(f"{marker} {record.id}  expected {record.expected.value}, got {actual.value}")
-        if actual is not record.expected:
-            failures.append(
-                f"{record.id}: expected {record.expected.value}, reproduced {actual.value}"
-            )
+        marker = "ok  " if actual is expected else "FAIL"
+        print(f"{marker} {record.id}  expected {expected.value}, got {actual.value}")
+        if actual is not expected:
+            failures.append(f"{record.id}: expected {expected.value}, reproduced {actual.value}")
 
     return checked, failures
 
 
-async def _run_checks(records: list[Record], provider_name: str | None) -> tuple[int, list[str]]:
+async def _run_checks(
+    records: list[ClaimRecord], provider_name: str | None
+) -> tuple[int, list[str]]:
     """``anyio.run`` entry point.
 
     A thin wrapper rather than keyword arguments at the call site: ``anyio.run`` is
