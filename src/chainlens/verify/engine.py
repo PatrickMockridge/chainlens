@@ -48,6 +48,8 @@ from chainlens.verify.verdicts import (
     STANDARD_VERIFICATION_LIMITATIONS,
     ClaimEvidence,
     CoincidenceEstimator,
+    RateEstimate,
+    Unpriced,
     VerificationFinding,
     VerificationReport,
 )
@@ -246,6 +248,10 @@ class VerificationEngine:
             )
 
         estimate = await self._estimator.estimate(elements, provider=self._provider)
+        if isinstance(estimate, Unpriced):
+            # The estimator's own words, verbatim: it knows which precondition failed, and the
+            # derivation renders this into the `because` node where a caller can act on it.
+            return None, estimate.reason
         if estimate is None:
             return None, (
                 "the coincidence rate could not be estimated from the data available: the "
@@ -298,6 +304,8 @@ class VerificationEngine:
         for name, factor in _TOLERANCE_VARIANTS.items():
             scaled = elements.model_copy(update={"band": band.scaled(factor)})
             priced = await self._estimator.estimate(scaled, provider=self._provider)
-            if priced is not None:
+            # A refusal is not a variant: reporting a sweep step the estimator would not price
+            # would put a number in the envelope that nothing stands behind.
+            if isinstance(priced, RateEstimate):
                 variants[name] = priced.component.value
         return variants or None

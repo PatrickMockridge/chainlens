@@ -70,6 +70,16 @@ class Provider(Protocol):
         until: datetime | None = None,
     ) -> AsyncIterator[Transaction]: ...
 
+    def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]: ...
+
     async def get_transaction(self, txid: str) -> Transaction: ...
 
     async def get_block(self, reference: str | int) -> Block: ...
@@ -213,6 +223,27 @@ class BaseProvider(ABC):
         raise NotImplementedError(
             f"{type(self).__name__} advertises {Capability.ADDRESS_TXS.value!r} "
             "but does not implement get_address_transactions"
+        )
+
+    def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        """Movements involving one address, newest first, optionally within a range.
+
+        The range bounds are plain datetimes rather than a verification model: this layer sits
+        below `verify/`, and a protocol that took one of its types would invert the dependency.
+        Whether a boundary moment counts as inside the window is the claim's business.
+        """
+        self._require(Capability.WINDOW_TRANSFERS)
+        raise NotImplementedError(
+            f"{type(self).__name__} advertises {Capability.WINDOW_TRANSFERS.value!r} "
+            "but does not implement get_window_transfers"
         )
 
     async def get_transaction(self, txid: str) -> Transaction:

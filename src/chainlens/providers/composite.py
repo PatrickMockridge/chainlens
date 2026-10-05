@@ -114,6 +114,19 @@ class CompositeProvider(BaseProvider):
             address, limit=limit, cursor=cursor, since=since, until=until
         )
 
+    def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        return self.provider_for(Capability.WINDOW_TRANSFERS).get_window_transfers(
+            address, since=since, until=until, limit=limit, cursor=cursor
+        )
+
     async def get_transaction(self, txid: str) -> Transaction:
         return await self.provider_for(Capability.TX).get_transaction(txid)
 

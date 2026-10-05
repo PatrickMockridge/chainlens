@@ -30,7 +30,8 @@ import anyio
 from chainlens.config import Settings
 from chainlens.exceptions import NotFoundError, SchemaError
 from chainlens.models.base import Provenance, utcnow
-from chainlens.models.enums import Chain
+from chainlens.models.enums import Chain, ChainModel, FlowVia
+from chainlens.models.flows import transfers_from_transaction
 from chainlens.models.primitives import Address, AssetRef, Balance, Block, Transaction, Transfer
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import Capability, provides
@@ -216,6 +217,125 @@ class InMemoryProvider(BaseProvider):
                 continue
             yielded += 1
             yield tx
+
+    @provides(Capability.WINDOW_TRANSFERS)
+    async def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        """The movements involving one address, read from what the fixtures recorded.
+
+        A movement is derived here exactly as a real provider's would be: on a UTXO chain from
+        the recorded outputs paying the address and inputs spending from it, on an account chain
+        from the transaction's own sender and recipient. Nothing is apportioned — a share of a
+        co-funded output belongs to the *coin-selection* question, not to what moved.
+
+        A transfer in ``token_transfers`` appears for both of its addresses, the way a real index
+        returns it, so a caller that walks both sides sees it twice and has to dedupe by its own
+        key — the bug a fixture that served it once would hide.
+        """
+        self._check_failure("get_window_transfers")
+        await self._delay()
+        self._require_known_address(address)
+
+        ordered = self._ordered_txids(address)
+        if cursor is not None:
+            if cursor not in ordered:
+                raise ValueError(f"unknown cursor {cursor!r} for address {address!r}")
+            ordered = ordered[ordered.index(cursor) + 1 :]
+
+        movements = [*self._movements_for(address, ordered), *self._token_movements_for(address)]
+        # Newest first, with an unrecorded timestamp last: the same order the transaction listing
+        # uses, so a caller paging both sees one ordering rather than two.
+        movements.sort(
+            key=lambda movement: (movement.timestamp is None, movement.txid), reverse=True
+        )
+
+        yielded = 0
+        for movement in movements:
+            if limit is not None and yielded >= limit:
+                return
+            if since is not None and movement.timestamp is not None and movement.timestamp < since:
+                continue
+            if until is not None and movement.timestamp is not None and movement.timestamp > until:
+                continue
+            yielded += 1
+            yield movement
+
+    def _movements_for(self, address: str, ordered: list[str]) -> list[Transfer]:
+        """Every movement one address's transactions record, read from the ledger's own fields.
+
+        Two shapes, and they are the two a real provider's index would give: an output the address
+        **funded** (it is one of the transaction's inputs) and an output that **paid** it. A
+        funded output keeps the address as the source and the output's own address as the
+        destination — which is the same projection the transfer check uses, so a rate counted over
+        these movements is counted over the thing the check matches.
+
+        An account chain needs no such reading: the transaction names its sender and recipient, so
+        the projection in :mod:`chainlens.models.flows` is already exact and is used as it stands.
+        """
+        found: list[Transfer] = []
+        for txid in ordered:
+            transaction = self._transactions[txid]
+            if transaction.chain_model is ChainModel.ACCOUNT:
+                found.extend(
+                    Transfer(
+                        chain=self.chain,
+                        asset=movement.asset,
+                        amount=movement.amount,
+                        txid=movement.txid,
+                        src=movement.src,
+                        dst=movement.dst,
+                        index=movement.index,
+                        block_height=movement.block_height,
+                        timestamp=movement.timestamp or transaction.block_time,
+                        via=movement.via,
+                        is_change=movement.is_change,
+                        provenance=movement.provenance,
+                    )
+                    for movement in transfers_from_transaction(transaction)
+                    if address in {movement.src, movement.dst}
+                )
+                continue
+
+            funded = address in transaction.input_addresses
+            for output in transaction.outputs:
+                if not output.value:
+                    continue
+                pays_address = address in output.all_addresses
+                if not (funded or pays_address):
+                    continue
+                found.append(
+                    Transfer(
+                        chain=self.chain,
+                        asset=output.asset or AssetRef.native(self.chain),
+                        amount=output.value,
+                        txid=transaction.txid,
+                        # Funded takes precedence, so an address that funded a transaction paying
+                        # itself is one movement rather than two halves of one.
+                        src=address if funded else None,
+                        dst=address if pays_address and not funded else output.address,
+                        index=output.index,
+                        block_height=transaction.block_height,
+                        timestamp=transaction.block_time,
+                        via=FlowVia.UTXO,
+                        is_change=pays_address,
+                        provenance=transaction.provenance,
+                    )
+                )
+        return found
+
+    def _token_movements_for(self, address: str) -> list[Transfer]:
+        return [
+            movement
+            for movement in self._token_transfers
+            if address in {movement.src, movement.dst}
+        ]
 
     @provides(Capability.TX)
     async def get_transaction(self, txid: str) -> Transaction:

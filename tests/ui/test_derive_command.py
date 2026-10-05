@@ -84,6 +84,18 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "_provider", lambda name, chain: _provider())
 
 
+def _reason(document: DerivationDocument) -> str:
+    """The engine's own reason for reporting no ratio, out of the derivation's `because`."""
+    reasons = [
+        str(detail.value)
+        for node in document.root.walk()
+        for detail in node.detail
+        if detail.key == "reason"
+    ]
+    assert reasons, "a finding with no ratio must say why"
+    return reasons[0]
+
+
 def _derive(claim: Path, out: Path, *extra: str) -> int:
     return main(["ui", "derive", "--claim", str(claim), "--out", str(out), *extra])
 
@@ -125,17 +137,39 @@ class TestTheDocument:
     def test_the_no_ratio_shape_says_which_precondition_failed(
         self, claim_file: Path, tmp_path: Path, wired: None
     ) -> None:
+        """The estimator is attached, so the reason is the estimator's own.
+
+        The fixture provider can list movements, so an estimator is configured — and it refuses
+        this claim for a reason it can name: every movement the sender made falls inside the
+        claim's window, so there is nothing outside it to count a coincidence rate over. That is a
+        better answer than a generic "no estimator is configured", and it is the estimator's
+        wording rather than a paraphrase.
+        """
         out = tmp_path / "derivation.json"
         _derive(claim_file, out)
         document = DerivationDocument.model_validate_json(out.read_text(encoding="utf-8"))
-        reasons = [
-            detail.value
-            for node in document.root.walk()
-            for detail in node.detail
-            if detail.key == "reason"
-        ]
-        assert reasons, "a finding with no ratio must say why"
-        assert "no coincidence estimator is configured" in str(reasons[0])
+        assert document.has_ratio is False
+        assert "no movements outside the window" in _reason(document)
+
+    def test_no_estimate_leaves_the_engine_without_one(
+        self, claim_file: Path, tmp_path: Path, wired: None
+    ) -> None:
+        out = tmp_path / "derivation.json"
+        _derive(claim_file, out, "--no-estimate")
+        document = DerivationDocument.model_validate_json(out.read_text(encoding="utf-8"))
+        assert document.has_ratio is False
+        assert "no coincidence estimator is configured" in _reason(document)
+
+    def test_a_claim_naming_no_window_is_refused_with_a_reason_to_act_on(
+        self, tmp_path: Path, wired: None
+    ) -> None:
+        """The refusal a caller can fix, in the words that say how."""
+        path = tmp_path / "0004-nowindow.toml"
+        path.write_text(CLAIM.split("[claim.window]")[0], encoding="utf-8")
+        out = tmp_path / "derivation.json"
+        assert _derive(path, out) == 0
+        document = DerivationDocument.model_validate_json(out.read_text(encoding="utf-8"))
+        assert "names no window" in _reason(document)
 
 
 class TestWhatItRefuses:

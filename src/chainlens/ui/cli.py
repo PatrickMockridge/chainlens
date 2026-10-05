@@ -35,6 +35,7 @@ from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
 from chainlens.ui.server import LOOPBACK, ServeConfig, serve
 from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.estimators import estimator_for
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import ClaimRecord, RecordError, load_record
 from chainlens.verify.schema import Extraction
@@ -92,13 +93,20 @@ async def _walk_for_cli(provider: Provider, seed: str, policy: LedgerPolicy) -> 
     return await walk_ledger(provider, seed_address=seed, policy=policy)
 
 
-async def _verify_for_cli(provider: Provider, record: ClaimRecord) -> VerificationReport:
+async def _verify_for_cli(
+    provider: Provider, record: ClaimRecord, estimate: bool
+) -> VerificationReport:
     """``anyio.run`` entry point for one claim record.
 
     A positional wrapper for the same reason as :func:`_walk_for_cli`: ``anyio.run`` forwards
     positional arguments only, and the engine would rather have keywords.
+
+    The estimator is attached when the provider can supply what one needs — the sender's own
+    movements to count a coincidence rate over — and left off otherwise, because the engine's "no
+    coincidences estimator is configured" reason is the honest one when there is nothing to
+    configure.
     """
-    engine = VerificationEngine(provider)
+    engine = VerificationEngine(provider, estimator=estimator_for(provider) if estimate else None)
     return await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
 
 
@@ -130,7 +138,7 @@ def _command_derive(args: argparse.Namespace) -> int:
             "finding rests on. Pass --redistributable-ok if you have the right to do this."
         )
 
-    report = anyio.run(_verify_for_cli, provider, record)
+    report = anyio.run(_verify_for_cli, provider, record, not args.no_estimate)
     for warning in report.warnings:
         print(f"warning: {warning}", file=sys.stderr)
 
@@ -298,6 +306,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--prior-supplied-by",
         help="who chose the prior; recorded on the posterior node, because a posterior without "
         "its author is a number nobody owns",
+    )
+    derive.add_argument(
+        "--no-estimate",
+        action="store_true",
+        help="do not price a coincidence even where the provider allows it; the document then "
+        "carries no ratio and says why, which is what a run that must not change with a sample "
+        "should produce",
     )
     derive.add_argument(
         "--redistributable-ok",

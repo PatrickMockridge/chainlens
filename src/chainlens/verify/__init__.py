@@ -26,6 +26,10 @@ from chainlens.verify.checks import (
 )
 from chainlens.verify.claims import ActivityWindow, AmountBand, ClaimElements
 from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.estimators import (
+    WindowCoincidenceEstimator,
+    estimator_for,
+)
 from chainlens.verify.likelihood import (
     MIN_JOINT_SUCCESSES,
     ComponentEstimate,
@@ -62,6 +66,7 @@ from chainlens.verify.verdicts import (
     ClaimEvidence,
     CoincidenceEstimator,
     RateEstimate,
+    Unpriced,
     VerificationFinding,
     VerificationReport,
 )
@@ -97,14 +102,17 @@ __all__ = [
     "RecordError",
     "SensitivityReport",
     "Sweep",
+    "Unpriced",
     "VerbalBand",
     "VerbalThresholds",
     "VerificationEngine",
     "VerificationFinding",
     "VerificationReport",
+    "WindowCoincidenceEstimator",
     "band_for",
     "coincidence_probability",
     "default_registry",
+    "estimator_for",
     "evaluate_likelihood",
     "likelihood_ratio",
     "linearisation_relative_error",

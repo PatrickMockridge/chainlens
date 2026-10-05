@@ -56,6 +56,7 @@ __all__ = [
     "ClaimEvidence",
     "CoincidenceEstimator",
     "RateEstimate",
+    "Unpriced",
     "VerificationFinding",
     "VerificationReport",
 ]
@@ -152,6 +153,26 @@ class RateEstimate:
     null_model: NullModel
 
 
+@dataclass(frozen=True, slots=True)
+class Unpriced:
+    """A refusal to price, in the estimator's own words.
+
+    ``None`` already means one thing: the sample the estimator could reach was too thin to price.
+    This is for the refusals an estimator can *diagnose* — the claim names no window, the sender
+    has nothing outside it to compare against, the null model needs a sample no provider can draw
+    — where collapsing them into one generic sentence would hide the reason, and the reason is the
+    part a caller can act on.
+
+    Attributes:
+        reason: what stopped it, phrased for the derivation's ``because`` node, which renders it
+            verbatim.
+        samples: how many movements the estimator got to look at, when it looked at any.
+    """
+
+    reason: str
+    samples: int | None = None
+
+
 class CoincidenceEstimator(Protocol):
     """Supplies the coincidence probability ``p`` for a claim's priced elements.
 
@@ -162,12 +183,14 @@ class CoincidenceEstimator(Protocol):
     configured, a finding simply carries no ratio and says why.
 
     An implementation returns ``None`` when the sample it can reach is too thin to
-    price the coincidence, which is a normal answer for a rare recipient.
+    price the coincidence, which is a normal answer for a rare recipient — and an
+    :class:`Unpriced` when it can say *why* it will not price one, which the engine puts
+    into the finding verbatim.
     """
 
     async def estimate(
         self, elements: ClaimElements, *, provider: Provider
-    ) -> RateEstimate | None: ...
+    ) -> RateEstimate | Unpriced | None: ...
 
 
 class VerificationFinding(LensModel):

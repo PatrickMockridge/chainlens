@@ -62,6 +62,13 @@ class Capability(StrEnum):
     LOGS = "logs"
     INTERNAL_TXS = "internal.transfers"
 
+    #: Movements involving one address, optionally within a time range. Distinct from
+    #: ``ADDRESS_TXS``: a transaction is what a provider indexed, and a *movement* is what the
+    #: ledger recorded leaving or reaching the address. A coincidence estimator needs the
+    #: movements, because a rate counted over transactions would price the wrong thing — a
+    #: transaction with four outputs is four opportunities for a coincidental match, not one.
+    WINDOW_TRANSFERS = "address.transfers"
+
     METRICS = "metrics"
     SQL_QUERY = "query.sql"
     LABELS = "labels"
@@ -79,6 +86,7 @@ ADDRESS_CAPABILITIES: frozenset[Capability] = frozenset(
         Capability.TOKEN_TRANSFERS,
         Capability.LOGS,
         Capability.INTERNAL_TXS,
+        Capability.WINDOW_TRANSFERS,
     }
 )
 
