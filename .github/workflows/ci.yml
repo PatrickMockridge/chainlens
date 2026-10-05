@@ -76,6 +76,13 @@ jobs:
 
   # Non-blocking early warning: httpx 1.0 is in flight and will be breaking.
   # We pin <1.0 for users, but we want to hear about the breakage now.
+  #
+  # KNOWN INCOMPATIBILITY (httpx 1.0.dev6, 2026-10-05): this job fails with
+  #   AttributeError: module 'httpx' has no attribute 'BaseTransport'
+  # 1.0 removes or renames the transport base classes, which transport.py uses for
+  # `_OfflineBackend` and for the injected-transport parameter's annotation. The
+  # <1.0 pin means no user is affected; this red mark is the migration reminder,
+  # not a regression. It should go green as part of that migration.
   httpx-prerelease:
     name: httpx pre-release (non-blocking)
     runs-on: ubuntu-latest

@@ -65,6 +65,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   credential will get the same answer. `TransportError` keeps its documented
   meaning: connection failures, timeouts, 408 and 5xx.
 
+### Known issues
+
+- **httpx 1.0 will be breaking, and we have measured how.** A CI job installs the
+  prerelease to find out early; against 1.0.dev6 it fails with
+  `AttributeError: module 'httpx' has no attribute 'BaseTransport'`. The transport
+  base classes are removed or renamed, and `providers/transport.py` uses one for
+  `_OfflineBackend` and for its injected-transport annotation. The
+  `httpx>=0.28,<1.0` pin means no user is affected. The failing job is deliberate:
+  it is the migration reminder, and it goes green when the migration happens.
+
 ### Notes
 
 - The `replay` cache mode was dropped before release. Against a store-then-serve
