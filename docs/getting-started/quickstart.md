@@ -77,6 +77,40 @@ asset = AssetRef.native(Chain.BITCOIN, symbol="BTC", decimals=8)
 print(asset)  # chain=<Chain.BITCOIN> kind=<AssetKind.NATIVE> ...
 ```
 
+## Clustering
+
+Clustering asks which addresses share one controller. It needs a provider that can
+list an address's transactions, because co-spent inputs are the main signal:
+
+```python
+from chainlens.analysis import ClusteringEngine
+from chainlens.adapters.mempool_space import MempoolSpaceProvider
+
+async with MempoolSpaceProvider() as provider:
+    result = await ClusteringEngine(provider).cluster("bc1q...")
+    for entity in result.entities:
+        print(entity.id, sorted(entity.addresses), entity.confidence)
+```
+
+Every cluster is a **hypothesis** with its evidence attached, not a conclusion:
+
+```python
+entity.heuristics     # ('common-input-ownership', 'change-address')
+entity.evidence[0].detail   # {'input_count': 2} — why it merged
+entity.confidence     # the weakest link among the merges that built it
+result.refusals       # merges a declared non-equivalence forbade
+result.warnings       # set when a budget truncated the run
+```
+
+The engine expands until the cluster stops growing, and reports honestly when a
+budget cut it short: a cluster that is small because the traversal stopped must
+not look like a cluster that is genuinely small.
+
+!!! warning "Read this before relying on a cluster"
+    Heuristics have false positives, and CoinJoin is the classic one.
+    [Forensic limits](../explanation/forensic-limits.md) explains what a cluster
+    does and does not license.
+
 ## Next steps
 
 - [Writing a provider](../plugins/writing-a-provider.md) — add a chain.

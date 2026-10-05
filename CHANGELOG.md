@@ -32,6 +32,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   advertises it — so an address history goes to an indexer while a balance can be
   answered by a node.
 - ERC-20 transfer parsing from both Etherscan's `tokentx` and `eth_getLogs`.
+- `chainlens.analysis`: address clustering. `UnionFind` with path compression,
+  a `Clusterer` that applies heuristic output while refusing merges that conflict
+  with declared non-equivalences, and a `ClusteringEngine` that fetches, reasons
+  and expands until the cluster settles.
+- Four heuristics: `common-input-ownership` (with CoinJoin suppression),
+  `change-address` (multi-signal, abstains below threshold and on ties),
+  `address-reuse` (observations only) and `eth-deposit-address`.
 - Docs site: MkDocs Material with an API reference generated from the source tree.
 
 ### Notes
@@ -42,5 +49,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `JsonRpcEthProvider` deliberately does **not** advertise `ADDRESS_TXS`: a node
   keeps no index, so it cannot list an address's transactions. Claiming the
   capability would return a partial list indistinguishable from a complete one.
+- `address-reuse` emits observations rather than merges. Merging on reuse is
+  either vacuous (an address is itself) or unsound (a merchant's receiving address
+  later swept would drag the payer's change into the merchant's cluster), and the
+  sound part is already covered by common-input-ownership.
+- Cluster confidence is the **minimum** over the merges that built the cluster,
+  not the mean: a chain of individually-plausible merges is exactly where errors
+  compound, and averaging would hide it.
+- Entity ids are derived from cluster membership, so a report is reproducible
+  across runs and processes.
 
 [Unreleased]: https://github.com/PatrickMockridge/chainlens/commits/main

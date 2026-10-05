@@ -60,14 +60,19 @@ Repository = "https://github.com/PatrickMockridge/chainlens"
 Documentation = "https://github.com/PatrickMockridge/chainlens#readme"
 Changelog = "https://github.com/PatrickMockridge/chainlens/blob/main/CHANGELOG.md"
 
-# Built-in providers are also declared as entry points, so the plugin mechanism is
-# exercised by our own code rather than only by third parties. Heuristic entry
-# points are added in M4.
+# Built-in providers and heuristics are also declared as entry points, so the
+# plugin mechanism is exercised by our own code rather than only by third parties.
 [project.entry-points."chainlens.providers"]
 esplora-mempool = "chainlens.adapters.mempool_space:MempoolSpaceProvider"
 esplora-blockstream = "chainlens.adapters.blockstream:BlockstreamProvider"
 jsonrpc-eth = "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"
 etherscan = "chainlens.adapters.etherscan:EtherscanProvider"
+
+[project.entry-points."chainlens.heuristics"]
+common-input-ownership = "chainlens.analysis.heuristics.common_input:CommonInputOwnership"
+change-address = "chainlens.analysis.heuristics.change_address:ChangeAddressDetector"
+address-reuse = "chainlens.analysis.heuristics.address_reuse:AddressReuse"
+eth-deposit-address = "chainlens.analysis.heuristics.eth_deposit:EthDepositAddressHeuristic"
 
 [dependency-groups]
 dev = [

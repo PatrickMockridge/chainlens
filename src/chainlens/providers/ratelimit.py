@@ -34,7 +34,7 @@ Sleeper = Callable[[float], Awaitable[None]]
 class RateLimit(LensModel):
     """A provider's documented request budget.
 
-    Args:
+    Attributes:
         requests: how many requests are permitted in each ``per`` window.
         per: the window length in seconds.
         burst: how many requests may be made back-to-back. Defaults to
