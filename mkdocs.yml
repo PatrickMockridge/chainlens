@@ -78,6 +78,7 @@ nav:
       - Forensic limits: explanation/forensic-limits.md
       - Data licensing: explanation/data-licensing.md
       - Claim records: explanation/claim-records.md
+      - Is a likelihood ratio any good?: explanation/calibration.md
   - Plugins:
       - Writing a provider: plugins/writing-a-provider.md
   - API reference: reference/

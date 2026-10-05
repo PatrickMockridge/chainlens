@@ -15,6 +15,16 @@ requires the caller to supply one.
 
 from __future__ import annotations
 
+from chainlens.verify.calibration import (
+    CalibrationCase,
+    CalibrationCost,
+    CalibrationReport,
+    CalibrationTrial,
+    GroundTruth,
+    case_from_finding,
+    log_likelihood_ratio_cost,
+    report_from_cases,
+)
 from chainlens.verify.checks import (
     DEFAULT_SCAN_LIMIT,
     DEFAULT_TRANSFER_LIMIT,
@@ -81,6 +91,10 @@ __all__ = [
     "ActivityWindow",
     "AmountBand",
     "AmountReading",
+    "CalibrationCase",
+    "CalibrationCost",
+    "CalibrationReport",
+    "CalibrationTrial",
     "CheckContext",
     "CheckOutcome",
     "Checker",
@@ -94,6 +108,7 @@ __all__ = [
     "ComponentEstimate",
     "EstimatorMethod",
     "Extraction",
+    "GroundTruth",
     "LikelihoodRatio",
     "NullModel",
     "ParsedClaim",
@@ -110,6 +125,7 @@ __all__ = [
     "VerificationReport",
     "WindowCoincidenceEstimator",
     "band_for",
+    "case_from_finding",
     "coincidence_probability",
     "default_registry",
     "estimator_for",
@@ -118,9 +134,11 @@ __all__ = [
     "linearisation_relative_error",
     "load_record",
     "load_records",
+    "log_likelihood_ratio_cost",
     "normalise_address",
     "parse_amount",
     "parse_claim",
+    "report_from_cases",
     "sensitivity_report",
     "validate_quotes",
     "wilson_interval",
