@@ -139,6 +139,12 @@ ignore = [
 "tests/**" = ["ANN", "ARG", "S101", "SLF001"]
 "docs/**" = ["ANN", "E501"]
 
+[tool.ruff.format]
+# Markdown code fences are hand-aligned for readability (comments line up with
+# the code they annotate). Reformatting them would break that alignment without
+# improving anything a reader sees.
+exclude = ["**/*.md"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["chainlens"]
 

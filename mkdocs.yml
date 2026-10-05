@@ -1,0 +1,83 @@
+site_name: chainlens
+site_description: Async-first blockchain chain-analysis and on-chain forensics toolkit
+repo_url: https://github.com/PatrickMockridge/chainlens
+edit_uri: edit/main/docs/
+copyright: MIT licensed
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings:
+      handlers:
+        python:
+          # Static analysis only. Importing the package during a docs build would
+          # trigger provider plugin discovery as a side effect.
+          options:
+            allow_inspection: false
+            docstring_style: google
+            merge_init_into_class: true
+            show_source: false
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Explanation:
+      - UTXO vs account models: explanation/utxo-vs-account.md
+      - Forensic limits: explanation/forensic-limits.md
+      - Data licensing: explanation/data-licensing.md
+  - Plugins:
+      - Writing a provider: plugins/writing-a-provider.md
+  - API reference: reference/
+
+strict: true
