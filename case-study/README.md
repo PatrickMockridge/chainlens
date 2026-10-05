@@ -34,6 +34,36 @@ will not name people in images by policy. Shipping a handle next to a table of
 `STANDARD_LIMITATIONS` in `chainlens/report/builder.py` already promises that
 "nothing here identifies a person".
 
+## Adding posts
+
+Drop them in `case-study/inbox/` and run `make ingest`. Print-to-PDF printouts of
+post pages are the recommended form, and screenshots or plain text work too. The file
+is digested into the corpus, recorded in the manifest, and removed from the inbox.
+
+```bash
+make ingest -- --dry-run     # say what would happen first, if you like
+make ingest
+```
+
+A printout is the best of the hand-supplied paths because it keeps the page's own
+text layer: the text is not transcribed by a person and not flattened by a
+screenshot, so what lands in the corpus is what the page said, character for
+character. It is still a hand-supplied artifact — nothing shows the page was real,
+and a printout is editable before it is dropped — so it is recorded as
+`provenance_strength: printout`, never as a fetch. That distinction is rendered
+beside every verdict rather than folded into it: a chain claim inside a printout can
+be `SUPPORTED`, because the chain data is real whatever the page is.
+
+Two things `make ingest` finds for you when it can: the post URL, which most browsers
+print in the page footer, and therefore the post id. Both are redacted before
+anything reaches the committed manifest. A printout with no footer is still usable —
+the URL simply stays unknown, because guessing which post a page shows would be worse
+than an empty field.
+
+An image capture carries no text at all until something reads it. The ingest writes
+no transcription for one, so a claim resting on a screenshot needs a hand-written
+`corpus/<key>.txt` before `make verify` can check its quote against anything.
+
 ## Layout
 
 | path | committed | what it is |
@@ -41,10 +71,12 @@ will not name people in images by policy. Shipping a handle next to a table of
 | `SELECTION.md` | yes | the pre-registered rule: window, keyword predicate, no-exclusions clause. Committed **before** any claim was authored; the commit timestamp is the pre-registration evidence |
 | `AMENDMENTS.md` | yes | append-only: post edits and deletions, provider revisions, schema changes |
 | `corpus.manifest.yaml` | yes | filename → sha256, redacted URL, capture time, form |
-| `corpus/` | **no** | the full post text and screenshots. Gitignored — see below |
+| `inbox/` | **no** | where posts are dropped for `make ingest` |
+| `corpus/` | **no** | the captures and their extracted text. Gitignored — see below |
 | `claims/NNNN-*.toml` | yes | one claim each: the engine's inputs, the verdict, and a falsifier |
 | `results/` | yes | the generated report and the coverage split |
-| `tools/capture.py` | yes | text or screenshot + URL → a corpus file and a manifest entry |
+| `tools/ingest.py` | yes | digests the inbox into the corpus |
+| `tools/capture.py` | yes | one post at a time, from the command line |
 | `tools/verify.py` | yes | re-runs the engine per record; fails if a committed verdict does not reproduce |
 
 ## Why the post text is not here
@@ -55,14 +87,15 @@ capture, and a short verbatim quote capped by a test at 25 words.
 An absolute "no post text" rule would be over-applied: the library's data-licensing
 policy governs *provider* data, not a public post. But a paraphrase alone cannot rule
 out that a verdict is about a claim nobody made, so a short attributed quote is kept
-and the full capture stays local. Reproduction needs the corpus: run
-`case-study/tools/capture.py` against the URLs in the manifest, and
-`test_every_capture_sha256_matches_a_manifest_entry` will tell you whether what you
-captured is what was verified.
+and the full capture stays local. Reproduction needs the corpus: re-capture the
+manifest's URL, or drop the post into the inbox again, and
+`test_every_capture_hash_matches_the_manifest` will tell you whether what you captured
+is what was verified.
 
 ## Reproducing
 
 ```bash
+make ingest             # digest whatever is in the inbox
 make case-study-check   # the static guardrails, no network
 make verify             # re-runs the engine per claim; needs providers and the corpus
 ```

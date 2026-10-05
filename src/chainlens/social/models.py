@@ -52,12 +52,23 @@ class ProvenanceStrength(StrEnum):
     *content* and must be rendered separately from one: a screenshot is weak
     evidence that the platform served a post, and no evidence at all about whether
     an on-chain claim inside it is true.
+
+    The distinctions are about two different things, and it is worth being clear
+    which one each entry turns on. Fetched-versus-handed-over is about **origin**:
+    an API response carries a claim that the platform served this, and a hand-supplied
+    artifact carries no such claim no matter how faithfully it was captured. Within
+    the handed-over class, the ordering is about **fidelity**: a printout carries the
+    page's own text layer, a paste is a copy someone may have edited in transit, and a
+    screenshot carries no text at all until something reads it.
     """
 
     #: Fetched by id or URL straight from the platform's API.
     API_LOOKUP = "api_lookup"
     #: A URL resolved through a reader or archive rather than the platform itself.
     URL_RESOLVED = "url_resolved"
+    #: A print-to-PDF of the post's page, supplied by hand. The text is the page's
+    #: own, so it is not a transcription — but nothing here shows the page was real.
+    PRINTOUT = "printout"
     #: Text supplied by hand, by someone who saw the post.
     PASTE = "paste"
     #: An image supplied by hand.
@@ -73,10 +84,20 @@ class ProvenanceStrength(StrEnum):
         """
         return _STRENGTH_ORDER.index(self)
 
+    @property
+    def is_platform_attested(self) -> bool:
+        """Whether the content carries the platform's own say-so that it served this.
+
+        Only a fetch does. Everything else is a human-mediated artifact, which can be
+        perfectly faithful and still not establish that the post exists.
+        """
+        return self in {ProvenanceStrength.API_LOOKUP, ProvenanceStrength.URL_RESOLVED}
+
 
 _STRENGTH_ORDER: tuple[ProvenanceStrength, ...] = (
     ProvenanceStrength.API_LOOKUP,
     ProvenanceStrength.URL_RESOLVED,
+    ProvenanceStrength.PRINTOUT,
     ProvenanceStrength.PASTE,
     ProvenanceStrength.SCREENSHOT,
 )

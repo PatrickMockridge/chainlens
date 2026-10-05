@@ -64,5 +64,11 @@ verdict = "SUPPORTED"
 - **`quote` is verbatim.** Not a paraphrase, not a summary. A quote that is not in the
   post means the claim is dropped rather than answered, because a verdict about a
   claim nobody made is worse than no verdict.
+- **Quote the post, not the page.** A capture holds the whole page a printout
+  rendered, chrome included: "Post", the timestamp, "1.2M Views". Those are the
+  browser's rendering of the page, not the post's assertions, and a claim extracted
+  from them would be a claim nobody made. This is the one rule here a test cannot
+  check — the guardrail confirms a quote is *in* the capture, not that it is the
+  right part of it — so it rests on the author.
 - **No motive, no character.** Describe what a post asserts and what the chain shows.
   Never why someone said it.

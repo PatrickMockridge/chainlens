@@ -14,11 +14,12 @@ not a result.
 It reaches the network, which is why it is not part of ``make check``. It also needs
 the corpus, which is gitignored: quote validation compares each claim's quote against
 the captured text, so a record cannot be checked without the capture it came from.
-Capture the URLs in the manifest with ``tools/capture.py`` first.
+Drop the posts into ``case-study/inbox`` and run ``make ingest`` first.
 
-A screenshot capture needs a transcription beside it — ``corpus/<key>.txt`` — because
-nothing here reads text out of images yet. Without one, quote validation would drop
-every claim and the run would say so rather than reporting a false mismatch.
+A text capture is its own transcription. A printout or a screenshot carries its text
+in a sidecar — ``corpus/<key>.txt``, which ``make ingest`` writes for a PDF and which
+somebody has to write for a screenshot — because nothing here reads text out of
+images yet.
 """
 
 from __future__ import annotations
@@ -116,16 +117,26 @@ def load_record(path: Path) -> Record:
     corpus_path = CORPUS / capture
     transcription = CORPUS / f"{capture}.txt"
 
-    if corpus_path.exists():
-        text = corpus_path.read_text(encoding="utf-8", errors="replace")
-    elif transcription.exists():
-        text = transcription.read_text(encoding="utf-8")
-    else:
+    if not corpus_path.exists() and not transcription.exists():
         raise RecordError(
             f"{where}: the capture {capture!r} is not in {CORPUS}. The corpus is gitignored; "
-            "capture the manifest's URL with tools/capture.py, and for a screenshot put a "
-            f"transcription beside it as {capture}.txt"
+            "drop the post into case-study/inbox and run `make ingest`, or capture the "
+            "manifest's URL with tools/capture.py"
         )
+
+    # A text capture *is* its own transcription. Anything else — a printout, a
+    # screenshot — carries its text in a sidecar, because reading a PDF's bytes as
+    # text would compare the quote against garbage and pass or fail meaninglessly.
+    if corpus_path.suffix.lower() in {".txt", ".md"}:
+        text = corpus_path.read_text(encoding="utf-8", errors="replace")
+    else:
+        if not transcription.exists():
+            raise RecordError(
+                f"{where}: {capture!r} is not a text capture and has no transcription at "
+                f"{transcription.name}, so the claim's quote cannot be checked against "
+                "anything. `make ingest` writes one for a PDF printout"
+            )
+        text = transcription.read_text(encoding="utf-8")
 
     strength = ProvenanceStrength(source.get("strength", "paste"))
     post = Post(

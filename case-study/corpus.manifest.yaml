@@ -26,15 +26,5 @@
 # The comments above must stay above the first key: tools/capture.py preserves
 # everything before `entries:` when it rewrites the file, because yaml.safe_dump
 # cannot keep comments of its own.
-entries:
-  0001-text-20261005T122456Z.txt:
-    bytes: 149
-    captured_at: '2026-10-05T12:24:56.346849Z'
-    content_type: text/plain
-    form: text
-    notes: smoke test
-    post_id: '1234567890'
-    sha256: bfef0c3bb727f324eeff441f8483d3cc1e2277e8b1c17fa1e0b846213e286919
-    strength: paste
-    url: https://x.com/<redacted>/status/1234567890
+entries: {}
 schema_version: 1

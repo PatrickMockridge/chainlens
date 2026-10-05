@@ -24,6 +24,8 @@ from typing import Any
 import pytest
 import yaml
 
+from chainlens.social.models import ProvenanceStrength
+
 CASE_STUDY = Path(__file__).resolve().parents[2] / "case-study"
 CLAIMS = CASE_STUDY / "claims"
 RESULTS = CASE_STUDY / "results"
@@ -119,6 +121,17 @@ def _manifest_entries() -> dict[str, Any]:
         return {}
     loaded = yaml.safe_load(_text(MANIFEST)) or {}
     return loaded.get("entries") or {}
+
+
+def _corpus_available() -> bool:
+    """Whether the gitignored corpus is on this machine.
+
+    Several checks need it and cannot run in CI without it. They skip explicitly
+    rather than passing quietly, because a guardrail that cannot fail is not a
+    guardrail — and a reader of the test report should be able to see which ones did
+    not run.
+    """
+    return CORPUS.is_dir() and any(CORPUS.iterdir())
 
 
 # --------------------------------------------------------------------------- #
@@ -227,22 +240,42 @@ def test_every_record_s_quote_is_within_the_cap() -> None:
 
 
 def test_the_manifest_is_consistent() -> None:
+    known_forms = {"text", "screenshot", "pdf", "url"}
+    known_strengths = {strength.value for strength in ProvenanceStrength}
     for name, entry in _manifest_entries().items():
         assert name, "a manifest entry with an empty key"
         assert len(entry.get("sha256", "")) == 64, f"{name}: sha256 must be a full digest"
         assert entry.get("captured_at"), f"{name}: no capture time"
+        assert entry.get("form") in known_forms, f"{name}: unknown form {entry.get('form')!r}"
+        assert entry.get("strength") in known_strengths, (
+            f"{name}: unknown strength {entry.get('strength')!r}"
+        )
         url = entry.get("url")
         if url:
             assert UNREDACTED_POST_URL.search(url) is None, f"{name}: url is not redacted"
 
 
+@pytest.mark.skipif(not _corpus_available(), reason="the corpus is gitignored and not present")
+def test_every_manifest_entry_is_a_capture_that_is_actually_there() -> None:
+    """A committed entry pointing at a capture nobody has is a dangling claim.
+
+    It cannot be checked in CI, because the corpus is not in the repository — which is
+    exactly why it is worth checking wherever the corpus *is*. A manifest written by a
+    tool that was then interrupted, or by a run against a scratch directory, leaves an
+    entry that looks like evidence and is not.
+    """
+    missing = [name for name in _manifest_entries() if not (CORPUS / name).exists()]
+    assert not missing, (
+        "the manifest lists captures that are not in the corpus: "
+        + ", ".join(sorted(missing))
+        + ". Either the corpus is incomplete or the manifest was written by a run "
+        "against a different directory."
+    )
+
+
 # --------------------------------------------------------------------------- #
 # The corpus is local, and the quote is not a copy of it
 # --------------------------------------------------------------------------- #
-def _corpus_available() -> bool:
-    return CORPUS.is_dir() and any(CORPUS.iterdir())
-
-
 @pytest.mark.skipif(not _corpus_available(), reason="the corpus is gitignored and not present")
 def test_no_committed_quote_is_the_whole_capture() -> None:
     """A quote is a span, not the post. Otherwise the artifact redistributes it."""

@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check ingest verify case-study-check build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -42,6 +42,10 @@ test-cov:  ## Run tests with coverage, enforcing the CI floor
 	uv run pytest --block-network --cov --cov-report=term-missing --cov-fail-under=90
 
 check: lint typecheck test-cov  ## Everything CI gates on
+
+ingest:  ## Digest everything dropped in case-study/inbox (PDFs, screenshots, text)
+	# Never part of `check`: it consumes whatever a person put in the inbox.
+	uv run python case-study/tools/ingest.py $(ARGS)
 
 verify:  ## Re-run every case-study claim record and check the verdicts reproduce
 	# Deliberately not part of `check`: it reaches the network, and it needs the

@@ -59,3 +59,8 @@ Thumbs.db
 # a redacted URL, a content hash and a short quote. See case-study/README.md.
 # results/ is deliberately NOT ignored — the generated report is the deliverable.
 case-study/corpus/
+
+# --- Case study inbox ---
+# Where posts are dropped for `make ingest` to digest. Both the drops and where they
+# end up are local; only the manifest entry is committed.
+case-study/inbox/

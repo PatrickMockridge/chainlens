@@ -48,8 +48,32 @@ def _post(**kwargs: object) -> Post:
 # --------------------------------------------------------------------------- #
 def test_strength_order_is_strongest_first() -> None:
     assert ProvenanceStrength.API_LOOKUP.rank < ProvenanceStrength.URL_RESOLVED.rank
-    assert ProvenanceStrength.URL_RESOLVED.rank < ProvenanceStrength.PASTE.rank
+    assert ProvenanceStrength.URL_RESOLVED.rank < ProvenanceStrength.PRINTOUT.rank
+    assert ProvenanceStrength.PRINTOUT.rank < ProvenanceStrength.PASTE.rank
     assert ProvenanceStrength.PASTE.rank < ProvenanceStrength.SCREENSHOT.rank
+
+
+def test_a_printout_outranks_a_paste_but_not_a_fetch() -> None:
+    """Fidelity, then origin: a printout's text is the page's own, and still not proof."""
+    assert ProvenanceStrength.PRINTOUT.rank < ProvenanceStrength.PASTE.rank
+    assert ProvenanceStrength.PRINTOUT.rank > ProvenanceStrength.URL_RESOLVED.rank
+
+
+@pytest.mark.parametrize(
+    ("strength", "attested"),
+    [
+        (ProvenanceStrength.API_LOOKUP, True),
+        (ProvenanceStrength.URL_RESOLVED, True),
+        (ProvenanceStrength.PRINTOUT, False),
+        (ProvenanceStrength.PASTE, False),
+        (ProvenanceStrength.SCREENSHOT, False),
+    ],
+)
+def test_only_a_fetch_carries_the_platform_s_own_say_so(
+    strength: ProvenanceStrength, attested: bool
+) -> None:
+    """A faithful printout is still a human-mediated artifact."""
+    assert strength.is_platform_attested is attested
 
 
 def test_ranks_are_contiguous_and_unique() -> None:

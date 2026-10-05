@@ -30,6 +30,7 @@ import argparse
 import hashlib
 import re
 import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,17 @@ CORPUS = CASE_STUDY / "corpus"
 MANIFEST = CASE_STUDY / "corpus.manifest.yaml"
 
 SCHEMA_VERSION = 1
+
+#: The image types vision reads, mapped from the extension a dropped file carries.
+#: The type is sniffed from the bytes later, when the media layer sees them; this is
+#: only what the capture is recorded as.
+_IMAGE_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
 
 #: A post URL's account segment, which is a handle and therefore never committed.
 _URL_ACCOUNT = re.compile(
@@ -107,48 +119,48 @@ def _write_manifest(manifest: dict[str, Any]) -> None:
     MANIFEST.write_text(f"{header}{body}", encoding="utf-8")
 
 
-def capture(
+def write_capture(
     *,
-    text: str | None,
-    image: Path | None,
-    url: str | None,
-    form: str | None,
+    data: bytes,
+    form: str,
+    strength: str,
+    suffix: str,
+    content_type: str | None = None,
+    transcription: str | None = None,
+    url: str | None = None,
     notes: str = "",
     captured_at: datetime | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Write a capture into the corpus and return its manifest entry."""
-    if (text is None) == (image is None):
-        raise SystemExit("give exactly one of --text or --image")
+    """Write one capture into the corpus and record it in the manifest.
 
+    Every ingest path goes through here, so a hash, a redaction and a manifest entry
+    mean the same thing whichever tool produced them.
+
+    Args:
+        data: the captured bytes, exactly as they will be stored.
+        form: ``text``, ``screenshot``, ``pdf`` or ``url``.
+        strength: a ``ProvenanceStrength`` value.
+        suffix: the file extension for the stored capture, leading dot included.
+        content_type: the sniffed or declared type, when there is one.
+        transcription: text extracted from a non-text capture, written beside it as
+            ``<name>.txt``. This is the file quote validation reads, so a binary
+            capture without one cannot be checked.
+        url: where the post was seen. Redacted before it is stored.
+        extra: anything else the caller knows and a reader would want — a page count,
+            an extracted-text length.
+
+    Returns:
+        The manifest entry, which is the existing one when the same bytes were
+        already captured.
+    """
     CORPUS.mkdir(parents=True, exist_ok=True)
     moment = captured_at or datetime.now(UTC)
-
-    if image is not None:
-        data = image.read_bytes()
-        if form is None:
-            form = "screenshot"
-        strength = "screenshot" if form == "screenshot" else "paste"
-        suffix = image.suffix or ".bin"
-        content_type = {
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-        }.get(suffix.lower())
-    else:
-        assert text is not None
-        data = text.encode("utf-8")
-        form = form or "text"
-        strength = "paste"
-        suffix = ".txt"
-        content_type = "text/plain"
-
     digest = hashlib.sha256(data).hexdigest()
+
     manifest = _load_manifest()
     entries: dict[str, Any] = manifest["entries"]
 
-    redacted = redact_url(url) if url else None
     existing = next((key for key, entry in entries.items() if entry.get("sha256") == digest), None)
     if existing is not None:
         print(f"already captured as {existing}; the manifest is unchanged")
@@ -163,6 +175,15 @@ def capture(
         name = f"{index:04d}-{_slug(form)}-{stamp}{suffix}"
 
     (CORPUS / name).write_bytes(data)
+    if transcription is not None:
+        (CORPUS / f"{name}.txt").write_text(transcription, encoding="utf-8")
+
+    redacted = redact_url(url) if url else None
+    post_id = post_id_from_url(url) if url else None
+    duplicate = next(
+        (key for key, entry in entries.items() if post_id and entry.get("post_id") == post_id),
+        None,
+    )
 
     entry: dict[str, Any] = {
         "sha256": digest,
@@ -170,18 +191,68 @@ def capture(
         "captured_at": moment.isoformat().replace("+00:00", "Z"),
         "form": form,
         "strength": strength,
-        "post_id": post_id_from_url(url) if url else None,
+        "post_id": post_id,
         "bytes": len(data),
         "content_type": content_type,
         "notes": notes,
     }
+    if transcription is not None:
+        entry["text_chars"] = len(transcription)
+    entry.update(extra or {})
     entries[name] = entry
     _write_manifest(manifest)
 
     print(f"captured {name} ({len(data)} bytes, sha256 {digest[:16]}…)")
+    if transcription is not None:
+        print(f"  transcription: {name}.txt ({len(transcription)} chars)")
     if redacted != url and url is not None:
         print(f"  url redacted: {redacted}")
+    if duplicate is not None:
+        print(
+            f"  note: the same post id is already captured as {duplicate}. If this is the "
+            "same post printed twice the content should match; if it differs, the post "
+            "changed after the first capture. Record it in AMENDMENTS.md."
+        )
     return entry
+
+
+def capture(
+    *,
+    text: str | None,
+    image: Path | None,
+    url: str | None,
+    form: str | None,
+    notes: str = "",
+    captured_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Capture one post supplied on the command line."""
+    if (text is None) == (image is None):
+        raise SystemExit("give exactly one of --text or --image")
+
+    if image is not None:
+        data = image.read_bytes()
+        resolved = form or "screenshot"
+        suffix = image.suffix or ".bin"
+        content_type = _IMAGE_TYPES.get(suffix.lower())
+        strength = "screenshot" if resolved == "screenshot" else "paste"
+    else:
+        assert text is not None
+        data = text.encode("utf-8")
+        resolved = form or "text"
+        suffix = ".txt"
+        content_type = "text/plain"
+        strength = "paste"
+
+    return write_capture(
+        data=data,
+        form=resolved,
+        strength=strength,
+        suffix=suffix,
+        content_type=content_type,
+        url=url,
+        notes=notes,
+        captured_at=captured_at,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

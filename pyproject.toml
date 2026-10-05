@@ -91,6 +91,7 @@ dev = [
   "types-PyYAML>=6.0",        # stubs for parsing cassettes in tests
   "pyyaml>=6.0",              # the case-study manifest; dev-side only
   "pillow>=11",               # the [social] extra, exercised by the media tests
+  "pypdf>=5",
 ]
 docs = [
   "mkdocs-material>=9.6",
