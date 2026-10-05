@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from chainlens.graph.build import IndexedGraph, to_rustworkx
 from chainlens.graph.export import (
+    amount_label,
     to_cytoscape_json,
     to_dot,
     to_graphml,
@@ -35,6 +36,7 @@ __all__ = [
     "GraphSummary",
     "IndexedGraph",
     "NodeValue",
+    "amount_label",
     "betweenness",
     "cycles",
     "cyclic_nodes",

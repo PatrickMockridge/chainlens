@@ -1,0 +1,143 @@
+{#- Markdown report. Canonical form: diffs cleanly and survives version control. -#}
+# {{ report.title }}
+
+| | |
+|---|---|
+| **Chain** | `{{ report.chain }}` |
+| **Seed** | `{{ report.seed }}` |
+| **Generated** | {{ report.created_at.strftime("%Y-%m-%d %H:%M:%SZ") }} |
+{%- if window_start %}
+| **Activity window** | {{ window_start.strftime("%Y-%m-%d") }} to {{ window_end.strftime("%Y-%m-%d") }} |
+{%- endif %}
+
+{% if not report.redistributable -%}
+> [!WARNING]
+> **Licensing.** The sources used for this report do not clearly permit redistribution.
+> Do not publish this document, or the data in it, without checking the terms of each
+> source listed under *Data provenance*.
+{% endif -%}
+
+## Summary
+
+{% if report.summary -%}
+- **Nodes:** {{ report.summary.node_count }}
+- **Edges:** {{ report.summary.edge_count }}
+- **Density:** {{ report.summary.density }}
+- **Entities:** {{ report.entities | length }} ({{ report.labelled_entities() | length }} labelled)
+- **Cycles:** {{ report.summary.cycle_count }}{% if report.summary.is_cyclic %} — {{ report.summary.recurring_node_count }} node(s) lie on a loop{% endif %}
+- **Apportioned edges:** {{ report.apportioned_flow_count() }} of {{ report.flows | length }}
+{%- else -%}
+No structural summary was computed.
+{%- endif %}
+
+{% if report.truncated -%}
+> [!IMPORTANT]
+> **This trace stopped early.** It is not a statement that nothing further exists.
+> The limits that ended it are listed under *Warnings*.
+{% endif -%}
+
+{% if report.warnings %}
+## Warnings
+
+{% for warning in report.warnings -%}
+- {{ warning }}
+{% endfor %}
+{%- endif %}
+
+{% if report.entities %}
+## Entities
+
+Every entity is a hypothesis. Confidence is the weakest link among the merges that
+built it, and the heuristic that fired is recorded against it.
+
+{% for entity in report.entities -%}
+### `{{ entity.id }}`{% if entity.labels %} — {{ entity.labels[0].name }}{% endif %}
+
+- **Addresses:** {{ entity.address_count }}
+- **Confidence:** {{ entity.confidence }} ({{ entity.confidence | percent }})
+- **Heuristics:** {{ entity.heuristics | join(", ") }}
+{%- for label in entity.labels %}
+- **Label:** {{ label.name }} (source: {{ label.source }}, kind: {{ label.kind }})
+{%- endfor %}
+
+| Address |
+|---|
+{% for address in entity.addresses | sort -%}
+| `{{ address }}` |
+{% endfor %}
+
+{% endfor -%}
+{% endif %}
+
+{% if flows %}
+## Value flows
+
+Largest first. An edge with confidence below 1 rests on an apportioned split: a
+UTXO transaction does not record which input paid which output, so the amount is
+our inference across the senders rather than the ledger's.
+
+| Source | Destination | Amount | Hops | Transfers | Confidence | Flags | Transaction ids |
+|---|---|---|---:|---:|---:|---|---|
+{% for row in flows -%}
+| `{{ row.src }}` | `{{ row.dst }}` | {{ row.amount_label }} | {{ row.hops }} | {{ row.n_transfers }} | {{ row.confidence }} | {% if row.is_change %}change{% endif %}{% if row.confidence < 1 %} apportioned{% endif %} | {% for txid in row.txids %}`{{ txid }}` {% endfor %}|
+{% endfor %}
+{% endif %}
+
+{% if report.graph and report.graph.edges %}
+## Graph
+
+```mermaid
+{{ report.graph | mermaid }}```
+
+{% if report.graph.node_count > 200 -%}
+The diagram is truncated; the table above is complete.
+{% endif -%}
+{% endif %}
+
+{% if report.refusals %}
+## Refused merges
+
+These merges were proposed and rejected because a declared non-equivalence forbids
+them. They are listed because a heuristic wanting to join two known-different
+entities is worth knowing about.
+
+{% for refusal in report.refusals -%}
+- `{{ refusal.heuristic }}`: {{ refusal.addresses | join(" + ") }} — {{ refusal.reason }}
+{% endfor %}
+{%- endif %}
+
+{% if report.observations %}
+## Observations
+
+Labelled behaviour rather than merges. These assert nothing about identity.
+
+{% for observation in report.observations -%}
+- `{{ observation.address }}`: {{ observation.name }} ({{ observation.source }}{% if observation.confidence is not none %}, confidence {{ observation.confidence }}{% endif %})
+{% endfor %}
+{%- endif %}
+
+## Methodology
+
+{{ report.methodology }}
+
+## Limitations
+
+{{ report.limitations }}
+
+## Data provenance
+
+{% if provenance_lines -%}
+{% for line in provenance_lines -%}
+- {{ line }}
+{% endfor %}
+{%- else -%}
+No external source was consulted.
+{%- endif %}
+
+{% if report.graph and report.graph.edges %}
+## Appendix: transaction ids
+
+{% for txid in report.all_txids() -%}
+- `{{ txid }}`
+{% endfor %}
+{%- endif %}

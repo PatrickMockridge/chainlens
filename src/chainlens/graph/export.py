@@ -17,7 +17,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 from chainlens.models.flows import AddressRef, EntityRef, FlowGraph, NodeRef, ValueFlow
 
-__all__ = ["to_cytoscape_json", "to_dot", "to_graphml", "to_mermaid"]
+__all__ = ["amount_label", "to_cytoscape_json", "to_dot", "to_graphml", "to_mermaid"]
 
 #: Mermaid lays out every node before rendering, so a large graph produces output
 #: no browser will open. Beyond this the diagram is truncated and says so.
@@ -45,7 +45,7 @@ def _addresses(node: NodeRef) -> tuple[str, ...]:
     return (node.address,) if isinstance(node, AddressRef) else ()
 
 
-def _amount_label(edge: ValueFlow) -> str:
+def amount_label(edge: ValueFlow) -> str:
     """Render an amount, falling back to base units when decimals are unknown."""
     try:
         rendered: Decimal = edge.amount_to_decimal()
@@ -122,7 +122,7 @@ def to_cytoscape_json(flow_graph: FlowGraph, *, indent: int | None = 2) -> str:
                 "source": edge.src.node_key,
                 "target": edge.dst.node_key,
                 "amount": edge.amount,
-                "amount_label": _amount_label(edge),
+                "amount_label": amount_label(edge),
                 "asset": str(edge.asset.kind),
                 "txids": list(edge.txids),
                 "n_transfers": edge.n_transfers,
@@ -151,7 +151,7 @@ def _dot_node(node: NodeRef) -> str:
 def _dot_edge(edge: ValueFlow) -> str:
     return (
         f'  "{_dot_escape(edge.src.node_key)}" -> "{_dot_escape(edge.dst.node_key)}" '
-        f'[label="{_dot_escape(_amount_label(edge))}"];'
+        f'[label="{_dot_escape(amount_label(edge))}"];'
     )
 
 
@@ -189,6 +189,6 @@ def to_mermaid(flow_graph: FlowGraph, *, max_nodes: int = _MERMAID_MAX_NODES) ->
     for edge in flow_graph.edges:
         if edge.src.node_key not in included or edge.dst.node_key not in included:
             continue
-        label = _mermaid_safe(_amount_label(edge))
+        label = _mermaid_safe(amount_label(edge))
         lines.append(f'  {aliases[edge.src.node_key]} -->|"{label}"| {aliases[edge.dst.node_key]}')
     return "\n".join(lines) + "\n"

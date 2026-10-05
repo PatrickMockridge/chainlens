@@ -39,6 +39,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Four heuristics: `common-input-ownership` (with CoinJoin suppression),
   `change-address` (multi-signal, abstains below threshold and on ties),
   `address-reuse` (observations only) and `eth-deposit-address`.
+- `chainlens.tracing`: a bounded value-flow `Tracer` (breadth- or depth-first) with
+  a `PruningPolicy` (dust, whale movements, dust ratio, fan-out, coinbase, change,
+  self-loops), `StopRule`s (labelled, known service, cluster boundary) and a
+  `TraceBudget` across depth, nodes, edges and wall clock.
+- `chainlens.graph`: a rustworkx digraph built from a flow graph, structural
+  metrics (degree, density, strongly-connected components, bounded cycle
+  enumeration, betweenness) and serialisers for GraphML, Cytoscape JSON, DOT and
+  Mermaid.
+- `chainlens.report`: `InvestigationReport` plus Markdown and standalone HTML
+  renderers. Methodology, limitations and provenance are mandatory and enforced at
+  construction, so a report citing chain data without recording its source cannot
+  be built.
+- `transfers_from_transaction`: derives transfers from a transaction, the point
+  where UTXO and account chains converge onto one edge type.
 - Docs site: MkDocs Material with an API reference generated from the source tree.
 
 ### Fixed
@@ -68,5 +82,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   compound, and averaging would hide it.
 - Entity ids are derived from cluster membership, so a report is reproducible
   across runs and processes.
+- UTXO attribution is an apportionment, not a reading. A transaction does not
+  record which input paid which output, so a multi-input transaction's output value
+  is split across senders in proportion to what each contributed, with integer
+  largest-remainder rounding. The guarantee is exact **per output** and approximate
+  per sender, where shares can drift by one base unit per output; such transfers
+  are marked `ambiguous` and their edges carry a confidence below 1.0.
+- A trace always reports how it ended. `FlowGraph.truncated` and `stop_reasons`
+  distinguish "there is nothing further here" from "we stopped looking", and every
+  bound that truncates a run is named.
+- An address the provider has no history for is tolerated per node and counted as
+  `no_history`. A transport or rate-limit failure still propagates: a graph that is
+  incomplete because a request failed must not be presented as a complete one.
 
 [Unreleased]: https://github.com/PatrickMockridge/chainlens/commits/main

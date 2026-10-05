@@ -1,0 +1,208 @@
+{#- Standalone HTML report: inline styles, no build step, opens from the filesystem. -#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ report.title }}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+         max-width: 60rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+  h2 { font-size: 1.15rem; margin-top: 2.25rem; border-bottom: 1px solid #8884;
+       padding-bottom: .25rem; }
+  h3 { font-size: 1rem; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: .75rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #8884; padding: .35rem .5rem; text-align: left;
+           vertical-align: top; }
+  th { background: #8881; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: .85em; word-break: break-all; }
+  .notice { border-left: 4px solid #d9822b; background: #d9822b1a;
+            padding: .6rem .8rem; margin: 1rem 0; }
+  .notice strong { display: block; }
+  .muted { opacity: .75; }
+  .pill { border: 1px solid #8886; border-radius: 999px; padding: 0 .45rem;
+          font-size: .78em; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<h1>{{ report.title }}</h1>
+<p class="muted">
+  Chain <code>{{ report.chain }}</code> &middot;
+  Seed <code>{{ report.seed }}</code> &middot;
+  Generated {{ report.created_at.strftime("%Y-%m-%d %H:%M:%SZ") }}
+  {%- if window_start %} &middot;
+  Activity {{ window_start.strftime("%Y-%m-%d") }} to {{ window_end.strftime("%Y-%m-%d") }}
+  {%- endif %}
+</p>
+
+{% if not report.redistributable %}
+<div class="notice">
+  <strong>Licensing</strong>
+  The sources used for this report do not clearly permit redistribution. Do not
+  publish this document, or the data in it, without checking the terms of each
+  source listed under <em>Data provenance</em>.
+</div>
+{% endif %}
+
+{% if report.truncated %}
+<div class="notice">
+  <strong>This trace stopped early</strong>
+  It is not a statement that nothing further exists. The limits that ended it are
+  listed under Warnings.
+</div>
+{% endif %}
+
+<h2>Summary</h2>
+{% if report.summary %}
+<ul>
+  <li>Nodes: <strong>{{ report.summary.node_count }}</strong>,
+      edges: <strong>{{ report.summary.edge_count }}</strong>,
+      density: {{ report.summary.density }}</li>
+  <li>Entities: <strong>{{ report.entities | length }}</strong>
+      ({{ report.labelled_entities() | length }} labelled)</li>
+  <li>Cycles: <strong>{{ report.summary.cycle_count }}</strong>
+      {%- if report.summary.is_cyclic %}, {{ report.summary.recurring_node_count }} node(s) on a loop{% endif %}</li>
+  <li>Apportioned edges: <strong>{{ report.apportioned_flow_count() }}</strong>
+      of {{ report.flows | length }}</li>
+</ul>
+{% else %}
+<p class="muted">No structural summary was computed.</p>
+{% endif %}
+
+{% if report.warnings %}
+<h2>Warnings</h2>
+<ul>
+  {%- for warning in report.warnings %}
+  <li>{{ warning }}</li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+{% if report.entities %}
+<h2>Entities</h2>
+<p class="muted">
+  Every entity is a hypothesis. Confidence is the weakest link among the merges
+  that built it, and the heuristic that fired is recorded against it.
+</p>
+{% for entity in report.entities %}
+<h3><code>{{ entity.id }}</code>{% if entity.labels %} &mdash; {{ entity.labels[0].name }}{% endif %}</h3>
+<ul>
+  <li>Addresses: <strong>{{ entity.address_count }}</strong>,
+      confidence: {{ entity.confidence }} ({{ entity.confidence | percent }})</li>
+  <li>Heuristics: {{ entity.heuristics | join(", ") }}</li>
+  {%- for label in entity.labels %}
+  <li>Label: {{ label.name }} <span class="pill">{{ label.source }}</span>
+      <span class="pill">{{ label.kind }}</span></li>
+  {%- endfor %}
+</ul>
+<table>
+  <tr><th>Address</th></tr>
+  {%- for address in entity.addresses | sort %}
+  <tr><td class="mono">{{ address }}</td></tr>
+  {%- endfor %}
+</table>
+{% endfor %}
+{% endif %}
+
+{% if flows %}
+<h2>Value flows</h2>
+<p class="muted">
+  Largest first. An edge with confidence below 1 rests on an apportioned split: a
+  UTXO transaction does not record which input paid which output, so the amount is
+  our inference across the senders rather than the ledger's.
+</p>
+<table>
+  <tr>
+    <th>Source</th><th>Destination</th><th>Amount</th><th>Hops</th>
+    <th>Transfers</th><th>Confidence</th><th>Flags</th><th>Transaction ids</th>
+  </tr>
+  {%- for row in flows %}
+  <tr>
+    <td class="mono">{{ row.src }}</td>
+    <td class="mono">{{ row.dst }}</td>
+    <td class="num">{{ row.amount_label }}</td>
+    <td class="num">{{ row.hops }}</td>
+    <td class="num">{{ row.n_transfers }}</td>
+    <td class="num">{{ row.confidence }}</td>
+    <td>{% if row.is_change %}<span class="pill">change</span>{% endif %}
+        {%- if row.confidence < 1 %} <span class="pill">apportioned</span>{% endif %}</td>
+    <td class="mono">{% for txid in row.txids %}{{ txid }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+  </tr>
+  {%- endfor %}
+</table>
+{% endif %}
+
+{% if report.graph and report.graph.edges %}
+<h2>Graph</h2>
+<p class="muted">
+  Rendered by Mermaid, which the script below loads from a CDN; without network
+  access this block stays as source and the table above remains authoritative.
+</p>
+<pre class="mermaid">
+{{ report.graph | mermaid }}</pre>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true });
+</script>
+{% endif %}
+
+{% if report.refusals %}
+<h2>Refused merges</h2>
+<p class="muted">
+  Proposed and rejected because a declared non-equivalence forbids them, listed
+  because a heuristic wanting to join two known-different entities is worth knowing.
+</p>
+<ul>
+  {%- for refusal in report.refusals %}
+  <li><code>{{ refusal.heuristic }}</code>: {{ refusal.addresses | join(" + ") }}
+      &mdash; {{ refusal.reason }}</li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+{% if report.observations %}
+<h2>Observations</h2>
+<p class="muted">Labelled behaviour rather than merges. These assert nothing about identity.</p>
+<ul>
+  {%- for observation in report.observations %}
+  <li><span class="mono">{{ observation.address }}</span>: {{ observation.name }}
+      <span class="pill">{{ observation.source }}</span>
+      {%- if observation.confidence is not none %}
+      <span class="pill">confidence {{ observation.confidence }}</span>{% endif %}</li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+<h2>Methodology</h2>
+<p>{{ report.methodology }}</p>
+
+<h2>Limitations</h2>
+<p>{{ report.limitations }}</p>
+
+<h2>Data provenance</h2>
+{% if provenance_lines %}
+<ul>
+  {%- for line in provenance_lines %}
+  <li>{{ line }}</li>
+  {%- endfor %}
+</ul>
+{% else %}
+<p class="muted">No external source was consulted.</p>
+{% endif %}
+
+{% if report.graph and report.graph.edges %}
+<h2>Appendix: transaction ids</h2>
+<ul class="mono">
+  {%- for txid in report.all_txids() %}
+  <li>{{ txid }}</li>
+  {%- endfor %}
+</ul>
+{% endif %}
+
+</body>
+</html>
