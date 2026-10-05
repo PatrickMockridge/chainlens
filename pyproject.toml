@@ -52,7 +52,8 @@ dependencies = [
 eth = ["web3>=7.16,<9"]       # ABI decode / EIP-55 only — deliberately NOT core
 nx = ["networkx>=3.3"]        # interop + viz layouts
 pandas = ["pandas>=2.2"]
-all = ["chainlens[eth,nx,pandas]"]
+social = ["pillow>=11"]       # image sniffing + downscaling before we send to vision
+all = ["chainlens[eth,nx,pandas,social]"]
 
 [project.urls]
 Homepage = "https://github.com/PatrickMockridge/chainlens"
@@ -88,6 +89,7 @@ dev = [
   "pre-commit>=4.0",
   "pycoin>=0.92",             # dev-only cross-validation oracle for the BTC codec
   "types-PyYAML>=6.0",        # stubs for parsing cassettes in tests
+  "pillow>=11",               # the [social] extra, exercised by the media tests
 ]
 docs = [
   "mkdocs-material>=9.6",

@@ -25,6 +25,15 @@ from chainlens.social.capabilities import (
     collect_social_capabilities,
     social_provides,
 )
+from chainlens.social.media import (
+    MAX_DIMENSION,
+    MAX_IMAGES_PER_REQUEST,
+    MAX_MEDIA_BYTES,
+    MediaFetcher,
+    prepare_for_vision,
+    select_for_vision,
+    sniff_media_type,
+)
 from chainlens.social.models import (
     MediaBlob,
     MediaItem,
@@ -38,12 +47,24 @@ from chainlens.social.models import (
     SourceRef,
     TextSource,
 )
+from chainlens.social.pasted import (
+    Capture,
+    PastedPostSource,
+    content_addressed_id,
+    content_addressed_key,
+)
 
 __all__ = [
+    "MAX_DIMENSION",
+    "MAX_IMAGES_PER_REQUEST",
+    "MAX_MEDIA_BYTES",
     "SOCIAL_PROVIDES_ATTR",
+    "Capture",
     "MediaBlob",
+    "MediaFetcher",
     "MediaItem",
     "MediaKind",
+    "PastedPostSource",
     "Post",
     "PostAuthor",
     "PostReference",
@@ -54,5 +75,10 @@ __all__ = [
     "SourceRef",
     "TextSource",
     "collect_social_capabilities",
+    "content_addressed_id",
+    "content_addressed_key",
+    "prepare_for_vision",
+    "select_for_vision",
+    "sniff_media_type",
     "social_provides",
 ]

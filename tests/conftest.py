@@ -55,5 +55,11 @@ def _no_ambient_provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         "GLASSNODE_API_KEY",
         "DUNE_API_KEY",
         "NANSEN_API_KEY",
+        "X_BEARER_TOKEN",
+        # The model keys are here for the same reason as the rest, with the stakes
+        # raised: a test that reaches a live model does not just depend on a
+        # developer's credentials, it spends their money.
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
     ):
         monkeypatch.delenv(var, raising=False)

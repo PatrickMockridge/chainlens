@@ -622,6 +622,7 @@ all = [
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pandas" },
+    { name = "pillow" },
     { name = "web3" },
 ]
 eth = [
@@ -634,11 +635,15 @@ nx = [
 pandas = [
     { name = "pandas" },
 ]
+social = [
+    { name = "pillow" },
+]
 
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
     { name = "mypy" },
+    { name = "pillow" },
     { name = "pre-commit" },
     { name = "pycoin" },
     { name = "pytest" },
@@ -675,6 +680,8 @@ requires-dist = [
     { name = "networkx", marker = "extra == 'nx'", specifier = ">=3.3" },
     { name = "pandas", marker = "extra == 'all'", specifier = ">=2.2" },
     { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.2" },
+    { name = "pillow", marker = "extra == 'all'", specifier = ">=11" },
+    { name = "pillow", marker = "extra == 'social'", specifier = ">=11" },
     { name = "pydantic", specifier = ">=2.9,<3" },
     { name = "pydantic-settings", specifier = ">=2.4" },
     { name = "rustworkx", specifier = ">=0.18" },
@@ -682,12 +689,13 @@ requires-dist = [
     { name = "web3", marker = "extra == 'all'", specifier = ">=7.16,<9" },
     { name = "web3", marker = "extra == 'eth'", specifier = ">=7.16,<9" },
 ]
-provides-extras = ["all", "eth", "nx", "pandas"]
+provides-extras = ["all", "eth", "nx", "pandas", "social"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6.115" },
     { name = "mypy", specifier = ">=1.13" },
+    { name = "pillow", specifier = ">=11" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pycoin", specifier = ">=0.92" },
     { name = "pytest", specifier = ">=8.3" },

@@ -93,6 +93,10 @@ class TextSource(StrEnum):
     truncation visible instead of looking like an absence of claims.
     """
 
+    #: Nothing has been read as text: the post is images only, and no transcription
+    #: has been attempted. Distinct from an empty ``text`` field, which *was* read
+    #: and was empty.
+    NONE = "none"
     #: The short ``text`` field, and it was not truncated.
     TEXT = "text"
     #: The long-form ``note_tweet.text`` field, because it was present.
