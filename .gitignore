@@ -41,6 +41,16 @@ site/
 # --- Notebooks ---
 .ipynb_checkpoints/
 
+# --- Front-end build ---
+# The app's source and its generated wire schema are committed; its dependency tree, its
+# intermediate build output and its coverage are not. The *finished* bundle is committed too,
+# and it lives inside the package (`src/chainlens/ui/static/`) because that is what ships in
+# the wheel. `make ui` builds it; CI rebuilds it and fails on a diff, so a stale bundle cannot
+# be shipped silently.
+web/node_modules/
+web/dist/
+web/coverage/
+
 # --- Editors / OS ---
 .vscode/
 .idea/

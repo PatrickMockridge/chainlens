@@ -55,6 +55,12 @@ pandas = ["pandas>=2.2"]
 social = ["pillow>=11"]       # image sniffing + downscaling before we send to vision
 all = ["chainlens[eth,nx,pandas,social]"]
 
+# The library's first console script. It has to stay importable without triggering provider
+# plugin discovery, which is why `chainlens.ui.cli` touches the registry only inside a command
+# body -- see its module docstring.
+[project.scripts]
+chainlens = "chainlens.ui.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/PatrickMockridge/chainlens"
 Repository = "https://github.com/PatrickMockridge/chainlens"
@@ -188,7 +194,11 @@ ignore_missing_imports = true
 # --------------------------------------------------------------------------- #
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+# `--allowed-hosts` carves loopback out of `--block-network`. The property that flag protects
+# is "no test reaches the live internet", and a loopback socket is not the internet — which
+# matters because the local server is tested by starting it and calling it, and blocking every
+# socket made that impossible. The regex list is the smallest carve-out that works.
+addopts = "-ra --strict-markers --strict-config --allowed-hosts=127\\.0\\.0\\.1"
 markers = [
   "network: test requires live network access (excluded in CI via --block-network)",
 ]
