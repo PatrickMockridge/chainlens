@@ -24,20 +24,36 @@ import sys
 import webbrowser
 from pathlib import Path
 
+from chainlens.exceptions import ConfigurationError, LLMError
 from chainlens.ledger.annotate import stamp
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.derive import derive_finding
 from chainlens.ledger.schema import SCHEMA_DIR, render_schemas, strict_dumps
 from chainlens.ledger.walk import walk_ledger
+from chainlens.models.base import utcnow
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
+from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.ui.server import LOOPBACK, ServeConfig, serve
 from chainlens.verify.engine import VerificationEngine
 from chainlens.verify.estimators import estimator_for
+from chainlens.verify.extract import (
+    DEFAULT_MODEL,
+    AnthropicLLM,
+    ExtractionReport,
+    Extractor,
+    StructuredLLM,
+)
 from chainlens.verify.parsing import parse_claim
-from chainlens.verify.records import ClaimRecord, RecordError, load_record
+from chainlens.verify.records import (
+    ClaimRecord,
+    RecordError,
+    dump_record,
+    load_record,
+    record_for_claim,
+)
 from chainlens.verify.schema import Extraction
 from chainlens.verify.verdicts import VerificationReport
 
@@ -175,6 +191,79 @@ def _command_derive(args: argparse.Namespace) -> int:
     print(
         f"wrote {out}: {finding.verdict.value} by {finding.method}, "
         f"{'with' if document.has_ratio else 'without'} a likelihood ratio"
+    )
+    return 0
+
+
+async def _extract_for_cli(llm: object, post: Post) -> ExtractionReport:
+    """``anyio.run`` entry point for reading one post."""
+    return await Extractor(llm).extract(post)  # type: ignore[arg-type]
+
+
+def _command_extract(args: argparse.Namespace) -> int:
+    """Read a post into claim records, one file per claim.
+
+    The claims are written as records rather than as a finding, because reading a post and
+    adjudicating it are separate steps and only the second needs a chain. A record is what
+    ``chainlens ui derive`` reads, so the two commands compose:
+
+        chainlens ui extract --post post.txt --out claims/
+        chainlens ui derive --claim claims/<one>.json --out derivation.json
+    """
+    import anyio
+
+    post_path = Path(args.post)
+    if not post_path.is_file():
+        raise SystemExit(f"no such post: {post_path}")
+
+    try:
+        llm: StructuredLLM = AnthropicLLM(model=args.model)
+    except ConfigurationError as exc:
+        # A missing key or a missing extra is a configuration problem, and the message names which
+        # — the env var or the install — rather than arriving as a traceback.
+        raise SystemExit(str(exc)) from exc
+
+    post = Post(
+        id=args.id or post_path.stem,
+        text=post_path.read_text(encoding="utf-8", errors="replace"),
+        source=SourceRef(
+            strength=ProvenanceStrength(args.strength),
+            captured_at=utcnow(),
+            url=args.url,
+        ),
+    )
+    try:
+        report = anyio.run(_extract_for_cli, llm, post)
+    except LLMError as exc:
+        raise SystemExit(f"the post could not be read: {exc}") from exc
+
+    print(report.format())
+    if report.kept == 0:
+        # Not a failure: a post that makes no chain-checkable claim is a finding about the corpus,
+        # and the coverage of a corpus is only honest if the denominator is everything.
+        print(f"no claim records written to {args.out}: the post yielded nothing to adjudicate")
+        return 0
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for index, claim in enumerate(report.extraction.claims, start=1):
+        record = record_for_claim(
+            claim,
+            record_id=f"{post.id}-{index}",
+            post_text=post.text,
+            strength=post.source.strength,
+            captured_at=post.source.captured_at,
+            url=post.source.url,
+        )
+        target = out / f"{record.id}.json"
+        target.write_text(dump_record(record), encoding="utf-8")
+        written.append(target)
+
+    print(f"wrote {len(written)} record(s) to {out}: {', '.join(path.name for path in written)}")
+    print(
+        "note: a falsifier and an expected verdict are a person's to add; the format allows both "
+        "to be absent, and the case study requires them for its own corpus"
     )
     return 0
 
@@ -334,6 +423,28 @@ def build_parser() -> argparse.ArgumentParser:
         target.add_argument(
             "--no-tokens", action="store_true", help="skip token movements (EVM chains)"
         )
+
+    extract = ui_commands.add_parser(
+        "extract",
+        help="read a post into claim records, one file per claim",
+        description=(
+            "Read a post with a model and write what it asserts as claim records, which "
+            "`chainlens ui derive` then adjudicates. The model reports what the post says; it "
+            "never reports what is true, and the shape it answers in has no room for a verdict."
+        ),
+    )
+    extract.add_argument("--post", required=True, help="a text file holding the post")
+    extract.add_argument("--out", required=True, help="a directory for the records")
+    extract.add_argument("--id", help="the post's id; defaults to the file's name")
+    extract.add_argument("--url", help="where the post was published, when it has a home")
+    extract.add_argument(
+        "--strength",
+        default=ProvenanceStrength.PASTE.value,
+        choices=[strength.value for strength in ProvenanceStrength],
+        help="how the text was obtained (default: paste)",
+    )
+    extract.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
+    extract.set_defaults(handler=_command_extract)
 
     export = ui_commands.add_parser("export", help="write a ledger document to a file")
     add_walk_options(export)

@@ -79,6 +79,7 @@ nav:
       - Data licensing: explanation/data-licensing.md
       - Claim records: explanation/claim-records.md
       - Is a likelihood ratio any good?: explanation/calibration.md
+      - Reading a post with a model: explanation/extraction.md
   - Plugins:
       - Writing a provider: plugins/writing-a-provider.md
   - API reference: reference/

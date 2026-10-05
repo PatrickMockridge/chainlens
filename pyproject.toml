@@ -52,6 +52,10 @@ dependencies = [
 eth = ["web3>=7.16,<9"]       # ABI decode / EIP-55 only — deliberately NOT core
 nx = ["networkx>=3.3"]        # interop + viz layouts
 pandas = ["pandas>=2.2"]
+# Reading posts into claims. Optional because most of the library answers questions about the
+# chain without ever asking a model anything, and a caller who does not read posts should not
+# carry an HTTP client for one.
+llm = ["anthropic>=1.11,<2"]
 social = ["pillow>=11"]       # image sniffing + downscaling before we send to vision
 all = ["chainlens[eth,nx,pandas,social]"]
 
@@ -98,6 +102,7 @@ dev = [
   "pyyaml>=6.0",              # the case-study manifest; dev-side only
   "pillow>=11",               # the [social] extra, exercised by the media tests
   "pypdf>=5",
+  "anthropic>=1.11,<2",       # the [llm] extra, exercised by the extractor's tests
 ]
 docs = [
   "mkdocs-material>=9.6",
@@ -186,7 +191,7 @@ show_error_codes = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["hishel.*", "rustworkx.*", "web3.*", "pycoin.*", "syrupy.*"]
+module = ["hishel.*", "rustworkx.*", "web3.*", "pycoin.*", "syrupy.*", "anthropic.*"]
 ignore_missing_imports = true
 
 # --------------------------------------------------------------------------- #

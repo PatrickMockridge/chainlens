@@ -33,10 +33,13 @@ knows:
 
 from __future__ import annotations
 
+import json
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import AwareDatetime
 
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import utcnow
@@ -45,7 +48,15 @@ from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.verify.claims import ActivityWindow
 from chainlens.verify.schema import Claim, ClaimType
 
-__all__ = ["SCHEMA_VERSION", "ClaimRecord", "RecordError", "load_record", "load_records"]
+__all__ = [
+    "SCHEMA_VERSION",
+    "ClaimRecord",
+    "RecordError",
+    "dump_record",
+    "load_record",
+    "load_records",
+    "record_for_claim",
+]
 
 #: The format version. A record declares it so that a change to the shape is visible in the
 #: diff rather than inferred from a parse failure.
@@ -136,18 +147,41 @@ def _post_text(raw: dict[str, Any], *, where: str, corpus_dir: Path | None, quot
     return transcription.read_text(encoding="utf-8")
 
 
+def _read_mapping(path: Path, where: str) -> dict[str, Any]:
+    """The record as a mapping, from either form the format allows.
+
+    **Two serialisations, one set of keys.** Hand-written records are TOML — it diffs cleanly and a
+    person can read it — and a record written by a program is JSON, because JSON is what the models
+    round-trip through exactly and what a generated file should be. The keys are the same in both,
+    so everything below the parse is shared and neither form can drift from the other.
+    """
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() == ".json":
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise RecordError(f"{where}: not valid JSON: {exc}") from exc
+        if not isinstance(loaded, dict):
+            raise RecordError(f"{where}: a claim record is an object, not {type(loaded).__name__}")
+        return loaded
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise RecordError(f"{where}: not valid TOML: {exc}") from exc
+
+
 def load_record(path: Path, *, corpus_dir: Path | None = None) -> ClaimRecord:
     """Parse one claim record, refusing anything that could not be adjudicated.
 
+    A record may be TOML (hand-written) or JSON (written by a tool); the keys are the same either
+    way, and ``.json`` is the only thing that changes how it is read.
+
     Raises:
-        RecordError: the file is not TOML, declares an unknown ``schema_version``, omits a key
-            the engine needs, or names a capture that cannot be read.
+        RecordError: the file is not TOML or JSON, declares an unknown ``schema_version``, omits a
+            key the engine needs, or names a capture that cannot be read.
     """
     where = path.name
-    try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as exc:
-        raise RecordError(f"{where}: not valid TOML: {exc}") from exc
+    raw = _read_mapping(path, where)
 
     version = raw.get("schema_version")
     if version != SCHEMA_VERSION:
@@ -215,11 +249,105 @@ def load_record(path: Path, *, corpus_dir: Path | None = None) -> ClaimRecord:
     )
 
 
+#: Suffixes a record may have. TOML for a person, JSON for a tool.
+_RECORD_SUFFIXES = (".toml", ".json")
+
+
 def load_records(
     directory: Path, *, corpus_dir: Path | None = None, prefix: str | None = None
 ) -> tuple[ClaimRecord, ...]:
     """Every claim record in a directory, by filename. An empty directory is not an error."""
-    paths = sorted(path for path in directory.glob("*.toml") if path.name != "README.md")
+    paths = sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in _RECORD_SUFFIXES and path.name != "README.md"
+    )
     if prefix is not None:
         paths = [path for path in paths if path.name.startswith(prefix)]
     return tuple(load_record(path, corpus_dir=corpus_dir) for path in paths)
+
+
+def record_for_claim(
+    claim: Claim,
+    *,
+    record_id: str,
+    post_text: str,
+    strength: ProvenanceStrength = ProvenanceStrength.PASTE,
+    captured_at: AwareDatetime | None = None,
+    url: str | None = None,
+) -> ClaimRecord:
+    """Build a record for one claim, with the post it was read from carried as its own text.
+
+    The shape a tool writes when it has read a post: the claim, the text it was read from, and the
+    id and capture time. **No falsifier and no expectation**, because those are a person's — a
+    falsifier is what would show the claim to be false, which is a judgement no extractor makes, and
+    an expectation is the case study's pre-registration. A caller that has them sets them.
+    """
+    post = Post(
+        id=record_id,
+        text=post_text,
+        source=SourceRef(
+            strength=strength,
+            captured_at=captured_at or utcnow(),
+            url=url,
+            provider="claim-record",
+        ),
+    )
+    return ClaimRecord(
+        path=Path(f"{record_id}.json"),
+        id=record_id,
+        claim=claim,
+        post=post,
+        quote=claim.quote,
+        assertion="",
+        falsifier="",
+        expected=None,
+    )
+
+
+def dump_record(record: ClaimRecord) -> str:
+    """A record as JSON, with the same keys the TOML form uses.
+
+    ``text`` is always written, so a record that came from a tool carries the post it was read from
+    and a quote can be checked against something rather than against itself. Everything else is
+    written only when it is set, so a generated record does not carry empty keys a person would have
+    to read past.
+    """
+    optional: dict[str, Any] = {
+        "addresses": list(record.claim.addresses),
+        "txid": record.claim.txid,
+        "amount_text": record.claim.amount_text,
+        "direction": record.claim.direction.value if record.claim.direction else None,
+        "asserted_label": record.claim.asserted_label,
+    }
+    claim: dict[str, Any] = {
+        "type": record.claim.type.value,
+        # Only the keys that carry something: a generated record should not make a person read past
+        # empty fields, and an absent key is already the format's way of saying "not stated".
+        **{key: value for key, value in optional.items() if value},
+    }
+    if record.claim.window is not None:
+        claim["window"] = {
+            "start": record.claim.window.start.isoformat(),
+            "end": record.claim.window.end.isoformat(),
+        }
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "id": record.id,
+        "quote": record.quote,
+        "text": record.post.text,
+        "claim": claim,
+        "source": {
+            "strength": record.post.source.strength.value,
+            "captured_at": record.post.source.captured_at.isoformat(),
+            **({"url": record.post.source.url} if record.post.source.url else {}),
+        },
+    }
+    if record.assertion:
+        payload["assertion"] = record.assertion
+    if record.falsifier:
+        payload["falsifier"] = record.falsifier
+    if record.expected is not None:
+        payload["expected"] = {"verdict": record.expected.value}
+    return json.dumps(payload, indent=2, sort_keys=True) + "\n"

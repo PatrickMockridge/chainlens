@@ -6,13 +6,20 @@ reads, together with a verbatim quote from the post. Two things read it:
 ```console
 chainlens ui derive --claim claim.toml --out derivation.json   # the argument behind one finding
 make verify                                                    # re-run a corpus and check it reproduces
+chainlens ui extract --post post.txt --out claims/             # read a post into records (see
+                                                               # Reading a post with a model)
 ```
+
+A record may be **TOML or JSON**: the keys are the same either way, `.json` is only the file
+extension that changes how it is read. Hand-written records are TOML because it diffs cleanly and a
+person can read it; the records `chainlens ui extract` writes are JSON, because a generated file
+should be the thing the models round-trip exactly.
 
 The format is deliberately the *engine's inputs*: a type, the addresses, the amount as written, the
 window — and no field anywhere that could carry a verdict. The engine is what answers; the record
-only says what to ask. One file per claim, `NNNN-slug.toml`, parsed with the standard library's
-`tomllib`: hand-editable, no dependency, and it returns timezone-aware datetimes directly, which is
-what the models want.
+only says what to ask. One file per claim, `NNNN-slug.toml` (or `.json`, when a tool wrote it),
+parsed with the standard library's `tomllib`: hand-editable, no dependency, and it returns
+timezone-aware datetimes directly, which is what the models want.
 
 ## The file
 

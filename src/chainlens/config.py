@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     glassnode_api_key: SecretStr | None = Field(default=None, validation_alias="GLASSNODE_API_KEY")
     dune_api_key: SecretStr | None = Field(default=None, validation_alias="DUNE_API_KEY")
     nansen_api_key: SecretStr | None = Field(default=None, validation_alias="NANSEN_API_KEY")
+    #: Reading posts with a model. Named here rather than passed in, like every other credential:
+    #: the library's public functions never take a key as a parameter, so there is nowhere for one
+    #: to be logged, committed, or copied into a notebook.
+    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    #: The other way of authenticating: a bearer token, which is what a gateway or a signed-in
+    #: profile supplies. Both are read because both are in use, and a caller with only this one
+    #: should not have to discover that the library wanted the other.
+    anthropic_auth_token: SecretStr | None = Field(
+        default=None, validation_alias="ANTHROPIC_AUTH_TOKEN"
+    )
 
     # --- Behaviour ---
     eth_rpc_url: str = Field(default=_DEFAULT_ETH_RPC_URL, validation_alias="CHAINLENS_ETH_RPC_URL")

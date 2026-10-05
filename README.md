@@ -50,8 +50,14 @@ with chainlens.SyncClient() as client:
 ```console
 chainlens ui serve --seed bc1q... --open      # a browsable graph, on loopback
 chainlens ui export --seed bc1q... --out graph.json
+chainlens ui extract --post post.txt --out claims/     # a post into claim records, with a model
 chainlens ui derive --claim claim.toml --out derivation.json
 ```
+
+`ui extract` reads a post with a model and writes what it asserts as claim records; `ui derive`
+adjudicates one against the chain. The model reports what the post says and never what is true —
+the shape it answers in has no field for a verdict — and a claim whose quote is not in the post is
+dropped rather than repaired. See [Reading a post with a model](docs/explanation/extraction.md).
 
 The app draws the ledger as it was recorded — a node per transaction and a node per
 address, one edge per input and per output — with the evidence the analysis layers
