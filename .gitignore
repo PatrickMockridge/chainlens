@@ -53,3 +53,9 @@ Thumbs.db
 .env.*
 !.env.example
 *.key
+
+# --- Case study corpus ---
+# Full post text and screenshots stay out of the repository: what is committed is
+# a redacted URL, a content hash and a short quote. See case-study/README.md.
+# results/ is deliberately NOT ignored — the generated report is the deliverable.
+case-study/corpus/

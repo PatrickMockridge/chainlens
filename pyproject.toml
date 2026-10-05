@@ -89,6 +89,7 @@ dev = [
   "pre-commit>=4.0",
   "pycoin>=0.92",             # dev-only cross-validation oracle for the BTC codec
   "types-PyYAML>=6.0",        # stubs for parsing cassettes in tests
+  "pyyaml>=6.0",              # the case-study manifest; dev-side only
   "pillow>=11",               # the [social] extra, exercised by the media tests
 ]
 docs = [

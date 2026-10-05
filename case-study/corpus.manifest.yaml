@@ -1,0 +1,40 @@
+# Corpus manifest.
+#
+# Written by tools/capture.py; hand-editing is supported, but the hashes are the
+# point. One entry per captured post, keyed by the filename inside the gitignored
+# corpus/ directory.
+#
+# The manifest is what makes the corpus auditable without shipping it: a reader who
+# obtains the same post can check that the hash matches, and therefore that the
+# verdict they are reading was computed over the same bytes.
+#
+# Every entry carries:
+#
+#   sha256       of the captured file, exactly as stored
+#   url          redacted — the account segment is replaced with <redacted>
+#   captured_at  when we took it, in UTC
+#   form         text | screenshot | url
+#   strength     a chainlens.social.models.ProvenanceStrength value
+#   post_id      the platform's id, when the URL or the capture carried one
+#   bytes        the size of the capture
+#   content_type for a screenshot, the sniffed type
+#   notes        anything a reader needs in order to interpret it
+#
+# A post that was edited or deleted after capture shows up as a hash mismatch when
+# the corpus is re-collected. Record what happened in AMENDMENTS.md.
+#
+# The comments above must stay above the first key: tools/capture.py preserves
+# everything before `entries:` when it rewrites the file, because yaml.safe_dump
+# cannot keep comments of its own.
+entries:
+  0001-text-20261005T122456Z.txt:
+    bytes: 149
+    captured_at: '2026-10-05T12:24:56.346849Z'
+    content_type: text/plain
+    form: text
+    notes: smoke test
+    post_id: '1234567890'
+    sha256: bfef0c3bb727f324eeff441f8483d3cc1e2277e8b1c17fa1e0b846213e286919
+    strength: paste
+    url: https://x.com/<redacted>/status/1234567890
+schema_version: 1

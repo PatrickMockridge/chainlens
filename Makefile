@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check build clean
+.PHONY: help sync lint format typecheck test test-cov check verify case-study-check build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -32,8 +32,8 @@ format:  ## Auto-fix lint and format in place
 	uv run ruff check --fix .
 	uv run ruff format .
 
-typecheck:  ## Typecheck src and tests
-	uv run mypy src tests
+typecheck:  ## Typecheck src, tests, and the case-study tools
+	uv run mypy src tests case-study/tools
 
 test:  ## Run the test suite with the network blocked
 	uv run pytest --block-network
@@ -42,6 +42,14 @@ test-cov:  ## Run tests with coverage, enforcing the CI floor
 	uv run pytest --block-network --cov --cov-report=term-missing --cov-fail-under=90
 
 check: lint typecheck test-cov  ## Everything CI gates on
+
+verify:  ## Re-run every case-study claim record and check the verdicts reproduce
+	# Deliberately not part of `check`: it reaches the network, and it needs the
+	# corpus, which is gitignored. See case-study/README.md.
+	uv run python case-study/tools/verify.py $(ARGS)
+
+case-study-check:  ## The case study's static guardrails, no network needed
+	uv run pytest tests/case_study -q
 
 build:  ## Build wheel and sdist
 	uv build
