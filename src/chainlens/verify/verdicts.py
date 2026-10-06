@@ -43,6 +43,7 @@ from typing import Any, Protocol
 from pydantic import Field
 
 from chainlens.models.base import LensModel, Provenance
+from chainlens.models.calculation import RatioAttempt, UnboundKind
 from chainlens.models.enums import ClaimVerdict
 from chainlens.models.primitives import Transfer
 from chainlens.providers.base import Provider
@@ -180,10 +181,17 @@ class Unpriced:
         reason: what stopped it, phrased for the derivation's ``because`` node, which renders it
             verbatim.
         samples: how many movements the estimator got to look at, when it looked at any.
+        kind: which of the three answers this refusal is. The estimator is the only thing that
+            knows, and the difference is what a reader acts on: a claim with no window wants a
+            window, a provider that cannot list movements wants a different provider, and the
+            population null model wants a reader to stop asking, because no free provider
+            enumerates a network-wide sample. Guessing ``no_data`` for all three would put a
+            limit of the data on the same footing as a limit of the method.
     """
 
     reason: str
     samples: int | None = None
+    kind: UnboundKind = UnboundKind.NO_DATA
 
 
 class CoincidenceEstimator(Protocol):
@@ -221,10 +229,15 @@ class VerificationFinding(LensModel):
         verdict: the categorical finding.
         method: which checker produced it, so a reader can go and read that method.
         reason: the machine-readable explanation, always present when no ratio is
-            reported and always present for the two unanswerable verdicts.
+            reported and always present for the two unanswerable verdicts. **Being
+            retired**: it is derived from :attr:`attempt` while the derivation builder is
+            migrated, and disappears when nothing reads it.
         elements: what was priced, when the claim reduced to something priceable.
         evidence: what the chain showed.
         likelihood: the weight of the evidence, when it could be priced at all.
+        attempt: what a ratio would have rested on, whether or not one was reported. The
+            inputs with their bindings, and the operation with its formula — so a withheld
+            ratio travels as a calculation with a hole in it rather than as a sentence.
         assumptions: what the result rests on, including every convention applied.
         caveats: what would change it.
     """
@@ -240,6 +253,7 @@ class VerificationFinding(LensModel):
     elements: ClaimElements | None = None
     evidence: ClaimEvidence = Field(default_factory=lambda: ClaimEvidence())
     likelihood: LikelihoodRatio | None = None
+    attempt: RatioAttempt | None = None
 
     assumptions: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()

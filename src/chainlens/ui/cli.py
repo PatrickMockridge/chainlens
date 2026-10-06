@@ -120,11 +120,19 @@ async def _verify_for_cli(
     positional arguments only, and the engine would rather have keywords.
 
     The estimator is attached when the provider can supply what one needs — the sender's own
-    movements to count a coincidence rate over — and left off otherwise, because the engine's "no
-    coincidences estimator is configured" reason is the honest one when there is nothing to
-    configure.
+    movements to count a coincidence rate over — and left off otherwise.
+
+    ``estimate_requested`` is passed separately from ``estimator`` because the two ways of having
+    no estimator are not the same fact. ``--no-estimate`` is a caller deciding a document must not
+    change with a sample; a provider that cannot draw one is a gap somebody could close. Both used
+    to reach the engine as the same ``None`` under one sentence, which is only honest about the
+    second.
     """
-    engine = VerificationEngine(provider, estimator=estimator_for(provider) if estimate else None)
+    engine = VerificationEngine(
+        provider,
+        estimator=estimator_for(provider) if estimate else None,
+        estimate_requested=estimate,
+    )
     return await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
 
 

@@ -22,6 +22,14 @@ import pytest
 
 from chainlens.ledger.derive import PRIOR_LIMITATIONS
 from chainlens.models.base import utcnow
+from chainlens.models.calculation import (
+    Binding,
+    BoundDirection,
+    OperationKind,
+    RatioAttempt,
+    SourceKind,
+    UnboundKind,
+)
 from chainlens.models.entities import Label
 from chainlens.models.enums import Chain, ClaimVerdict, EntityKind, LabelSource
 from chainlens.models.primitives import Transaction
@@ -37,6 +45,7 @@ from chainlens.verify.likelihood import (
     ComponentEstimate,
     EstimatorMethod,
     NullModel,
+    formula_for,
     wilson_interval,
 )
 from chainlens.verify.schema import Claim, ClaimType, Extraction
@@ -44,6 +53,7 @@ from chainlens.verify.verdicts import (
     STANDARD_VERIFICATION_LIMITATIONS,
     ClaimEvidence,
     RateEstimate,
+    Unpriced,
     VerificationFinding,
     VerificationReport,
 )
@@ -721,3 +731,143 @@ def test_the_ratio_a_derivation_carries_says_which_case_it_is_under() -> None:
     report = VerificationReport(post_id="p1", provenance_strength=ProvenanceStrength.PASTE)
     assert report.limitations == STANDARD_VERIFICATION_LIMITATIONS
     assert "with the evidence in view" in report.limitations
+
+
+# --------------------------------------------------------------------------- #
+# What a ratio would have rested on, whether or not one was reported
+# --------------------------------------------------------------------------- #
+class TestTheRatioAttempt:
+    @pytest.mark.anyio
+    async def test_a_priced_finding_carries_its_operands_and_its_formula(self) -> None:
+        """Every number a reader could check, and the arithmetic that produced it."""
+        provider = _provider(
+            *[_tx(n, sender=A, recipient=C, sats=n * BTC) for n in range(1, 6)],
+            _tx(9, sender=A, recipient=B, sats=40 * BTC),
+        )
+        finding = await _finding(
+            provider, _claim(addresses=(A, B), amount_text="40 BTC"), estimator=_Estimator()
+        )
+
+        attempt = finding.attempt
+        assert attempt is not None
+        k = attempt.by_name("k")
+        p = attempt.by_name("p")
+        assert k is not None
+        assert p is not None
+        assert k.is_exact
+        assert p.is_exact
+        # Six: the five moves to another address, plus the one the claim is about. The
+        # opportunities are everything the sender did in the window, not the near-misses.
+        assert k.value == 6.0
+        # The exact count travels as a string, for the reason `DetailEntry` gives.
+        assert [(e.key, e.value) for e in k.detail] == [("candidates_considered", "6")]
+        assert k.source is not None
+        assert k.source.kind is SourceKind.COUNTED
+        # The sample's own words, which used to have no home on the artifact at all.
+        assert p.source is not None
+        assert p.source.kind is SourceKind.ESTIMATED
+
+        assert attempt.operation is not None
+        assert attempt.operation.result == finding.likelihood.lr  # type: ignore[union-attr]
+        assert attempt.operation.formula == formula_for(OperationKind.LIKELIHOOD_RATIO)
+        assert attempt.operation.reason is None
+
+    @pytest.mark.anyio
+    async def test_a_truncated_scan_bounds_k_rather_than_leaving_it_out(self) -> None:
+        """A lower bound is a value, and it is the bound that stops the ratio.
+
+        This is the case where an input is present and the answer is still withheld, so the
+        reason has to sit on the operation and name the input — a reader who saw only "no ratio"
+        would have nothing to act on.
+        """
+        provider = _provider(
+            *[_tx(n, sender=A, recipient=C, sats=n * BTC) for n in range(1, 6)],
+            _tx(9, sender=A, recipient=B, sats=40 * BTC),
+        )
+        finding = await _finding(
+            provider,
+            _claim(addresses=(A, B), amount_text="40 BTC"),
+            estimator=_Estimator(),
+            scan_limit=3,
+        )
+
+        assert finding.likelihood is None
+        attempt = finding.attempt
+        assert attempt is not None
+        assert attempt.operation is not None
+        k = attempt.by_name("k")
+        assert k is not None
+        assert k.binding is Binding.BOUND
+        assert k.direction is BoundDirection.LOWER
+        assert attempt.operation.result is None
+        assert "not exhaustive" in (attempt.operation.reason or "")
+
+    @pytest.mark.anyio
+    async def test_the_three_ways_of_having_no_rate_are_three_different_things(self) -> None:
+        """The whole point of the third kind.
+
+        Declining to price, having nothing to price with, and having no way to price are three
+        facts with three remedies, and they used to arrive as one `None` under one sentence. A
+        reader of the artifact can now tell them apart without reading prose.
+        """
+        provider = _provider(
+            *[_tx(n, sender=A, recipient=C, sats=n * BTC) for n in range(1, 4)],
+            _tx(9, sender=A, recipient=B, sats=40 * BTC),
+        )
+        claim = _claim(addresses=(A, B), amount_text="40 BTC")
+
+        declined = await _finding(provider, claim, estimator=None, estimate_requested=False)
+        unset = await _finding(provider, claim, estimator=None)
+        unreachable = await _finding(provider, claim, estimator=_Unreachable())
+
+        kinds = set()
+        for finding in (declined, unset, unreachable):
+            attempt = finding.attempt
+            assert attempt is not None
+            p = attempt.by_name("p")
+            assert p is not None
+            assert p.binding is Binding.UNBOUND
+            kinds.add(p.kind)
+        assert kinds == {
+            UnboundKind.NOT_REQUESTED,
+            UnboundKind.NO_DATA,
+            UnboundKind.NO_METHOD,
+        }
+
+        # And the two that share a kind are still told apart by whose words the reason is in.
+        unset_p = (unset.attempt or RatioAttempt()).by_name("p")
+        unreachable_p = (unreachable.attempt or RatioAttempt()).by_name("p")
+        assert unset_p is not None
+        assert unreachable_p is not None
+        assert "no coincidence estimator is configured" in (unset_p.reason or "")
+        assert "cannot draw" in (unreachable_p.reason or "")
+
+    @pytest.mark.anyio
+    async def test_a_pairing_without_an_estimator_has_no_ratio_and_says_which_input_lacks_one(
+        self,
+    ) -> None:
+        provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+        finding = await _finding(provider, _claim(addresses=(A, B), amount_text="40 BTC"))
+        attempt = finding.attempt
+        assert attempt is not None
+        assert attempt.operation is not None
+        assert finding.likelihood is None
+        assert attempt.operation.result is None
+        assert attempt.operation.reason is not None
+        assert attempt.operation.inputs == ("k", "p")
+
+
+class _Unreachable:
+    """An estimator that can measure nothing at all, in its own words.
+
+    Distinct from :class:`_SilentEstimator`, which has a method and not enough sample: this one
+    says the method does not exist for the model it was asked about, which is the `no_method`
+    answer and the one a reader should stop asking after.
+    """
+
+    async def estimate(self, elements: object, *, provider: object) -> Unpriced:
+        return Unpriced(
+            "no configured provider can draw a population sample, and the population null model "
+            "cannot draw one, so this estimator has no method for it",
+            kind=UnboundKind.NO_METHOD,
+        )

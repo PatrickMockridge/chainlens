@@ -151,14 +151,22 @@ class TestTheDocument:
         assert document.has_ratio is False
         assert "no movements outside the window" in _reason(document)
 
-    def test_no_estimate_leaves_the_engine_without_one(
+    def test_no_estimate_is_reported_as_declined_rather_than_as_missing(
         self, claim_file: Path, tmp_path: Path, wired: None
     ) -> None:
+        """The distinction three causes used to share one sentence under.
+
+        `--no-estimate` means a caller decided this document must not change with a sample.
+        A provider that cannot draw the sample is a gap somebody could close. Both reach the
+        engine as no estimator at all, and this test used to assert the second's wording for
+        the first — which read as a setup problem where there was a decision.
+        """
         out = tmp_path / "derivation.json"
         _derive(claim_file, out, "--no-estimate")
         document = DerivationDocument.model_validate_json(out.read_text(encoding="utf-8"))
         assert document.has_ratio is False
-        assert "no coincidence estimator is configured" in _reason(document)
+        assert "pricing was not asked for" in _reason(document)
+        assert "no coincidence estimator is configured" not in _reason(document)
 
     def test_a_claim_naming_no_window_is_refused_with_a_reason_to_act_on(
         self, tmp_path: Path, wired: None

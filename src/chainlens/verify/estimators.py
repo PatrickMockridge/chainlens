@@ -30,6 +30,7 @@ Three further things are worth stating rather than discovering:
 
 from __future__ import annotations
 
+from chainlens.models.calculation import UnboundKind
 from chainlens.models.primitives import Transfer
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
@@ -76,18 +77,21 @@ class WindowCoincidenceEstimator:
                 f"the {self._null_model.value} null model prices a coincidence against a sample "
                 "wider than any one address's history, and no configured provider can draw one: "
                 "estimating it needs a population-level transfer sample. The ratio is withheld "
-                "rather than computed from a rate this estimator cannot measure"
+                "rather than computed from a rate this estimator cannot measure",
+                kind=UnboundKind.NO_METHOD,
             )
         if elements.window is None:
             return Unpriced(
                 "the claim names no window, so there is no period whose outside could be sampled: "
                 "a coincidence rate measured over the sender's whole history would include the "
-                "very transfers the claim is about. Give the claim a window"
+                "very transfers the claim is about. Give the claim a window",
+                kind=UnboundKind.NO_DATA,
             )
         if not provider.supports(Capability.WINDOW_TRANSFERS):
             return Unpriced(
                 f"provider {provider.name!r} cannot list an address's movements, which is what a "
-                "coincidence rate is counted over; configure one that can"
+                "coincidence rate is counted over; configure one that can",
+                kind=UnboundKind.NO_DATA,
             )
 
         movements = [
@@ -109,6 +113,7 @@ class WindowCoincidenceEstimator:
                 "the sender has no movements outside the window to draw a coincidence rate from, "
                 "so there is nothing to compare the asserted transfer against",
                 samples=0,
+                kind=UnboundKind.NO_DATA,
             )
 
         successes = sum(1 for movement in sample if _coincides(movement, elements))
