@@ -107,9 +107,26 @@ number the ratio cannot support.
 
 A likelihood ratio appears where its preconditions hold: a match was found, the scan was
 exhaustive, `k` is above the selection floor, the coincidence probability can be estimated, and
-the ratio is finite or explicitly unbounded. Otherwise the derivation carries the reason instead —
-and the reason is the estimator's own words, so "the claim names no window" and "the sample is too
-thin" read differently, because the remedy differs.
+the ratio is finite or explicitly unbounded.
+
+**Where they do not hold, the derivation shows the calculation anyway** — the formula, each input
+with where it came from, and the input that stopped it. A reader gets
+
+```
+k = 2,000   counted, and a lower bound: the scan hit its limit
+p — no value   no data: no coincidence estimator is configured
+1 / (1 - (1 - p) ** k) — not computed
+```
+
+rather than a sentence standing where the arithmetic would be. Every input says whether it is
+bound, and where a bound one came from — observed, counted, estimated, this library's convention,
+or supplied by whoever ran it. An unbound one says which of three kinds of missing it is: no method
+here could obtain it, something could and the data was not reachable, or nobody asked. Those read
+differently because the remedies differ, and the derivation says which rather than leaving it to a
+phrasing.
+
+The reason a ratio is withheld is never a summary: it is the estimator's or the engine's own words,
+attached to the input it is about.
 
 The estimator prices one specific coincidence: **one of the sender's other movements
 coincidentally looking like the asserted payment**. That is the `within_sender` null model, and it
