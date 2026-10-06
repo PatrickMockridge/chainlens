@@ -22,6 +22,8 @@ accidentally fall through to the network.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -41,13 +43,76 @@ from chainlens.exceptions import (
     SchemaError,
     TransportError,
 )
+from chainlens.models.base import Provenance, utcnow
 from chainlens.providers.ratelimit import RateLimit, TokenBucket, parse_retry_after
 
-__all__ = ["Transport"]
+__all__ = ["Transport", "last_read_was_cached", "read_provenance"]
 
 _MAX_ATTEMPTS = 5
 _DEFAULT_HEADERS = {"Accept": "application/json"}
 _TRUNCATED_BODY = 200
+
+#: The extension hishel sets on every response it handles. Read rather than inferred: it is the
+#: only thing that separates a cache hit from a fresh read, and the two bodies are identical.
+_FROM_CACHE = "hishel_from_cache"
+
+
+@dataclass(frozen=True, slots=True)
+class _Read:
+    """What the cache did with one request."""
+
+    cached: bool
+    cache_mode: str | None
+
+
+#: The absence of a read. ``cache_mode`` is ``None`` rather than the configured mode, because a
+#: response that arrived from somewhere else cannot say whether a cache was on — only whether one
+#: answered.
+_NO_READ = _Read(cached=False, cache_mode=None)
+
+#: What the most recent request **on this task** did.
+#:
+#: A context variable rather than an attribute on the transport, because one transport serves a
+#: walk's concurrent fetches and an attribute would let one address's cache hit be reported as
+#: another's. Read it immediately after the fetch it describes: it tracks the last read on the task,
+#: not the last read of any particular provider.
+_LAST_READ: ContextVar[_Read] = ContextVar("chainlens_last_read", default=_NO_READ)
+
+
+def last_read_was_cached() -> bool:
+    """Whether the most recent request on this task came from the HTTP cache."""
+    return _LAST_READ.get().cached
+
+
+def read_provenance(provider: str, *, endpoint: str | None = None) -> Provenance:
+    """Where a value that has just been read came from, cache fields included.
+
+    The one place a :class:`Provenance` is built for a finished read, so that the cache fields
+    cannot be set at one call site and forgotten at another — which is exactly how they came to be
+    declared, documented and never written. See :class:`Provenance` for what the two say.
+    """
+    read = _LAST_READ.get()
+    return Provenance(
+        provider=provider,
+        fetched_at=utcnow(),
+        endpoint=endpoint,
+        cached=read.cached,
+        cache_mode=read.cache_mode,
+    )
+
+
+def _read_of(response: httpx.Response, *, mode: str) -> _Read:
+    """Whether hishel served this response from its store, and under which mode.
+
+    The extension is set on every response the cache transport handles — on a miss as well as a hit
+    — so its **absence** means no cache was in play at all: an injected transport in a test, or
+    ``cache=False``. That is not a cache miss, and reporting the configured mode for it would say a
+    cache answered when none was installed.
+    """
+    from_cache = response.extensions.get(_FROM_CACHE)
+    if from_cache is None:
+        return _NO_READ
+    return _Read(cached=bool(from_cache), cache_mode=mode)
 
 
 def _content_length(response: httpx.Response) -> int | None:
@@ -258,6 +323,7 @@ class Transport:
         except httpx.TransportError as exc:
             raise TransportError(self._name, f"connection failed: {exc}") from exc
         self._check_status(response)
+        _LAST_READ.set(_read_of(response, mode=self._settings.cache_mode))
         return response
 
     def _check_status(self, response: httpx.Response) -> None:
@@ -410,6 +476,7 @@ class Transport:
                             f"response exceeded the {max_bytes} byte cap ({url})",
                             limit=max_bytes,
                         )
+                _LAST_READ.set(_read_of(response, mode=self._settings.cache_mode))
                 return bytes(body)
         except httpx.TimeoutException as exc:
             raise TransportError(self._name, f"request timed out: {exc}") from exc

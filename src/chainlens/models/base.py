@@ -47,11 +47,15 @@ class LensModel(BaseModel):
 class Provenance(LensModel):
     """Where a retrieved fact came from.
 
-    ``fetched_at`` is always timezone-aware. ``cached`` and ``cache_mode`` record
-    whether the value came from the HTTP cache and in which mode, so a replay or
-    offline run is never mistaken for a live observation.
+    ``fetched_at`` is always timezone-aware, and it is when *this* value was obtained — the network
+    read, or the cache hit that replayed it. ``cached`` says which of the two, and ``cache_mode``
+    says under which mode of the cache, so a replay or an offline run is never mistaken for a live
+    observation.
     """
 
+    # The two cache fields are written in exactly one place, `transport.read_provenance`. When they
+    # were merely declared, every builder left them at their defaults and a replayed read was
+    # byte-identical to a fresh one — see the tests for the cache-hit path.
     provider: str
     fetched_at: AwareDatetime
 

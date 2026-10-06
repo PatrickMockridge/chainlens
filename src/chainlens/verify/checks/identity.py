@@ -22,9 +22,9 @@ from __future__ import annotations
 
 from chainlens.analysis.engine import ClusteringEngine
 from chainlens.exceptions import CapabilityError
-from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
+from chainlens.providers.transport import read_provenance
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
 from chainlens.verify.verdicts import ClaimEvidence
 
@@ -77,7 +77,7 @@ async def check_identity(context: CheckContext) -> CheckOutcome:
     evidence = ClaimEvidence(
         provider=provider.name,
         endpoint="cluster",
-        provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+        provenance=(read_provenance(provider.name),),
         warnings=tuple(result.warnings),
         detail={
             "seed": subject,

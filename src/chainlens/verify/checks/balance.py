@@ -15,9 +15,9 @@ measurement height attached, because the claim may simply be older than the chec
 from __future__ import annotations
 
 from chainlens.exceptions import NotFoundError
-from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
+from chainlens.providers.transport import read_provenance
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
 from chainlens.verify.verdicts import ClaimEvidence
 
@@ -76,7 +76,7 @@ async def check_balance(context: CheckContext) -> CheckOutcome:
     evidence = ClaimEvidence(
         provider=provider.name,
         endpoint="get_balance",
-        provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+        provenance=(read_provenance(provider.name),),
         detail=measured_at,
     )
 

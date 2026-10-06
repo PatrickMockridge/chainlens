@@ -64,3 +64,11 @@ and conditional revalidation work as the providers intend. The cache lives under
 Offline mode is enforced by a transport that refuses to reach the network, placed
 *beneath* the cache. It cannot fall through to a live request by accident, which
 makes it safe for reproducible analysis and for tests.
+
+**Every read says which it was.** A value that comes back carries a `Provenance`
+naming the provider, the endpoint, and when the value was obtained — plus `cached`
+and `cache_mode`, because a replay and a fresh read return the same bytes and
+nothing else in the document distinguishes them. So a graph or a finding built
+from disk says so, and an offline run is never mistaken for a live observation.
+`cache_mode` is empty where no cache was in play at all, which is not the same as a
+cache miss.

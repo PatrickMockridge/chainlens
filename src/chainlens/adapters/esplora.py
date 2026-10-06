@@ -30,7 +30,7 @@ from urllib.parse import quote
 
 from chainlens.codec.btc_script import classify_script
 from chainlens.exceptions import SchemaError
-from chainlens.models.base import Provenance, utcnow
+from chainlens.models.base import Provenance
 from chainlens.models.enums import Chain, FlowVia, ScriptType, TxStatus
 from chainlens.models.primitives import (
     Address,
@@ -45,7 +45,7 @@ from chainlens.models.primitives import (
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import Capability, provides
 from chainlens.providers.ratelimit import RateLimit
-from chainlens.providers.transport import Transport
+from chainlens.providers.transport import Transport, read_provenance
 
 __all__ = ["EsploraProvider", "mempool_space_rate_limit"]
 
@@ -139,11 +139,7 @@ class EsploraProvider(BaseProvider):
     # -- helpers -------------------------------------------------------------
 
     def _provenance(self, endpoint: str) -> Provenance:
-        return Provenance(
-            provider=self.name,
-            fetched_at=utcnow(),
-            endpoint=f"{self.base_url.rstrip('/')}/{endpoint}",
-        )
+        return read_provenance(self.name, endpoint=f"{self.base_url.rstrip('/')}/{endpoint}")
 
     def _native_asset(self) -> AssetRef:
         return AssetRef.native(self.chain, symbol="BTC", decimals=_BTC_DECIMALS)

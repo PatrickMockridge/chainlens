@@ -37,13 +37,13 @@ from chainlens.adapters._evm import (
 from chainlens.codec.eth_address import normalize_address
 from chainlens.config import Settings
 from chainlens.exceptions import NotFoundError, ProviderError, SchemaError
-from chainlens.models.base import Provenance, utcnow
+from chainlens.models.base import Provenance
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import Address, AssetRef, Balance, Block, Transaction, Transfer
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import Capability, provides
 from chainlens.providers.ratelimit import RateLimit
-from chainlens.providers.transport import Transport
+from chainlens.providers.transport import Transport, read_provenance
 
 __all__ = ["JsonRpcEthProvider"]
 
@@ -96,11 +96,7 @@ class JsonRpcEthProvider(BaseProvider):
     # -- plumbing ------------------------------------------------------------
 
     def _provenance(self, endpoint: str) -> Provenance:
-        return Provenance(
-            provider=self.name,
-            fetched_at=utcnow(),
-            endpoint=f"{self.rpc_url}#{endpoint}",
-        )
+        return read_provenance(self.name, endpoint=f"{self.rpc_url}#{endpoint}")
 
     def _native_asset(self) -> AssetRef:
         return AssetRef.native(self.chain, symbol="ETH", decimals=WEI_DECIMALS)

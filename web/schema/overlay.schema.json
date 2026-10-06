@@ -228,7 +228,7 @@
     },
     "Provenance": {
       "additionalProperties": false,
-      "description": "Where a retrieved fact came from.\n\n``fetched_at`` is always timezone-aware. ``cached`` and ``cache_mode`` record\nwhether the value came from the HTTP cache and in which mode, so a replay or\noffline run is never mistaken for a live observation.",
+      "description": "Where a retrieved fact came from.\n\n``fetched_at`` is always timezone-aware, and it is when *this* value was obtained \u2014 the network\nread, or the cache hit that replayed it. ``cached`` says which of the two, and ``cache_mode``\nsays under which mode of the cache, so a replay or an offline run is never mistaken for a live\nobservation.",
       "properties": {
         "cache_mode": {
           "anyOf": [

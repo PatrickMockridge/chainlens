@@ -18,9 +18,9 @@ from __future__ import annotations
 import re
 
 from chainlens.exceptions import NotFoundError
-from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
+from chainlens.providers.transport import read_provenance
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
 from chainlens.verify.verdicts import ClaimEvidence
 
@@ -89,7 +89,7 @@ async def check_tx_exists(context: CheckContext) -> CheckOutcome:
             evidence=ClaimEvidence(
                 provider=provider.name,
                 endpoint="get_transaction",
-                provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+                provenance=(read_provenance(provider.name),),
                 detail={"txid": txid},
             ),
             reason=f"provider {provider.name!r} has no transaction with this id",
@@ -106,7 +106,7 @@ async def check_tx_exists(context: CheckContext) -> CheckOutcome:
             provider=provider.name,
             endpoint="get_transaction",
             txids=(transaction.txid,),
-            provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+            provenance=(read_provenance(provider.name),),
             detail={
                 "status": transaction.status.value,
                 "block_height": transaction.block_height,

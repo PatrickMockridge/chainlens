@@ -24,9 +24,9 @@ attribution from a provider and one from our own heuristics are not the same cla
 
 from __future__ import annotations
 
-from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import ClaimVerdict, LabelSource
 from chainlens.providers.capabilities import Capability
+from chainlens.providers.transport import read_provenance
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
 from chainlens.verify.verdicts import ClaimEvidence
 
@@ -71,7 +71,7 @@ async def check_label(context: CheckContext) -> CheckOutcome:
     evidence = ClaimEvidence(
         provider=provider.name,
         endpoint="get_labels",
-        provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+        provenance=(read_provenance(provider.name),),
         detail={
             "address": subject,
             "asserted_label": asserted,

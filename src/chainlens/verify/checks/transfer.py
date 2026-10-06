@@ -24,12 +24,12 @@ verdict stands on its own and the engine refuses the number.
 from __future__ import annotations
 
 from chainlens.exceptions import NotFoundError
-from chainlens.models.base import Provenance, utcnow
 from chainlens.models.enums import ChainModel, ClaimVerdict, FlowVia
 from chainlens.models.flows import transfers_from_transaction
 from chainlens.models.primitives import AssetRef, Transaction, Transfer
 from chainlens.models.wire import as_edge_ref
 from chainlens.providers.capabilities import Capability
+from chainlens.providers.transport import read_provenance
 from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome, drain
 from chainlens.verify.claims import ClaimElements
 from chainlens.verify.verdicts import ClaimEvidence
@@ -232,7 +232,7 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
             evidence=ClaimEvidence(
                 provider=provider.name,
                 endpoint="get_address_transactions",
-                provenance=(Provenance(provider=provider.name, fetched_at=utcnow()),),
+                provenance=(read_provenance(provider.name),),
             ),
             reason=(
                 f"provider {provider.name!r} has no record of the address, so what the "
@@ -252,7 +252,7 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
     movements, apportioned = _movements(in_window, elements)
     matches = _matching(movements, context)
 
-    provenance = (Provenance(provider=provider.name, fetched_at=utcnow(), endpoint="address"),)
+    provenance = (read_provenance(provider.name, endpoint="address"),)
     shared = ClaimEvidence(
         provider=provider.name,
         endpoint="get_address_transactions",

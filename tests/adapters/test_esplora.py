@@ -9,14 +9,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from hishel import AsyncSqliteStorage
+from hishel.httpx import AsyncCacheTransport
 
 from chainlens.adapters.blockstream import BlockstreamProvider
 from chainlens.adapters.esplora import EsploraProvider
 from chainlens.adapters.mempool_space import MempoolSpaceProvider
+from chainlens.config import Settings
 from chainlens.exceptions import NotFoundError
 from chainlens.models.enums import Chain, ChainModel, ScriptType, TxStatus
 from chainlens.providers.registry import ProviderRegistry
@@ -442,3 +446,55 @@ def test_default_provider_for_bitcoin_is_a_free_one() -> None:
     registry = ProviderRegistry(discover=True)
     chosen = registry.default_for(Chain.BITCOIN, Capability.TX)
     assert chosen.name == "esplora-mempool"
+
+
+# --------------------------------------------------------------------------- #
+# What the adapter says about a read
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_a_replayed_read_is_marked_as_one_on_the_provenance(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The adapter's own half of the cache promise.
+
+    ``Provenance`` documents ``cached`` and ``cache_mode`` so that "a replay or offline run is never
+    mistaken for a live observation", and for a while every builder left both at their defaults — so
+    a replayed read was byte-identical to a fresh one. The transport tests pin the signal; this pins
+    that the adapter asks for it, which is the half a revert would break.
+    """
+    monkeypatch.setenv("CHAINLENS_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("CHAINLENS_CACHE_MODE", "live")
+    base_url = "https://esplora.test/api"
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(200, json=_tx_payload(), headers={"Cache-Control": "max-age=3600"})
+
+    provider = EsploraProvider(
+        base_url=base_url,
+        transport=Transport(
+            provider_name="esplora-provenance",
+            base_url=base_url,
+            settings=Settings(),
+            transport=AsyncCacheTransport(
+                next_transport=httpx.MockTransport(handler),
+                storage=AsyncSqliteStorage(
+                    database_path=str(tmp_path / "esplora-provenance.sqlite")
+                ),
+            ),
+            cache=False,
+        ),
+    )
+
+    fresh = await provider.get_transaction("aa" * 32)
+    assert fresh.provenance is not None
+    assert fresh.provenance.cached is False
+    assert fresh.provenance.cache_mode == "live"
+
+    replayed = await provider.get_transaction("aa" * 32)
+    assert replayed.provenance is not None
+    assert replayed.provenance.cached is True
+    assert replayed.provenance.cache_mode == "live"
+    assert len(calls) == 1, "the second read went to the network; it was not a cache hit"
+    await provider.aclose()

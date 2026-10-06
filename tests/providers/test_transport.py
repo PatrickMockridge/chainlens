@@ -12,6 +12,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from hishel import AsyncSqliteStorage
+from hishel.httpx import AsyncCacheTransport
 
 from chainlens.config import Settings
 from chainlens.exceptions import (
@@ -24,7 +26,7 @@ from chainlens.exceptions import (
     TransportError,
 )
 from chainlens.providers.ratelimit import RateLimit
-from chainlens.providers.transport import Transport
+from chainlens.providers.transport import Transport, read_provenance
 
 
 def _transport(
@@ -439,3 +441,114 @@ def test_settings_offline_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
 
     monkeypatch.setenv("CHAINLENS_CACHE_MODE", "live")
     assert not Settings().is_offline
+
+
+# --------------------------------------------------------------------------- #
+# What a read did, as the provenance records it
+# --------------------------------------------------------------------------- #
+def _cached(
+    handler: Callable[[httpx.Request], httpx.Response],
+    tmp_path: Path,
+    *,
+    settings: Settings,
+    name: str = "cached",
+) -> Transport:
+    """A transport with a **real** hishel cache over a mock network.
+
+    The cache transport is built here rather than by ``Transport``, because passing an injected
+    transport is exactly what turns the built-in cache off — and a cache that was never installed is
+    the one case these tests are not about. ``AsyncCacheTransport`` is the same one ``Transport``
+    installs, so the hit signal is the real one rather than a stand-in.
+    """
+    return Transport(
+        provider_name=name,
+        base_url="https://example.com/api",
+        settings=settings,
+        transport=AsyncCacheTransport(
+            next_transport=httpx.MockTransport(handler),
+            storage=AsyncSqliteStorage(database_path=str(tmp_path / f"{name}.sqlite")),
+        ),
+        cache=False,
+        max_attempts=1,
+    )
+
+
+def _counted(responses: list[dict[str, int]]) -> Callable[[httpx.Request], httpx.Response]:
+    """A handler that counts its calls and answers with a cacheable body."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        responses.append({"n": len(responses)})
+        return httpx.Response(
+            200,
+            json={"n": len(responses)},
+            headers={"Cache-Control": "max-age=3600"},
+        )
+
+    return handler
+
+
+@pytest.mark.anyio
+async def test_a_miss_is_a_live_read_and_a_hit_says_it_replayed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The promise ``Provenance`` makes, and the reason these fields exist.
+
+    Both bodies are identical, so nothing but the cache's own signal can tell the two reads apart —
+    which is why the assertion is on the *upstream* call count as well as on the flag. A flag that
+    said "replay" while the network was hit again would be the same lie in the other direction.
+    """
+    monkeypatch.setenv("CHAINLENS_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("CHAINLENS_CACHE_MODE", "live")
+    settings = Settings()
+    calls: list[dict[str, int]] = []
+    transport = _cached(_counted(calls), tmp_path, settings=settings)
+
+    assert await transport.get_json("tx/1") == {"n": 1}
+    fresh = read_provenance("test", endpoint="tx/1")
+    assert fresh.cached is False
+    assert fresh.cache_mode == "live"
+    assert fresh.fetched_at.tzinfo is not None
+
+    assert await transport.get_json("tx/1") == {"n": 1}
+    replayed = read_provenance("test", endpoint="tx/1")
+    assert replayed.cached is True
+    assert replayed.cache_mode == "live"
+    assert len(calls) == 1, "the second read went to the network; it was not a cache hit"
+    await transport.aclose()
+
+
+@pytest.mark.anyio
+async def test_an_offline_replay_is_not_reported_as_a_live_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The case the field was added for: a replay must not look like a fresh observation."""
+    monkeypatch.setenv("CHAINLENS_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("CHAINLENS_CACHE_MODE", "live")
+    calls: list[dict[str, int]] = []
+    handler = _counted(calls)
+
+    live = _cached(handler, tmp_path, settings=Settings())
+    await live.get_json("tx/1")
+    await live.aclose()
+
+    monkeypatch.setenv("CHAINLENS_CACHE_MODE", "offline")
+    offline = _cached(handler, tmp_path, settings=Settings())
+    assert await offline.get_json("tx/1") == {"n": 1}
+    read = read_provenance("test")
+    assert read.cached is True
+    assert read.cache_mode == "offline"
+    assert len(calls) == 1, "the offline run reached the network"
+    await offline.aclose()
+
+
+@pytest.mark.anyio
+async def test_a_read_with_no_cache_in_play_reports_no_mode() -> None:
+    """An injected transport is not a cache miss, and saying "live" would name a cache that is not
+    there. This is also the in-memory provider's case, and the reason a test's provenance carries
+    the same fields it did before these were set."""
+    transport = _transport(lambda request: httpx.Response(200, json={}))
+    await transport.get_json("tx/1")
+    read = read_provenance("test")
+    assert read.cached is False
+    assert read.cache_mode is None
+    await transport.aclose()

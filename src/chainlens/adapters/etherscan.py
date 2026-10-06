@@ -39,7 +39,7 @@ from chainlens.exceptions import (
     RateLimitError,
     SchemaError,
 )
-from chainlens.models.base import Provenance, utcnow
+from chainlens.models.base import Provenance
 from chainlens.models.enums import AssetKind, Chain, FlowVia, TxStatus
 from chainlens.models.primitives import (
     Address,
@@ -52,7 +52,7 @@ from chainlens.models.primitives import (
 from chainlens.providers.base import BaseProvider
 from chainlens.providers.capabilities import Capability, provides
 from chainlens.providers.ratelimit import RateLimit
-from chainlens.providers.transport import Transport
+from chainlens.providers.transport import Transport, read_provenance
 
 __all__ = ["EtherscanProvider"]
 
@@ -158,10 +158,8 @@ class EtherscanProvider(BaseProvider):
     # -- plumbing ------------------------------------------------------------
 
     def _provenance(self, endpoint: str) -> Provenance:
-        return Provenance(
-            provider=self.name,
-            fetched_at=utcnow(),
-            endpoint=f"{self.base_url}api#{self._chain_id}/{endpoint}",
+        return read_provenance(
+            self.name, endpoint=f"{self.base_url}api#{self._chain_id}/{endpoint}"
         )
 
     async def _call(self, module: str, action: str, **params: Any) -> Any:
