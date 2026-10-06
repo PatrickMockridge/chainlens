@@ -214,19 +214,96 @@
                 "children": [],
                 "detail": [
                   {
-                    "key": "reason",
-                    "kind": "string",
+                    "key": "candidates_considered",
+                    "kind": "int",
                     "unit": null,
-                    "value": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate"
+                    "value": "5"
                   }
                 ],
                 "graph_refs": [],
-                "id": "claim:b6da67668bf55249/because",
-                "input": null,
-                "kind": "because",
-                "label": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
+                "id": "claim:b6da67668bf55249/quantity/k",
+                "input": {
+                  "binding": "bound",
+                  "detail": [
+                    {
+                      "key": "candidates_considered",
+                      "kind": "int",
+                      "unit": null,
+                      "value": "5"
+                    }
+                  ],
+                  "direction": "point",
+                  "kind": null,
+                  "label": "opportunities for a coincidence",
+                  "name": "k",
+                  "reason": null,
+                  "source": {
+                    "kind": "counted",
+                    "text": "the sender's movements inside the claim's window"
+                  },
+                  "unit": "movements",
+                  "value": 5.0
+                },
+                "kind": "quantity_k",
+                "label": "k = 5",
                 "operation": null,
-                "summary": "the engine's own wording, reproduced rather than paraphrased \u2014 the refusal reasons are specific and substituting a summary would lose the distinction between them",
+                "summary": "the sender's movements inside the claim's window",
+                "unit": "movements",
+                "value": 5.0
+              },
+              {
+                "band": null,
+                "children": [],
+                "detail": [],
+                "graph_refs": [],
+                "id": "claim:b6da67668bf55249/quantity/p",
+                "input": {
+                  "binding": "unbound",
+                  "detail": [],
+                  "direction": "point",
+                  "kind": "no_data",
+                  "label": "chance of a coincidental match",
+                  "name": "p",
+                  "reason": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
+                  "source": null,
+                  "unit": null,
+                  "value": null
+                },
+                "kind": "quantity_p",
+                "label": "p \u2014 no value",
+                "operation": null,
+                "summary": "no data: no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
+                "unit": null,
+                "value": null
+              },
+              {
+                "band": null,
+                "children": [],
+                "detail": [
+                  {
+                    "key": "formula",
+                    "kind": "string",
+                    "unit": null,
+                    "value": "1 / (1 - (1 - p) ** k)"
+                  }
+                ],
+                "graph_refs": [],
+                "id": "claim:b6da67668bf55249/ratio",
+                "input": null,
+                "kind": "likelihood_ratio",
+                "label": "1 / (1 - (1 - p) ** k) \u2014 not computed",
+                "operation": {
+                  "direction": "point",
+                  "formula": "1 / (1 - (1 - p) ** k)",
+                  "inputs": [
+                    "k",
+                    "p"
+                  ],
+                  "kind": "likelihood_ratio",
+                  "reason": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
+                  "result": null
+                },
+                "summary": "no coincidence estimator is configured, so the probability of a chance match cannot be estimated from data; the ratio is withheld rather than computed from an assumed rate",
                 "unit": null,
                 "value": null
               }
@@ -732,7 +809,28 @@
             ],
             "graph_refs": [],
             "id": "claim/quantity/k",
-            "input": null,
+            "input": {
+              "binding": "bound",
+              "detail": [
+                {
+                  "key": "candidates_considered",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "5"
+                }
+              ],
+              "direction": "point",
+              "kind": null,
+              "label": "opportunities for a coincidence",
+              "name": "k",
+              "reason": null,
+              "source": {
+                "kind": "counted",
+                "text": "the sender's movements inside the claim's window"
+              },
+              "unit": "movements",
+              "value": 5.0
+            },
             "kind": "quantity_k",
             "label": "k = 5 opportunities",
             "operation": null,
@@ -813,7 +911,58 @@
             ],
             "graph_refs": [],
             "id": "claim/quantity/p",
-            "input": null,
+            "input": {
+              "binding": "bound",
+              "detail": [
+                {
+                  "key": "ci_lower",
+                  "kind": "float",
+                  "unit": null,
+                  "value": 3.4009593858307005e-05
+                },
+                {
+                  "key": "ci_upper",
+                  "kind": "float",
+                  "unit": null,
+                  "value": 0.00029399703269986923
+                },
+                {
+                  "key": "method",
+                  "kind": "string",
+                  "unit": null,
+                  "value": "empirical_joint"
+                },
+                {
+                  "key": "null_model",
+                  "kind": "string",
+                  "unit": null,
+                  "value": "within_sender"
+                },
+                {
+                  "key": "successes",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "3"
+                },
+                {
+                  "key": "trials",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "30000"
+                }
+              ],
+              "direction": "point",
+              "kind": null,
+              "label": "chance of a coincidental match",
+              "name": "p",
+              "reason": null,
+              "source": {
+                "kind": "estimated",
+                "text": "the sender's own out-of-window transfers"
+              },
+              "unit": null,
+              "value": 0.000105
+            },
             "kind": "quantity_p",
             "label": "p = 0.000105",
             "operation": null,
@@ -1173,7 +1322,17 @@
             "input": null,
             "kind": "likelihood_ratio",
             "label": "LR = 1905.16",
-            "operation": null,
+            "operation": {
+              "direction": "point",
+              "formula": "1 / (1 - (1 - p) ** k)",
+              "inputs": [
+                "k",
+                "p"
+              ],
+              "kind": "likelihood_ratio",
+              "reason": null,
+              "result": 1905.1619467641099
+            },
             "summary": "a weight, not a probability: it says how much more likely the finding is under one proposition than the other",
             "unit": null,
             "value": 1905.1619467641099
@@ -1655,7 +1814,28 @@
             ],
             "graph_refs": [],
             "id": "claim/quantity/k",
-            "input": null,
+            "input": {
+              "binding": "bound",
+              "detail": [
+                {
+                  "key": "candidates_considered",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "5"
+                }
+              ],
+              "direction": "point",
+              "kind": null,
+              "label": "opportunities for a coincidence",
+              "name": "k",
+              "reason": null,
+              "source": {
+                "kind": "counted",
+                "text": "the sender's movements inside the claim's window"
+              },
+              "unit": "movements",
+              "value": 5.0
+            },
             "kind": "quantity_k",
             "label": "k = 5 opportunities",
             "operation": null,
@@ -1736,7 +1916,58 @@
             ],
             "graph_refs": [],
             "id": "claim/quantity/p",
-            "input": null,
+            "input": {
+              "binding": "bound",
+              "detail": [
+                {
+                  "key": "ci_lower",
+                  "kind": "float",
+                  "unit": null,
+                  "value": 3.4009593858307005e-05
+                },
+                {
+                  "key": "ci_upper",
+                  "kind": "float",
+                  "unit": null,
+                  "value": 0.00029399703269986923
+                },
+                {
+                  "key": "method",
+                  "kind": "string",
+                  "unit": null,
+                  "value": "empirical_joint"
+                },
+                {
+                  "key": "null_model",
+                  "kind": "string",
+                  "unit": null,
+                  "value": "within_sender"
+                },
+                {
+                  "key": "successes",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "3"
+                },
+                {
+                  "key": "trials",
+                  "kind": "int",
+                  "unit": null,
+                  "value": "30000"
+                }
+              ],
+              "direction": "point",
+              "kind": null,
+              "label": "chance of a coincidental match",
+              "name": "p",
+              "reason": null,
+              "source": {
+                "kind": "estimated",
+                "text": "the sender's own out-of-window transfers"
+              },
+              "unit": null,
+              "value": 0.000105
+            },
             "kind": "quantity_p",
             "label": "p = 0.000105",
             "operation": null,
@@ -2096,7 +2327,17 @@
             "input": null,
             "kind": "likelihood_ratio",
             "label": "LR = 1905.16",
-            "operation": null,
+            "operation": {
+              "direction": "point",
+              "formula": "1 / (1 - (1 - p) ** k)",
+              "inputs": [
+                "k",
+                "p"
+              ],
+              "kind": "likelihood_ratio",
+              "reason": null,
+              "result": 1905.1619467641099
+            },
             "summary": "a weight, not a probability: it says how much more likely the finding is under one proposition than the other",
             "unit": null,
             "value": 1905.1619467641099

@@ -18,7 +18,12 @@
 import { z } from "zod";
 
 import { AnnotationRequestDocumentSchema } from "./annotation_request.gen";
-import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
+import {
+  DerivationDocumentSchema,
+  DerivationNodeSchema,
+  InputSchema,
+  OperationSchema,
+} from "./derivation.gen";
 import { AnnotationSchema, LedgerDocumentSchema, LedgerEdgeSchema } from "./ledger.gen";
 import { NarrativeDocumentSchema } from "./narrative.gen";
 import { EvidenceItemSchema, GraphRefSchema, OverlayDocumentSchema } from "./overlay.gen";
@@ -64,6 +69,14 @@ export interface DerivationNode {
    * because a structural match is all TypeScript checks.
    */
   graph_refs?: GraphRef[];
+  /**
+   * The input this step *is*, when it is one of the values a calculation rests on. Taken from the
+   * generated schema rather than restated here, for the same reason `graph_refs` is: a second
+   * hand-written shape is one that can drift silently.
+   */
+  input?: z.infer<typeof InputSchema> | null;
+  /** The arithmetic, when this step is a number that was computed — whether or not it produced one. */
+  operation?: z.infer<typeof OperationSchema> | null;
   children?: DerivationNode[];
 }
 

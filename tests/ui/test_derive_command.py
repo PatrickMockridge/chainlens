@@ -85,7 +85,16 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _reason(document: DerivationDocument) -> str:
-    """The engine's own reason for reporting no ratio, out of the derivation's `because`."""
+    """Why no ratio was reported, out of whichever node now carries it.
+
+    Two shapes, because two things withhold a number. A finding whose arithmetic was attempted
+    carries the reason on the operation, beside the formula it could not finish. A contradicted
+    finding attempted nothing — the ratio is unavailable in principle, not withheld — and keeps
+    the ``because`` node with the verdict's own wording.
+    """
+    for node in document.root.walk():
+        if node.operation is not None and node.operation.reason is not None:
+            return node.operation.reason
     reasons = [
         str(detail.value)
         for node in document.root.walk()

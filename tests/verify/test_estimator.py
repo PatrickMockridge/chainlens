@@ -23,6 +23,7 @@ import pytest
 
 from chainlens.ledger.derive import derive_finding
 from chainlens.models.base import utcnow
+from chainlens.models.calculation import OperationKind
 from chainlens.models.enums import Chain, ClaimVerdict
 from chainlens.models.primitives import AssetRef, Transaction
 from chainlens.providers.capabilities import Capability
@@ -32,7 +33,7 @@ from chainlens.testing.in_memory import InMemoryProvider
 from chainlens.verify.claims import ActivityWindow, AmountBand, ClaimElements
 from chainlens.verify.engine import VerificationEngine
 from chainlens.verify.estimators import WindowCoincidenceEstimator, estimator_for
-from chainlens.verify.likelihood import NullModel
+from chainlens.verify.likelihood import NullModel, formula_for
 from chainlens.verify.schema import Claim, ClaimType, Extraction
 from chainlens.verify.verdicts import RateEstimate, Unpriced
 
@@ -244,8 +245,14 @@ class TestWhatTheEngineDoesWithIt:
         assert detail["lr"] is not None or detail["lr_at_least"] is True
 
     @pytest.mark.anyio
-    async def test_a_refusal_reaches_the_derivations_because_node(self) -> None:
-        """The reason is the estimator's own words, not a generic sentence about thinness."""
+    async def test_a_refusal_reaches_the_derivations_withheld_operation(self) -> None:
+        """The reason is the estimator's own words, not a generic sentence about thinness.
+
+        It arrives on the operation now — beside the formula that was not finished and the
+        input that stopped it — rather than on a ``because`` node standing where a calculation
+        would have been. The assertion is the one it always was: whatever the estimator said,
+        the artifact says, verbatim.
+        """
         provider = _provider(_payment("tx_match", when=SEPTEMBER), _payment("tx1", when=JUNE))
         engine = VerificationEngine(
             provider, estimator=WindowCoincidenceEstimator(null_model=NullModel.POPULATION)
@@ -254,14 +261,11 @@ class TestWhatTheEngineDoesWithIt:
         document = derive_finding(report.findings[0])
 
         assert document.has_ratio is False
-        reasons = [
-            entry.value
-            for node in document.root.walk()
-            for entry in node.detail
-            if entry.key == "reason"
-        ]
-        assert reasons, "a finding with no ratio must say why"
-        assert "population" in str(reasons[0])
+        operations = [node.operation for node in document.root.walk() if node.operation is not None]
+        assert operations, "a finding with no ratio must show the calculation it did not finish"
+        assert "population" in (operations[0].reason or "")
+        # And the formula travels with the reason, which is what makes the hole a hole.
+        assert operations[0].formula == formula_for(OperationKind.LIKELIHOOD_RATIO)
 
     @pytest.mark.anyio
     async def test_a_tolerance_sweep_never_prices_a_variant_the_estimator_refuses(self) -> None:

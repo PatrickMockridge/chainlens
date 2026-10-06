@@ -13,6 +13,7 @@ import pytest
 
 from chainlens.ledger.derive import PRIOR_LIMITATIONS, claim_id, derive_finding
 from chainlens.models.base import utcnow
+from chainlens.models.calculation import Binding, OperationKind, SourceKind, UnboundKind
 from chainlens.models.derive import DerivationDocument, DerivationKind, DerivationNode
 from chainlens.models.enums import Chain, ClaimVerdict, VerbalScale
 from chainlens.models.wire import GraphRefKind
@@ -26,6 +27,7 @@ from chainlens.verify.likelihood import (
     ComponentEstimate,
     EstimatorMethod,
     NullModel,
+    formula_for,
     wilson_interval,
 )
 from chainlens.verify.schema import Claim, ClaimType, Extraction
@@ -121,11 +123,15 @@ def _kinds(document: DerivationDocument) -> dict[DerivationKind, list[Derivation
 # The shape without a ratio — the normal case today
 # --------------------------------------------------------------------------- #
 @pytest.mark.anyio
-async def test_the_no_ratio_tree_is_short_rather_than_full_of_holes() -> None:
-    """No hypothesised pair is drawn, because with no ratio there are none.
+async def test_the_no_ratio_tree_shows_the_calculation_and_its_hole() -> None:
+    """No hypothesised pair, and the arithmetic drawn anyway.
 
-    Drawing first/alternative above an empty ratio node is exactly the shape that looks
-    broken, and while no estimator ships it would be the shape of almost every finding.
+    This used to be the *short* tree — verdict, evidence, and a sentence where the
+    calculation would be — on the grounds that first/alternative propositions above an empty
+    ratio node look broken. The propositions still are not drawn, because with no number there
+    is nothing for them to compete over. What changed is that the calculation is: a reader gets
+    the formula, the input the finding did obtain and the input it did not, and can see where
+    the hole is instead of being told there is one.
     """
     finding = await _finding()
     assert finding.likelihood is None
@@ -133,11 +139,44 @@ async def test_the_no_ratio_tree_is_short_rather_than_full_of_holes() -> None:
     document = derive_finding(finding)
     kinds = set(_kinds(document))
 
-    assert DerivationKind.BECAUSE in kinds
     assert DerivationKind.VERDICT in kinds
     assert DerivationKind.PROPOSITION not in kinds
-    assert DerivationKind.LIKELIHOOD_RATIO not in kinds
     assert not document.has_ratio
+
+    # The ratio node is present and empty rather than absent, and it carries the operation
+    # that did not finish rather than a sentence standing in for one.
+    ratios = [node for node in document.root.walk() if node.kind is DerivationKind.LIKELIHOOD_RATIO]
+    assert len(ratios) == 1
+    assert ratios[0].value is None
+    assert ratios[0].operation is not None
+    assert ratios[0].operation.reason
+    assert ratios[0].operation.formula == formula_for(OperationKind.LIKELIHOOD_RATIO)
+    # And the reason is no longer a node of its own, which is the shape this replaces.
+    assert DerivationKind.BECAUSE not in kinds
+
+
+@pytest.mark.anyio
+async def test_the_inputs_the_calculation_rests_on_are_drawn_with_their_bindings() -> None:
+    """What each input is and where it came from, on the nodes rather than in a caveat.
+
+    ``k`` was counted and ``p`` was not obtained at all, and the two nodes say so in a form a
+    machine can read — which is the difference between a reader seeing a number and a reader
+    seeing a number they can check.
+    """
+    document = derive_finding(await _finding())
+    nodes = {node.kind: node for node in document.root.walk()}
+
+    counted = nodes[DerivationKind.QUANTITY_K]
+    assert counted.input is not None
+    assert counted.input.binding is Binding.BOUND
+    assert counted.input.source is not None
+    assert counted.input.source.kind is SourceKind.COUNTED
+
+    unbound = nodes[DerivationKind.QUANTITY_P]
+    assert unbound.input is not None
+    assert unbound.input.binding is Binding.UNBOUND
+    assert unbound.input.kind is UnboundKind.NO_DATA
+    assert unbound.input.reason
 
 
 @pytest.mark.anyio
@@ -153,17 +192,23 @@ async def test_the_refusal_reason_is_reproduced_verbatim() -> None:
     assert finding.reason
 
     document = derive_finding(finding)
-    because = _kinds(document)[DerivationKind.BECAUSE][0]
-    assert because.label == finding.reason
-    assert {entry.key: entry.value for entry in because.detail}["reason"] == finding.reason
+    operations = [node.operation for node in document.root.walk() if node.operation is not None]
+    assert operations, "a finding with no ratio must carry the operation it did not finish"
+    assert operations[0].reason == finding.reason
 
 
 @pytest.mark.anyio
-async def test_the_verdict_holds_the_evidence_and_the_reason() -> None:
+async def test_the_verdict_holds_the_evidence_and_the_calculation() -> None:
+    """Everything beneath the verdict: what the chain showed, and what was done with it."""
     document = derive_finding(await _finding())
     verdict = _kinds(document)[DerivationKind.VERDICT][0]
     child_kinds = {child.kind for child in verdict.children}
-    assert child_kinds == {DerivationKind.EVIDENCE, DerivationKind.BECAUSE}
+    assert child_kinds == {
+        DerivationKind.EVIDENCE,
+        DerivationKind.QUANTITY_K,
+        DerivationKind.QUANTITY_P,
+        DerivationKind.LIKELIHOOD_RATIO,
+    }
 
 
 @pytest.mark.anyio

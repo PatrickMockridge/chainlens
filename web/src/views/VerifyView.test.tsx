@@ -117,17 +117,26 @@ describe("the verify view", () => {
     expect(container.querySelector(".claim-quote")!.textContent).toBe(noRatio.claim_quote);
   });
 
-  it("renders the no-ratio shape without the competing propositions", () => {
+  it("renders the no-ratio shape as a calculation with a hole, not as a sentence", () => {
     const { container } = draw(loaded(noRatio));
-    // The structural claim: with no ratio there are no competing propositions, so drawing a
-    // first/alternative pair above an empty ratio node would be the "looks broken" failure.
+    // The structural claim, in two halves. With no ratio there are still no competing
+    // propositions — drawing a first/alternative pair above a number that does not exist would
+    // be the "looks broken" failure. But the ratio node *is* drawn, carrying the formula and the
+    // input that stopped it, which is the difference between a withheld number and an absent
+    // argument.
     expect(screen.queryByText("proposition")).toBeNull();
     expect(container.querySelector(".tree-verdict")).not.toBeNull();
-    expect(container.querySelector(".tree-because")).not.toBeNull();
-    // And the reason is the engine's own wording, not a summary of it. It appears twice on the
-    // step — as the label and as the `reason` detail — which is the point: the detail is the field
-    // it was read from, so the two cannot drift apart.
-    expect(screen.getAllByText(/no coincidence estimator is configured/).length).toBeGreaterThan(1);
+    expect(container.querySelector(".tree-likelihood_ratio")).not.toBeNull();
+    expect(container.querySelector(".tree-because")).toBeNull();
+    // The formula a reader could check by hand, and the reason nothing was computed from it.
+    expect(screen.getByText(/1 \/ \(1 - \(1 - p\) \*\* k\) — not computed/)).toBeInTheDocument();
+    // The reason appears twice, and both are load-bearing: once on `p`, which is the input with
+    // no value and has to say which kind of missing it is, and once on the operation, which has
+    // to say which input stopped it. A reader arriving at either one learns the same thing.
+    expect(screen.getAllByText(/no coincidence estimator is configured/).length).toBe(2);
+    // And the inputs the formula would have consumed, one of them with no value at all.
+    expect(container.querySelectorAll(".tree-quantity_k").length).toBe(1);
+    expect(container.querySelectorAll(".tree-quantity_p").length).toBe(1);
   });
 
   it("renders the with-ratio shape with the envelope inside the ratio and the band inside that", () => {
@@ -289,9 +298,9 @@ describe("the prior, supplied in the browser", () => {
     expect(within(control as HTMLElement).getByText("the fixture")).toBeInTheDocument();
   });
 
-  it("says a finding with no ratio has nothing for a prior to update", () => {
+  it("says a withheld ratio has nothing for a prior to update", () => {
     draw(loaded(noRatio));
-    expect(screen.getByText(/reports no likelihood ratio/)).toBeInTheDocument();
+    expect(screen.getByText(/was not computed, so a prior has nothing to update/)).toBeInTheDocument();
     expect(screen.queryByRole("slider")).toBeNull();
   });
 });

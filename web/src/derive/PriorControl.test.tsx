@@ -59,13 +59,20 @@ function unbounded(document: DerivationDocument): DerivationDocument {
 }
 
 describe("planning what a prior implies", () => {
-  it("offers nothing in the no-ratio shape, because there is nothing to update", () => {
+  it("offers nothing when the ratio was withheld, because a prior has nothing to update", () => {
+    // The no-ratio derivation *has* a ratio node since the redesign — it carries the formula and
+    // the input that stopped it — so "is there a ratio node" no longer answers "is there a
+    // ratio". The operation's own result does, and this is the state that must not be confused
+    // with an unbounded ratio: that one ran and came out infinite.
     const plan = planPosterior(noRatio, -3);
-    expect(plan.ratioNode).toBeNull();
+    expect(plan.ratioNode).not.toBeNull();
+    expect(plan.withheld).toBe(true);
+    expect(plan.unbounded).toBe(false);
     expect(plan.offerable).toBe(false);
     expect(plan.extraChildren).toBeUndefined();
     expect(plan.limitations).toBeUndefined();
   });
+
 
   it("offers the control for a ratio with no prior", () => {
     const plan = planPosterior(ratioNoPrior, null);
@@ -204,16 +211,22 @@ describe("the control", () => {
     expect(screen.queryByRole("slider")).toBeNull();
   });
 
-  it("says a derivation with no ratio has nothing to update", () => {
+  it("says a withheld ratio has nothing to update, and that it is not an unbounded one", () => {
     draw({ plan: planPosterior(noRatio, null) });
-    expect(screen.getByText(/reports no likelihood ratio/)).toBeInTheDocument();
+    expect(screen.getByText(/was not computed, so a prior has nothing to update/)).toBeInTheDocument();
+    expect(screen.getByText(/not the same as a ratio that came out unbounded/)).toBeInTheDocument();
   });
 });
 
 /** A guard on the fixture set: the three shapes these tests need must all still be there. */
 describe("the derivation fixtures the control is tested against", () => {
-  it("covers no ratio, a ratio with no prior, and a ratio with one", () => {
-    expect(findRatio(asTree(noRatio.root))).toBeNull();
+  it("covers a withheld ratio, a ratio with no prior, and a ratio with one", () => {
+    // The withheld shape has a ratio node carrying an operation with no result; the priced ones
+    // carry a number. What the control keys on is the result, not the node's presence.
+    const withheld = findRatio(asTree(noRatio.root));
+    expect(withheld).not.toBeNull();
+    expect(withheld!.operation?.result).toBeNull();
+    expect(withheld!.operation?.reason).toBeTruthy();
     expect(findRatio(asTree(ratioNoPrior.root))).not.toBeNull();
     expect(ratioNoPrior.prior_supplied_by).toBeNull();
     expect(withPrior.prior_supplied_by).toBe("the fixture");

@@ -237,21 +237,38 @@ def test_the_fixture_covers_both_derivation_shapes(derivations: dict[str, dict[s
     assert {document["has_ratio"] for document in derivations.values()} == {True, False}
 
 
-def test_the_no_ratio_derivation_draws_no_hypotheses(
+def test_the_no_ratio_derivation_shows_the_calculation_with_its_hole(
     derivations: dict[str, dict[str, Any]],
 ) -> None:
-    """The shape choice that keeps it from looking broken.
+    """The shape choice, and the one that replaced it.
 
-    With no ratio there are no competing propositions. Drawing a first/alternative pair
-    above an empty ratio node would be the taller tree with holes, which is what almost
-    every real finding would look like while no estimator ships.
+    No competing propositions, because with no number there is nothing for them to compete
+    over. But the calculation is drawn: the formula, the inputs, and no result. Asserted on the
+    *committed* fixture rather than on a freshly built document, because this is the artifact a
+    reader is handed and the contract is what the app renders.
     """
     document = derivations["no_ratio"]
-    kinds = {node["kind"] for node in _walk_nodes(document["root"])}
-    assert "because" in kinds
+    nodes = list(_walk_nodes(document["root"]))
+    kinds = {node["kind"] for node in nodes}
     assert "verdict" in kinds
     assert "proposition" not in kinds
-    assert "likelihood_ratio" not in kinds
+    # The reason is no longer a node of its own standing where the calculation would be.
+    assert "because" not in kinds
+
+    ratios = [node for node in nodes if node["kind"] == "likelihood_ratio"]
+    assert len(ratios) == 1
+    ratio = ratios[0]
+    assert ratio["value"] is None, "a ratio with no inputs to price it must carry no value"
+    assert ratio["operation"]["reason"], "a withheld ratio must say which input stopped it"
+    assert ratio["operation"]["result"] is None
+    assert {entry["key"] for entry in ratio["detail"]} == {"formula"}
+
+    # Both inputs are present, one bound and one not, which is what makes it a hole.
+    inputs = {node["input"]["name"]: node["input"] for node in nodes if node["input"]}
+    assert set(inputs) == {"k", "p"}
+    assert inputs["k"]["binding"] == "bound"
+    assert inputs["p"]["binding"] == "unbound"
+    assert inputs["p"]["kind"]
 
 
 def test_the_ratio_derivation_carries_the_whole_argument(

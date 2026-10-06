@@ -35,8 +35,13 @@ import { detailNumber, findRatio } from "./tree";
 export interface PosteriorPlan {
   /** The step a posterior would hang beneath, or `null` in the no-ratio shape. */
   readonly ratioNode: DerivationNode | null;
-  /** The ratio's base-10 logarithm, or `null` when it is unbounded. */
+  /** The ratio's base-10 logarithm, or `null` when it is unbounded or withheld. */
   readonly log10Lr: number | null;
+  /**
+   * Whether the document shows the calculation and no result — the ratio was withheld, and the
+   * artifact carries the formula with the input that stopped it.
+   */
+  readonly withheld: boolean;
   /** Whether the ratio is infinite, which no prior can move. */
   readonly unbounded: boolean;
   /** Whoever the document says supplied the prior it already holds, if it holds one. */
@@ -68,8 +73,16 @@ export function planPosterior(
   const ratioNode = findRatio(asTree(document.root));
   const alreadySuppliedBy = document.prior_supplied_by ?? null;
   const log10Lr = ratioNode === null ? null : detailNumber(ratioNode, "log10_lr");
-  const unbounded = ratioNode !== null && log10Lr === null;
-  const offerable = ratioNode !== null && !unbounded && alreadySuppliedBy === null;
+  // A withheld ratio is not an unbounded one. Both carry no logarithm, and they mean opposite
+  // things: a withheld ratio was never computed, so there is nothing for a prior to update,
+  // while an unbounded one was computed and came out infinite, which no prior can move. Since
+  // the redesign a no-ratio derivation *has* a ratio node — carrying the formula and the input
+  // that stopped it — so "is there a ratio node" no longer answers "is there a ratio", and the
+  // operation's own result is what does.
+  const withheld = ratioNode?.operation != null && ratioNode.operation.result === null;
+  const unbounded = !withheld && ratioNode !== null && log10Lr === null;
+  const offerable =
+    ratioNode !== null && !withheld && !unbounded && alreadySuppliedBy === null;
 
   const prior = offerable && logOdds !== null ? probabilityFromLogOdds(logOdds) : null;
   let posterior: number | null = null;
@@ -80,6 +93,7 @@ export function planPosterior(
   const base = {
     ratioNode,
     log10Lr,
+    withheld,
     unbounded,
     alreadySuppliedBy,
     offerable,
@@ -144,8 +158,23 @@ export function PriorControl({ plan, logOdds, onChange }: PriorControlProps) {
       <section className="prior">
         <h3>Prior</h3>
         <p className="hint">
-          This finding reports no likelihood ratio, so there is nothing for a prior to update. The
-          reason is in the step marked <code>because</code>.
+          This finding has no likelihood ratio and no calculation that would have produced one —
+          a contradicted claim, whose ratio is unavailable in principle rather than withheld. There
+          is nothing for a prior to update, so none is offered.
+        </p>
+      </section>
+    );
+  }
+
+  if (plan.withheld) {
+    return (
+      <section className="prior">
+        <h3>Prior</h3>
+        <p className="hint">
+          The ratio was not computed, so a prior has nothing to update. The step above shows the
+          formula that would have produced it and the input that stopped it, and says which kind
+          of missing that input is. This is not the same as a ratio that came out unbounded: there
+          the arithmetic ran and the answer was infinite.
         </p>
       </section>
     );

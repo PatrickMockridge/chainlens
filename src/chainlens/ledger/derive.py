@@ -13,12 +13,15 @@ Two shapes, decided by whether a ratio was reported:
 evidence, the measured quantities ``k`` and ``p``, the ratio, and then — deliberately
 *before* the verbal band — the sensitivity envelope that qualifies it.
 
-**Without a ratio**, which is the normal case today because no coincidence estimator
-ships, the tree is shorter rather than full of holes. There are no competing propositions
-to draw, so the third layer is the verdict and a node carrying the engine's own reason for
-withholding a number. The reason string is reproduced verbatim: the six refusal reasons are
-already specific and useful, and a paraphrase would be the library's words standing in for
-its own.
+**Without a ratio** — the normal case today, because no coincidence estimator ships — the
+tree carries no competing propositions, because there is no number for them to compete over.
+It carries the calculation instead: the inputs the finding did obtain, and the formula with
+the input it did not. A reader sees where the hole is rather than being told there is one,
+which is the difference between a withheld number and an absent argument.
+
+A finding with no attempt at all — a contradicted claim, whose ratio is unavailable in
+principle rather than withheld — keeps the shorter shape, with the reason on a ``because``
+node. The reason string is reproduced verbatim there too: it is the verdict's own wording.
 """
 
 from __future__ import annotations
@@ -27,10 +30,24 @@ import hashlib
 from collections.abc import Sequence
 from typing import Any
 
+from chainlens.models.calculation import (
+    Binding,
+    BoundDirection,
+    Input,
+    Operation,
+    RatioAttempt,
+)
 from chainlens.models.derive import DerivationDocument, DerivationKind, DerivationNode
 from chainlens.models.enums import Chain, ClaimVerdict, Proposition, VerbalScale
 from chainlens.models.ledger import address_node_key, transaction_node_key
-from chainlens.models.wire import GraphRef, as_edge_ref, as_node_ref, detail_entries
+from chainlens.models.wire import (
+    DetailEntry,
+    DetailKind,
+    GraphRef,
+    as_edge_ref,
+    as_node_ref,
+    detail_entries,
+)
 from chainlens.verify.likelihood import LikelihoodRatio, NullModel
 from chainlens.verify.verdicts import (
     STANDARD_VERIFICATION_LIMITATIONS,
@@ -101,23 +118,34 @@ def _node(
     *,
     summary: str | None = None,
     detail: dict[str, Any] | None = None,
+    entries: Sequence[DetailEntry] = (),
     value: float | None = None,
     unit: str | None = None,
     band: VerbalScale | None = None,
     refs: Sequence[GraphRef] = (),
+    item: Input | None = None,
+    operation: Operation | None = None,
     children: Sequence[DerivationNode] = (),
 ) -> DerivationNode:
-    """Assemble one node, keeping the call sites readable."""
+    """Assemble one node, keeping the call sites readable.
+
+    ``entries`` is for a detail list that already exists as tagged entries — an ``Input``'s, in
+    practice. Passing those through ``detail`` instead would round-trip them through
+    :func:`~chainlens.models.wire.detail_entries`, which turns a tagged INT back into a STRING
+    and would quietly change what the field means.
+    """
     return DerivationNode(
         id=identifier,
         kind=kind,
         label=label,
         summary=summary,
-        detail=detail_entries(detail or {}),
+        detail=tuple(entries) if entries else detail_entries(detail or {}),
         value=value,
         unit=unit,
         band=band,
         graph_refs=tuple(refs),
+        input=item,
+        operation=operation,
         children=tuple(children),
     )
 
@@ -343,7 +371,70 @@ def _evidence_node(
     )
 
 
-def _quantity_k(finding: VerificationFinding, evidence: ClaimEvidence) -> DerivationNode | None:
+#: Which node kind an input of a given name is drawn as.
+_INPUT_KINDS: dict[str, DerivationKind] = {
+    "k": DerivationKind.QUANTITY_K,
+    "p": DerivationKind.QUANTITY_P,
+}
+
+
+def _input_node(identifier: str, item: Input) -> DerivationNode:
+    """One value the calculation rests on, drawn from the input rather than from a ratio.
+
+    Drawn from the ``Input`` because **most findings have no ratio** and a quantity node built
+    out of a :class:`LikelihoodRatio` could not be drawn at all in that case — which is why a
+    withheld number used to arrive as a sentence. An input exists whether or not the arithmetic
+    finished, so the same nodes appear either way and the difference is a value where there is
+    one.
+    """
+    if item.binding is Binding.BOUND:
+        label = f"{item.name} = {item.value:g}"
+        if item.direction is BoundDirection.LOWER:
+            label += ", or more"
+        elif item.direction is BoundDirection.UPPER:
+            label += ", or less"
+        summary = item.source.text if item.source is not None else None
+    else:
+        # The kind in words rather than the enum value: a reader of an artifact should not have
+        # to know that `no_method` is spelled with an underscore.
+        label = f"{item.name} — no value"
+        # The validator on `Input` guarantees a kind and a reason together, so the `or ""` is
+        # for the type checker rather than for a case that can arrive.
+        kind_text = item.kind.value.replace("_", " ") if item.kind is not None else "no value"
+        summary = f"{kind_text}: {item.reason or ''}"
+    return _node(
+        f"{identifier}/quantity/{item.name}",
+        _INPUT_KINDS.get(item.name, DerivationKind.QUANTITY_K),
+        label,
+        summary=summary,
+        entries=item.detail,
+        value=item.value,
+        unit=item.unit,
+        item=item,
+    )
+
+
+def _withheld_ratio_node(identifier: str, operation: Operation) -> DerivationNode:
+    """The arithmetic with no result, showing the formula and where it stopped.
+
+    A reader meeting an artifact with no ratio should see the calculation that did not finish
+    and the input that stopped it, rather than a verdict and a sentence. The formula is the
+    point: it is what makes the missing input legible as a *hole* rather than an absence.
+    """
+    return _node(
+        f"{identifier}/ratio",
+        DerivationKind.LIKELIHOOD_RATIO,
+        f"{operation.formula} — not computed",
+        summary=operation.reason,
+        entries=(DetailEntry(key="formula", kind=DetailKind.STRING, value=operation.formula),),
+        value=None,
+        operation=operation,
+    )
+
+
+def _quantity_k(
+    finding: VerificationFinding, evidence: ClaimEvidence, attempt: RatioAttempt | None
+) -> DerivationNode | None:
     """``k``: the number of opportunities for a coincidence."""
     if evidence.candidates_considered is None:
         return None
@@ -365,10 +456,11 @@ def _quantity_k(finding: VerificationFinding, evidence: ClaimEvidence) -> Deriva
         },
         value=float(evidence.candidates_considered),
         unit="transfers",
+        item=attempt.by_name("k") if attempt is not None else None,
     )
 
 
-def _quantity_p(ratio: LikelihoodRatio) -> DerivationNode:
+def _quantity_p(ratio: LikelihoodRatio, attempt: RatioAttempt | None = None) -> DerivationNode:
     """``p``: the coincidence rate, with the sample it came from."""
     component = ratio.components[0] if ratio.components else None
     detail: dict[str, Any] = {
@@ -397,6 +489,7 @@ def _quantity_p(ratio: LikelihoodRatio) -> DerivationNode:
         ),
         detail=detail,
         value=ratio.p,
+        item=attempt.by_name("p") if attempt is not None else None,
     )
 
 
@@ -458,7 +551,7 @@ def _sensitivity(ratio: LikelihoodRatio) -> DerivationNode:
     )
 
 
-def _ratio_node(ratio: LikelihoodRatio) -> DerivationNode:
+def _ratio_node(ratio: LikelihoodRatio, attempt: RatioAttempt | None = None) -> DerivationNode:
     """The ratio, with the infinite case stated rather than faked into a number.
 
     ``lr`` can be infinite when the coincidence probability is exactly zero, and JSON has no
@@ -488,6 +581,7 @@ def _ratio_node(ratio: LikelihoodRatio) -> DerivationNode:
         },
         value=None if infinite else ratio.lr,
         band=ratio.verbal.scale,
+        operation=attempt.operation if attempt is not None else None,
         children=(_sensitivity(ratio),),
     )
 
@@ -593,25 +687,30 @@ def derive_finding(
 def _no_ratio_children(
     identifier: str, finding: VerificationFinding, evidence: DerivationNode
 ) -> tuple[DerivationNode, ...]:
-    """The short shape: verdict, the evidence behind it, and why no number is reported.
+    """The shape without a ratio: the evidence, and — where one was attempted — the calculation.
 
-    No hypothesised pair. With no ratio there are no competing propositions, and drawing
-    them above an empty ratio node is precisely the "looks broken" failure.
+    No hypothesised pair, because with no number there are no competing propositions to weigh.
+    But **the calculation is still drawn when there was one to draw**, with the formula and the
+    inputs it did and did not obtain, because a reader looking at a withheld number should see
+    where the hole is rather than be told that there is one.
+
+    The `because` node survives only for a finding with no attempt at all: a contradicted claim
+    has no arithmetic to show, and its reason is a verdict's reason rather than a missing input.
     """
-    because = finding.reason or (
-        "no reason was recorded, which is itself a defect: a verdict without a ratio has to "
-        "say why there is not one"
-    )
-    verdict = _node(
-        f"{identifier}/verdict",
-        DerivationKind.VERDICT,
-        finding.verdict.value,
-        summary="what the chain shows, which is a categorical finding and not a probability",
-        detail={
-            "method": finding.method,
-            "is_informative": finding.verdict.value in {"supported", "contradicted"},
-        },
-        children=(
+    attempt = finding.attempt
+    if attempt is not None and attempt.operation is not None:
+        children: list[DerivationNode] = [evidence]
+        for name in attempt.operation.inputs:
+            item = attempt.by_name(name)
+            if item is not None:
+                children.append(_input_node(identifier, item))
+        children.append(_withheld_ratio_node(identifier, attempt.operation))
+    else:
+        because = finding.reason or (
+            "no reason was recorded, which is itself a defect: a verdict without a ratio has to "
+            "say why there is not one"
+        )
+        children = [
             evidence,
             _node(
                 f"{identifier}/because",
@@ -624,7 +723,17 @@ def _no_ratio_children(
                 ),
                 detail={"reason": because},
             ),
-        ),
+        ]
+    verdict = _node(
+        f"{identifier}/verdict",
+        DerivationKind.VERDICT,
+        finding.verdict.value,
+        summary="what the chain shows, which is a categorical finding and not a probability",
+        detail={
+            "method": finding.method,
+            "is_informative": finding.verdict.value in {"supported", "contradicted"},
+        },
+        children=tuple(children),
     )
     return (verdict, *_trailing(finding, identifier))
 
@@ -668,12 +777,12 @@ def _ratio_children(
     )
     hypothesis = hypothesis.model_copy(update={"children": propositions})
 
-    quantity_k = _quantity_k(finding, finding.evidence)
+    quantity_k = _quantity_k(finding, finding.evidence, finding.attempt)
     children: list[DerivationNode] = [hypothesis]
     if quantity_k is not None:
         children.append(quantity_k)
-    children.append(_quantity_p(ratio))
-    children.append(_ratio_node(ratio))
+    children.append(_quantity_p(ratio, finding.attempt))
+    children.append(_ratio_node(ratio, finding.attempt))
     if prior is not None:
         children.append(_posterior(ratio, prior, prior_supplied_by))
     children.extend(_trailing(finding, identifier))
