@@ -32,7 +32,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, ConfigDict, Field, ValidationError, field_validator
 
 from chainlens.config import Settings, get_settings
 from chainlens.exceptions import ConfigurationError, LLMError
@@ -43,6 +43,7 @@ from chainlens.verify.claims import ActivityWindow
 from chainlens.verify.schema import Claim, ClaimType, Extraction, QuoteValidation, validate_quotes
 
 __all__ = [
+    "DEFAULT_MAX_TOKENS",
     "DEFAULT_MODEL",
     "FORBIDDEN_DRAFT_FIELDS",
     "SYSTEM_PROMPT",
@@ -56,13 +57,31 @@ __all__ = [
 ]
 
 #: The model to read posts with. Named here rather than defaulted at the call site so a corpus run
-#: records which model produced its extractions.
+#: records which model produced its extractions. It is a name the configured endpoint accepts; the
+#: shipped endpoint answers to this one and serves its own model behind it.
 DEFAULT_MODEL = "claude-opus-5"
+
+#: The answer cap, and it has to cover more than the answer.
+#:
+#: The model this project's default endpoint serves **thinks before it writes**, and thinking is
+#: billed against `max_tokens` like everything else. A cap sized for the JSON alone is spent before
+#: the JSON starts, and the failure looks like "no answer in the expected shape" rather than like a
+#: budget problem — which is exactly how this number was found. The refusal path now distinguishes
+#: the two, and the cap is sized so that it does not have to.
+DEFAULT_MAX_TOKENS = 8_000
 
 #: The prompt a model is read with, and the reason it is a constant: it is part of the method, so a
 #: corpus that pins extractions has to pin the text that produced them. Bump
 #: :attr:`Extractor.prompt_version` when this changes, because two extractions made under different
 #: prompts are not comparable.
+#:
+#: **It names every field and its type, because on the shipped endpoint the prompt is what holds the
+#: shape.** A request carries the schema in ``output_config.format``, and an endpoint that honours
+#: it makes this block redundant; the shipped default does not — asked for a declared shape it
+#: answered ``Hello!`` — so an answer is shape-correct here only because the prompt asked for it to
+#: be, and correct-by-validation because the library checks it locally before anything reads it.
+#: Neither is a guarantee the other replaces: the prompt is a convention the model may drift from,
+#: and the validation is what makes drifting cost a refusal rather than a fiction.
 SYSTEM_PROMPT = """\
 You read a post and report the on-chain claims it makes. You do not judge them, and you do not
 decide whether they are true.
@@ -81,10 +100,34 @@ Rules, in order of importance:
    complete a truncated address, never correct a checksum, never guess.
 5. You never state a verdict, a likelihood, a probability or a judgement about whether the claim is
    true. There is no field for one. What you report is what the post says.
-6. If the post names a period, report it as `window_start` and `window_end` in ISO 8601. If the
-   period is vague, leave them empty rather than guessing dates.
-7. `confidence` is your confidence that you found and quoted the claim correctly — a reading, not a
-   belief. Nothing decides anything from it.
+
+Answer with one JSON object, and nothing else — no prose before it, no explanation after it, no
+code fence around it:
+
+{"claims": [{"type": "transfer", "quote": "exact words from the post", "addresses": [],
+             "txid": null, "amount_text": null, "direction": null, "asserted_label": null,
+             "window_start": null, "window_end": null, "confidence": 0.5}]}
+
+Every claim object carries every one of those keys, with these types:
+
+- "type": one of "transfer" (a payment moved), "tx_exists" (a transaction happened), "balance" (an
+  address held an amount), "identity" (an address belongs to someone), "label" (an address is named
+  as a service), "unsupported" (anything else, and anything that cannot be checked).
+- "quote": a string, verbatim from the post, 25 words or fewer.
+- "addresses": a list of strings, copied exactly as written; [] when the post names none.
+- "txid": a string, or null. Never a list.
+- "amount_text": a string, or null.
+- "direction": "in", "out", "both", or null.
+- "asserted_label": a string, or null.
+- "window_start" and "window_end": ISO 8601 date-time strings, or null. Never an empty string — if
+  the period the post names is vague, set both to null rather than guessing dates.
+- "confidence": a number between 0 and 1, and never a word like "high". It is your confidence that
+  you found and quoted the claim correctly — a reading, not a belief. Nothing decides anything
+  from it.
+
+A claim object sent without the "claims" list around it is a failed answer, not an answer about a
+post that makes one claim. Do not add keys: the post's id, your name and your reasoning are not
+read.
 """
 
 #: Fields the model's answer may not have, pinned by a test. These are the fields through which a
@@ -115,6 +158,23 @@ class DraftClaim(LensModel):
     window_end: AwareDatetime | None = None
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    @field_validator("window_start", "window_end", mode="before")
+    @classmethod
+    def _blank_is_absent(cls, value: Any) -> Any:
+        """A field the model left blank means the claim names no window, which is ``None``.
+
+        Met live: told to "leave them empty rather than guessing dates", a model sends ``""`` — a
+        correct reading of the instruction and not a date, so pydantic refuses it and two optional
+        fields would cost the whole post. This is not the repair the library forbids: nothing is
+        invented, nothing is filled in, and an empty string in a date field has no other reading.
+        The repair that *would* be forbidden is turning a vague period into a guess, and that stays
+        refused — the prompt says omit, and this only tolerates a model that said "none" the long
+        way round.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     def as_claim(self) -> Claim:
         """The engine's own claim model, which is what everything downstream reads."""
         window: ActivityWindow | None = None
@@ -136,9 +196,36 @@ class DraftClaim(LensModel):
 
 
 class DraftExtraction(LensModel):
-    """Every claim one post makes, as the model reports them."""
+    """Every claim one post makes, as the model reports them.
 
-    claims: tuple[DraftClaim, ...] = ()
+    **``claims`` is required, and that is the load-bearing part of this shape.** A model answers
+    around the list it was asked for: told the post's id, it may hand back the list plus that id,
+    echoing what it was shown, so an undeclared *key* is tolerated rather than fatal — refusing a
+    whole extraction over a key nothing reads would lose every claim in a post because the model was
+    helpfully verbose. What is **not** tolerated is an answer with no ``claims`` key at all, because
+    a default of ``()`` would make a model that answered with a bare claim object — the envelope
+    dropped, the claim kept — indistinguishable from a post that makes no claims. That is the one
+    conflation this library exists not to make, and it was reachable only against a live model:
+    :class:`FakeLLM` never reshapes its answer, so no test could have found it.
+
+    Tolerating extras is also not *silent*: :attr:`unread_keys` names them and
+    :meth:`Extractor.extract` reports them, so a model drifting away from the envelope shows up in
+    the report rather than as a slightly worse extraction.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    claims: tuple[DraftClaim, ...]
+
+    @property
+    def unread_keys(self) -> tuple[str, ...]:
+        """The keys the model added that nothing here reads, sorted.
+
+        Kept rather than discarded with ``extra="ignore"``, because "the model echoed two keys" and
+        "the model answered the shape it was asked for" are different facts and only one of them is
+        worth a line in a corpus report.
+        """
+        return tuple(sorted(self.model_extra or ()))
 
 
 class StructuredLLM(Protocol):
@@ -206,13 +293,24 @@ class AnthropicLLM:
 
     name = "anthropic"
 
+    def endpoint(self) -> str | None:
+        """The host model calls go to, so a caller can say where their text was sent.
+
+        Read off the client rather than off the settings, because the client is what actually
+        answers: an injected one, or one the SDK built, may not be the configured endpoint. `None`
+        when the client does not report one — a stub in a test, say — because "not reported" is not
+        a host, and a caller printing it would be inventing one.
+        """
+        base_url = getattr(self._client, "base_url", None)
+        return str(base_url) if base_url is not None else None
+
     def __init__(
         self,
         *,
         model: str = DEFAULT_MODEL,
         settings: Settings | None = None,
         client: Any | None = None,
-        max_tokens: int = 4_096,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> None:
         """Args:
         model: which model reads the posts.
@@ -220,8 +318,9 @@ class AnthropicLLM:
         client: an already-constructed async client, for a caller that manages its own. When it
             is not given, one is built from the configured key — and its absence is a
             *configuration* error naming the environment variable, because that is what it is.
-        max_tokens: the answer cap. An extraction is short; the cap is here so a runaway answer is
-            refused rather than billed.
+        max_tokens: the answer cap. An extraction is short, but the cap has to cover the model's
+            thinking as well as its answer — see :data:`DEFAULT_MAX_TOKENS` — and it is here so a
+            runaway answer is refused rather than billed.
         """
         if anthropic is None:  # pragma: no cover - exercised by monkeypatching the module
             raise ConfigurationError(
@@ -235,12 +334,17 @@ class AnthropicLLM:
         settings = settings or get_settings()
         api_key = settings.api_key("anthropic")
         auth_token = _auth_token(settings)
+        # The endpoint is passed explicitly rather than left to the SDK's environment lookup, so
+        # that the configured value is the one used and `endpoint()` can report it. It is a setting
+        # with a non-Anthropic default, which is a fact a caller should be able to read off the
+        # object rather than infer from a bill.
+        base_url = settings.anthropic_base_url
         if api_key:
-            self._client = anthropic.AsyncAnthropic(api_key=api_key)
+            self._client = anthropic.AsyncAnthropic(api_key=api_key, base_url=base_url)
         elif auth_token:
             # A gateway or a signed-in profile authenticates this way. Named as a separate branch
             # rather than passed alongside, because the SDK treats them as alternatives.
-            self._client = anthropic.AsyncAnthropic(auth_token=auth_token)
+            self._client = anthropic.AsyncAnthropic(auth_token=auth_token, base_url=base_url)
         else:
             raise ConfigurationError(
                 "reading posts with a model requires a credential; set ANTHROPIC_API_KEY (or "
@@ -269,7 +373,17 @@ class AnthropicLLM:
             raise LLMError(f"the model could not be reached: {_describe(exc)}") from exc
         except ValueError as exc:
             # The SDK validates the answer against ``shape`` and raises a pydantic error when the
-            # model produced something else — a refusal with text, most often.
+            # model produced something else. Two failures arrive here with **different remedies**,
+            # so they are told apart: an answer that is not JSON at all means the endpoint returned
+            # prose — it did not hold the model to the schema the request declared — while JSON of
+            # the wrong shape means the model drifted from the prompt, which is the endpoint's
+            # business to fix by prompting rather than by configuration.
+            if _is_prose(exc):
+                raise LLMError(
+                    "the endpoint returned prose rather than the declared shape: it did not hold "
+                    "the model to the output schema the request declared, so on this endpoint the "
+                    "shape is held by the prompt alone and this answer did not follow it"
+                ) from exc
             raise LLMError(f"the model's answer is not a valid extraction: {exc}") from exc
         except anthropic.APIStatusError as exc:
             # Every other API error, with the request id the SDK exposes so a failure can be
@@ -294,8 +408,8 @@ class AnthropicLLM:
             raise LLMError(
                 "the model returned no answer in the expected shape "
                 f"(stop reason {stop_reason or 'not reported'}); the post was not read, which is "
-                "not the same as a post that makes no claims. A model or endpoint that does not "
-                "implement structured outputs fails exactly here"
+                "not the same as a post that makes no claims. An endpoint that does not honour "
+                "the output schema fails here, rather than somewhere further downstream"
             )
         return dict(parsed.model_dump())
 
@@ -313,6 +427,19 @@ def _auth_token(settings: Settings) -> str | None:
 def _describe(exc: BaseException) -> str:
     """A failure's own words, without its type name standing in for them."""
     return str(exc) or type(exc).__name__
+
+
+def _is_prose(exc: ValueError) -> bool:
+    """Whether a shape failure was really "this is not JSON at all".
+
+    Read off the error's own ``type`` rather than its message, because the message is pydantic's to
+    reword. Measured against the shipped endpoint, a declared shape came back as ``Hello!``: the
+    answer was prose, and the caller should be told that rather than told the JSON did not parse.
+    """
+    errors = getattr(exc, "errors", None)
+    if not callable(errors):
+        return False
+    return any(error.get("type") == "json_invalid" for error in errors())
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,7 +497,7 @@ class Extractor:
     """
 
     def __init__(
-        self, llm: StructuredLLM, *, max_claims: int = 50, prompt_version: int = 1
+        self, llm: StructuredLLM, *, max_claims: int = 50, prompt_version: int = 2
     ) -> None:
         self._llm = llm
         self._max_claims = max_claims
@@ -398,14 +525,20 @@ class Extractor:
             answer = await self._llm.complete(
                 system=SYSTEM_PROMPT, prompt=_prompt_for(post), shape=DraftExtraction
             )
-            draft = DraftExtraction.model_validate(answer)
         except ValueError as exc:
-            # A model that answered out of shape has not read the post, so this is a failure
-            # rather than an empty extraction — and the *shape* check belongs to whoever validated
-            # first: an implementation that hands back raw data fails here, and one that validates
-            # against the shape it was given fails inside its own call. Both are the same failure
-            # to a caller, and both arrive as one.
+            # An implementation validates against the shape it was given — a real client's SDK does
+            # — so a model that answered out of shape fails inside its own call. It did not read the
+            # post, so this is a failure rather than an empty extraction.
             raise LLMError(f"the model's answer is not a valid extraction: {exc}") from exc
+
+        draft = _draft_from(answer)
+
+        if draft.unread_keys:
+            warnings.append(
+                "the model added field(s) the extractor does not read: "
+                f"{_named(draft.unread_keys)}. They were ignored rather than refused, because a "
+                "key this shape does not declare cannot reach a claim, a number or a verdict"
+            )
 
         if len(draft.claims) > self._max_claims:
             warnings.append(
@@ -440,6 +573,39 @@ class Extractor:
             prompt_version=self._prompt_version,
             warnings=tuple(warnings),
         )
+
+
+def _draft_from(answer: Mapping[str, Any]) -> DraftExtraction:
+    """The envelope, or a failure that says what arrived instead.
+
+    An implementation that hands back raw data rather than a validated object fails here, and the
+    message names the difference that matters: **an answer with no ``claims`` key is a failed read,
+    not a post that makes no claims.** ``DraftExtraction.claims`` has no default precisely so that
+    this cannot be anything else. Met live: a model given the envelope but not *reminded* of it
+    answered with a bare claim object, and with a defaulted ``claims`` that validated as an
+    extraction of zero claims and was reported as one — the conflation, arriving as a clean run.
+    """
+    try:
+        return DraftExtraction.model_validate(answer)
+    except ValidationError as exc:
+        if "claims" not in answer:
+            keys = tuple(sorted(str(key) for key in answer))
+            raise LLMError(
+                "the model answered without a 'claims' key, so the post was not read as an "
+                "extraction — which is not the same as a post that makes no claims. The key(s) it "
+                f"answered with: {_named(keys)}"
+            ) from exc
+        raise LLMError(f"the model's answer is not a valid extraction: {exc}") from exc
+
+
+def _named(keys: Sequence[str], *, limit: int = 6) -> str:
+    """Some key names, and a count of the rest, so a verbose model cannot run away with a line."""
+    shown = list(keys[:limit])
+    if not shown:
+        return "none"
+    if len(keys) > limit:
+        shown.append(f"and {len(keys) - limit} more")
+    return ", ".join(shown)
 
 
 def _prompt_for(post: Post) -> str:

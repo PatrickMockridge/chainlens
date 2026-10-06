@@ -62,6 +62,15 @@ export ANTHROPIC_API_KEY=...          # or ANTHROPIC_AUTH_TOKEN, for a gateway
 chainlens ui extract --post post.txt --out claims/ --url https://example.test/post/1
 ```
 
+**Which endpoint answers is a setting, and the shipped default is not Anthropic's API.** It is an
+Anthropic-*compatible* gateway (`anthropic_base_url` in `chainlens.config`, read through
+`ANTHROPIC_BASE_URL` like the SDK does), because that is what this project has access to and a
+default nobody can run is not a default. Two consequences a caller should not have to discover:
+**text sent for extraction leaves for that host** — a post may be somebody's material — and it is
+somebody else's service with its own model and terms. Set `ANTHROPIC_BASE_URL` to point at Anthropic
+or at a local gateway; whatever the environment says outranks the shipped value. Both commands print
+the host they used, so a run says where the text went rather than leaving it to be inferred.
+
 `--strength` records how the text was obtained (`paste`, `printout`, `screenshot`, `url_resolved`,
 `api_lookup`), which travels into the record's `source`. The model is `claude-opus-5` unless
 `--model` says otherwise, and which model read a post is recorded on every report — two extractions
@@ -79,7 +88,8 @@ read posts work without it.
 | the SDK is not installed | a configuration error naming `chainlens[llm]` |
 | the model rate-limited or the connection failed | an `LLMError` with the SDK's own words |
 | the answer was cut off at the token cap | an `LLMError` saying the extraction is incomplete, not absent |
-| the endpoint returned no structured answer | an `LLMError` naming structured outputs as the likely cause |
+| the endpoint answered prose instead of the declared shape | an `LLMError` naming structured outputs as the likely cause |
+| the answer is the shape but not its types — a word where a number was declared, a list where a string was | an `LLMError` naming the field and what arrived |
 | the post has no text | nothing is sent to a model, and the report says why |
 | the post makes no claim | no records written, and the report says so — a finding, not a failure |
 
@@ -87,10 +97,37 @@ The last two are the important ones. A post that could not be read is **not** a 
 claims, and the library refuses to let the two look alike: the first is an error, the second is an
 empty extraction with a reason.
 
-**A gateway may not implement structured outputs.** The SDK is pointed at whatever
-`ANTHROPIC_BASE_URL` says, and an Anthropic-compatible proxy that ignores the output schema will
-return prose instead of JSON. That arrives as the "no answer in the expected shape" error rather
-than as an empty extraction — which is the correct outcome, and worth recognising when you see it.
+**A model that thinks first needs a budget for the thinking.** The endpoint this project ships a
+default for returns a thinking block before its answer, and thinking is billed against `max_tokens`
+like everything else. A cap sized for the JSON alone is spent before the JSON starts, and the
+failure surfaces as `stop_reason: max_tokens` with no parsed answer — which is why
+`DEFAULT_MAX_TOKENS` is 8,000 rather than the few hundred an extraction needs, and why the refusal
+distinguishes "cut off at the token cap" from "no answer in the expected shape". Found by hitting
+it: the first version of this layer used a 1,024-token cap and reported, wrongly, that the endpoint
+did not support structured outputs.
+
+**It does not support them, and the prompt carries the shape instead.** The request declares the
+answer's shape (`output_config.format`), and Anthropic's own API holds a model to it. This endpoint
+accepts the parameter and ignores it. Measured rather than inferred: asked for a shape with two
+required fields it answered `Hello!`, and on a real post it returned `confidence: "high"` where the
+schema declares a number, a `txid` as a *list* where a string was declared, and no `type` at all
+though the schema requires one — three violations a schema-enforcing server cannot produce. The
+prompt therefore names every field and its type (`SYSTEM_PROMPT`), which is what makes a run against
+this endpoint work at all.
+
+So the shape is held in three places, and it is worth being exact about which does what:
+
+| defence | holds the shape by | alone, what it gives you |
+|---|---|---|
+| `output_config.format` | the endpoint, where it honours it | nothing here — a violating answer arrives anyway |
+| `SYSTEM_PROMPT` | the model's compliance | a convention, which a model may drift from |
+| local validation | the library | a drift is a **refusal**, never a repaired claim |
+
+The third is the one that matters and the one nothing here replaces: an answer that is not the shape
+is *discarded* — as an error for the whole post, because a model that did not answer the shape did
+not read the post — and never trimmed into one. The first two buy a run that works rather than a
+stream of refusals; they cannot buy a guarantee, and nothing downstream of this layer treats them as
+one.
 
 ## What this is not
 

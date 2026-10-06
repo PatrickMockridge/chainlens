@@ -31,6 +31,10 @@ __all__ = ["CacheMode", "Settings", "get_settings", "reset_settings_cache"]
 CacheMode = Literal["live", "offline"]
 
 _DEFAULT_ETH_RPC_URL = "https://eth.llamarpc.com"
+#: Where model calls go unless something says otherwise. See `anthropic_base_url` for why this is
+#: a gateway rather than Anthropic's own endpoint, and what a caller should know about it.
+_DEFAULT_MODEL_ENDPOINT = "https://api.deepseek.com/anthropic/"
+
 _DEFAULT_USER_AGENT = "chainlens (+https://github.com/PatrickMockridge/chainlens)"
 
 
@@ -79,6 +83,24 @@ class Settings(BaseSettings):
     #: should not have to discover that the library wanted the other.
     anthropic_auth_token: SecretStr | None = Field(
         default=None, validation_alias="ANTHROPIC_AUTH_TOKEN"
+    )
+    #: Which endpoint answers model calls.
+    #:
+    #: **The shipped default is not Anthropic's API.** It is an Anthropic-*compatible* gateway,
+    #: because that is what this project has access to and a default nobody can run is not a
+    #: default. Two consequences a caller should know rather than discover: text sent for
+    #: extraction leaves for that host and not for Anthropic, and it is somebody else's service
+    #: with its own model and terms. Set `ANTHROPIC_BASE_URL` — or this setting — to point at
+    #: Anthropic or at a local gateway; the SDK's own `ANTHROPIC_BASE_URL` is read through the same
+    #: alias, so an environment that already sets it keeps winning over the default here.
+    #:
+    #: It also **does not honour the structured-output schema** a model call declares — measured,
+    #: not inferred: asked for a shape with two required fields it answered `Hello!`. The prompt
+    #: carries the shape because of that, and the library validates the answer itself, which is what
+    #: makes a non-conforming endpoint cost a refusal rather than a claim. Anthropic's own API
+    #: enforces the schema, so pointing here at it is a strictly stronger arrangement.
+    anthropic_base_url: str = Field(
+        default=_DEFAULT_MODEL_ENDPOINT, validation_alias="ANTHROPIC_BASE_URL"
     )
 
     # --- Behaviour ---

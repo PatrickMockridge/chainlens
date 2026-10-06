@@ -43,7 +43,55 @@ POST_TEXT = (
     "settled. carol moved ~30,000 sats to alice yesterday, tx 5b1e…c9a2 if anyone wants to check"
 )
 QUOTE = "carol moved ~30,000 sats to alice"
+
+
+def _default_endpoint() -> str:
+    """The shipped endpoint, read from the module rather than spelled again here."""
+    from chainlens.config import _DEFAULT_MODEL_ENDPOINT
+
+    return _DEFAULT_MODEL_ENDPOINT
+
+
 WHEN = datetime(2026, 9, 20, tzinfo=UTC)
+
+
+class _RawLLM:
+    """An implementation that hands back what it got, without validating it against the shape.
+
+    The protocol permits it — it says an implementation is *expected* to hold the model to the
+    shape, not that it must — so the extractor has to survive one. That is what puts the shape check
+    on the path that produces the envelope-specific message rather than pydantic's own.
+    """
+
+    name = "raw"
+
+    def __init__(self, answer: dict[str, Any]) -> None:
+        self._answer = answer
+
+    async def complete(self, *, system: str, prompt: str, shape: type[object]) -> dict[str, Any]:
+        return self._answer
+
+
+def _prose_error() -> ValueError:
+    """The error pydantic raises for `Hello!` where JSON was declared — a real one, not a stand-in.
+
+    Built by validating prose, so the test would notice if pydantic stopped classifying it as
+    ``json_invalid``, which is the single fact the distinction rests on.
+    """
+    try:
+        DraftExtraction.model_validate_json("Hello!")
+    except ValueError as exc:  # pragma: no cover - the raise is the point
+        return exc
+    raise AssertionError("pydantic accepted prose as JSON")
+
+
+def _shape_error() -> ValueError:
+    """The other failure: JSON arrived, and it is not the shape that was declared."""
+    try:
+        DraftExtraction.model_validate({"claims": "this is not a list"})
+    except ValueError as exc:  # pragma: no cover - the raise is the point
+        return exc
+    raise AssertionError("pydantic accepted a string where a list of claims was declared")
 
 
 def _post(text: str = POST_TEXT) -> Post:
@@ -85,6 +133,39 @@ class TestTheShapeAModelAnswersIn:
     def test_a_claim_must_have_a_quote(self) -> None:
         with pytest.raises(ValueError, match="quote"):
             DraftExtraction.model_validate({"claims": [{"type": "transfer", "quote": ""}]})
+
+    def test_a_window_left_blank_is_no_window_and_not_a_failed_read(self) -> None:
+        """Told to "leave them empty", a live model sends ``""``. It means no window.
+
+        Two optional fields must not cost a post, and this is not a repair: an empty string in a
+        date field has no other reading, and nothing is filled in. A *guessed* date is still
+        refused, which is the difference that matters.
+        """
+        blank = {"type": "transfer", "quote": QUOTE, "window_start": "", "window_end": " "}
+        draft = DraftExtraction.model_validate({"claims": [blank]})
+        claim = draft.claims[0].as_claim()
+        assert claim.window is None
+        assert draft.claims[0].window_start is None
+        # And a value that is not a date is still a refusal rather than a silently absent window.
+        with pytest.raises(ValueError, match="window_start"):
+            DraftExtraction.model_validate(
+                {"claims": [{"type": "transfer", "quote": QUOTE, "window_start": "yesterday"}]}
+            )
+
+    def test_the_envelope_must_be_present_even_when_it_would_hold_nothing(self) -> None:
+        """``claims`` is required, and there is no default that could stand in for it.
+
+        A default of ``()`` reads as a convenience and is the opposite: it makes an answer with no
+        envelope at all — a bare claim object, which a live model produced — validate as an
+        extraction of zero claims. "The post was not read" and "the post makes no claims" would then
+        be the same value, and this library's whole discipline is that they are not.
+        """
+        assert DraftExtraction.model_fields["claims"].is_required()
+        with pytest.raises(ValueError, match="claims"):
+            DraftExtraction.model_validate({"type": "transfer", "quote": QUOTE})
+        # Present and empty is a different fact, and it is a legitimate answer: a post that makes
+        # no claims gets a record saying so.
+        assert DraftExtraction.model_validate({"claims": []}).claims == ()
 
 
 class TestWhatTheExtractorDoes:
@@ -196,6 +277,52 @@ class TestWhatTheExtractorDoes:
             await Extractor(llm).extract(_post())
 
     @pytest.mark.anyio
+    async def test_a_bare_claim_object_is_a_failed_read_not_an_empty_post(self) -> None:
+        """The failure this shape is arranged to make impossible, reproduced.
+
+        A model given the envelope but not reminded of it answered with the claim object alone —
+        no ``claims`` list around it. With a defaulted ``claims`` that validated and was reported as
+        "0 kept, 0 dropped", which a reader takes for a post that asserts nothing. It was reachable
+        only live: :class:`FakeLLM` never reshapes its answer, so no test could have found it.
+        """
+        bare = {
+            "type": "transfer",
+            "quote": QUOTE,
+            "amount_text": "approximately 30,000 sats",
+            "addresses": [ALICE],
+            "confidence": 0.98,
+        }
+        with pytest.raises(LLMError, match="claims"):
+            await Extractor(FakeLLM(bare)).extract(_post())
+
+    @pytest.mark.anyio
+    async def test_an_answer_with_no_envelope_is_named_as_such_not_as_a_shape_error(self) -> None:
+        """The message names what arrived, because "not a valid extraction" sends a reader to the
+        claims rather than to the envelope that is missing."""
+        client = _RawLLM({"type": "transfer", "quote": QUOTE, "confidence": 0.98})
+        with pytest.raises(LLMError, match="without a 'claims' key") as caught:
+            await Extractor(client).extract(_post())
+        assert "not the same as a post that makes no claims" in str(caught.value)
+        assert "confidence, quote, type" in str(caught.value), "the keys it did get are named"
+
+    @pytest.mark.anyio
+    async def test_an_echoed_extra_key_is_tolerated_and_the_key_is_reported(self) -> None:
+        """Tolerant, not silent: an echoed key cannot reach a finding, and it does reach the report.
+
+        Found live, like the failure above: told the post's id, a model handed back
+        ``{"post_id": ..., "claims": [...]}``. With ``extra="forbid"`` that cost the whole
+        extraction, so the tolerance is right — but a model drifting away from the envelope is worth
+        a line, because it is how the envelopeless answer above starts.
+        """
+        echoed = {"post_id": "p1", "model": "claude-opus-5", **_answer()}
+        report = await Extractor(FakeLLM(echoed)).extract(_post())
+
+        assert report.kept == 1, "an echoed key does not cost the claims"
+        assert any("does not read" in warning for warning in report.warnings)
+        assert any("model, post_id" in warning for warning in report.warnings)
+        assert "warning:" in report.format()
+
+    @pytest.mark.anyio
     async def test_the_report_names_the_model_and_the_prompt(self) -> None:
         """Two extractions made under different prompts are not comparable."""
         report = await Extractor(FakeLLM(_answer()), prompt_version=3).extract(_post())
@@ -239,7 +366,7 @@ class TestTheRealClient:
 
     @pytest.mark.anyio
     async def test_the_shape_is_what_the_sdk_is_asked_to_hold_the_model_to(self) -> None:
-        llm = self._llm(self._Response(DraftExtraction()))
+        llm = self._llm(self._Response(DraftExtraction(claims=())))
         await llm.complete(system="s", prompt="p", shape=DraftExtraction)
         call = llm._client.messages.calls[0]
         assert call["output_format"] is DraftExtraction
@@ -264,11 +391,31 @@ class TestTheRealClient:
             await llm.complete(system="s", prompt="p", shape=DraftExtraction)
 
     @pytest.mark.anyio
-    async def test_a_missing_answer_names_structured_outputs_as_a_likely_cause(self) -> None:
-        """Because that is what it looks like when an endpoint does not implement them."""
+    async def test_a_missing_answer_names_the_schema_as_the_thing_not_honoured(self) -> None:
+        """The failure is "the shape did not come back", not a diagnosis of why."""
         llm = self._llm(self._Response(None, stop_reason="end_turn"))
-        with pytest.raises(LLMError, match="does not implement structured outputs"):
+        with pytest.raises(LLMError, match="does not honour the output schema"):
             await llm.complete(system="s", prompt="p", shape=DraftExtraction)
+
+    @pytest.mark.anyio
+    async def test_an_endpoint_that_answers_prose_is_told_apart_from_a_drifted_model(self) -> None:
+        """The two shape failures have different remedies, so they must not read alike.
+
+        The SDK validates the answer itself and raises the same `ValidationError` either way, so
+        the distinction is read off the error's own type. Measured against the shipped endpoint:
+        asked for a shape with two required fields it answered `Hello!`, and the bare "not valid
+        JSON" that arrived named neither the cause nor where to look.
+        """
+        prose = self._llm(_prose_error())
+        with pytest.raises(LLMError, match="returned prose rather than the declared shape"):
+            await prose.complete(system="s", prompt="p", shape=DraftExtraction)
+
+        # JSON, and the wrong shape: the model drifted from the prompt rather than the endpoint
+        # dropping the schema, and the field-level detail is what a reader needs.
+        drifted = self._llm(_shape_error())
+        with pytest.raises(LLMError, match="not a valid extraction") as caught:
+            await drifted.complete(system="s", prompt="p", shape=DraftExtraction)
+        assert "returned prose" not in str(caught.value)
 
     @pytest.mark.anyio
     async def test_a_rate_limit_arrives_as_an_llm_error(self) -> None:
@@ -373,3 +520,66 @@ class TestThePipeline:
         # The verdict is the engine's, from the chain; the model only said what the post says.
         assert findings.findings[0].verdict is ClaimVerdict.SUPPORTED
         assert findings.findings[0].claim.quote == QUOTE
+
+
+class TestTheEndpointItSendsTo:
+    """Which service answers, and the fact that it is configurable.
+
+    The shipped default is an Anthropic-*compatible* gateway rather than Anthropic's own API, which
+    is a decision a caller has to be able to see: text sent for extraction leaves for that host, and
+    it is somebody else's service with its own model and terms. So the endpoint is a setting, the
+    default is stated, and the commands print the host they used.
+    """
+
+    def test_the_shipped_default_is_the_configured_endpoint(self) -> None:
+        from chainlens.config import Settings
+        from chainlens.verify.extract import AnthropicLLM
+
+        settings = Settings(  # type: ignore[call-arg]
+            _env_file=None, anthropic_auth_token=SecretStr("sk-ant-oat-not-a-real-token")
+        )
+        client = AnthropicLLM(settings=settings)
+        endpoint = client.endpoint()
+        assert endpoint is not None, "a client built from settings knows where it sends"
+        assert "deepseek" in endpoint
+
+    def test_the_endpoint_can_be_pointed_somewhere_else(self) -> None:
+        from chainlens.config import Settings
+        from chainlens.verify.extract import AnthropicLLM
+
+        settings = Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            anthropic_auth_token=SecretStr("sk-ant-oat-not-a-real-token"),
+            anthropic_base_url="https://api.anthropic.com",
+        )
+        client = AnthropicLLM(settings=settings)
+        endpoint = client.endpoint()
+        assert endpoint is not None
+        assert "anthropic.com" in endpoint
+
+    def test_the_environment_variable_wins_over_the_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A machine already pointed at an endpoint is not redirected by this library's default.
+
+        The setting is read through the SDK's own variable name, so whatever is configured outranks
+        the shipped value — which is the only reason shipping a non-Anthropic default is defensible.
+        """
+        from chainlens.config import Settings
+
+        monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+        shipped = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert shipped.anthropic_base_url == _default_endpoint()
+
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+        configured = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert configured.anthropic_base_url == "https://api.anthropic.com"
+
+    def test_a_client_that_cannot_say_where_it_sends_is_not_claimed_to(self) -> None:
+        """`None` rather than a placeholder: "not reported" is not a host.
+
+        The commands print an endpoint when there is one and say nothing when there is not, which
+        is why this returns `None` instead of a string a caller would have to recognise.
+        """
+        llm = AnthropicLLM(client=TestTheRealClient._StubClient(None))
+        assert llm.endpoint() is None

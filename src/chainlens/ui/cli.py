@@ -47,7 +47,6 @@ from chainlens.verify.extract import (
     AnthropicLLM,
     ExtractionReport,
     Extractor,
-    StructuredLLM,
 )
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import (
@@ -198,6 +197,18 @@ def _command_derive(args: argparse.Namespace) -> int:
     return 0
 
 
+def _where(client: object) -> str | None:
+    """Where a model client sends its work, when it can say.
+
+    Asked of the object rather than required by the protocol: the contract a client has to satisfy
+    is "answer a prompt with a declared shape", and a fake that sends nothing anywhere satisfies it
+    fully. A command that demanded an endpoint would be demanding more than the library needs —
+    so it reports one when there is one, and says nothing when there is not.
+    """
+    endpoint = getattr(client, "endpoint", None)
+    return endpoint() if callable(endpoint) else None
+
+
 async def _narrate_for_cli(llm: object, document: DerivationDocument) -> NarrativeDocument:
     """``anyio.run`` entry point for writing prose about one derivation."""
     return await Narrator(llm).narrate_derivation(document)  # type: ignore[arg-type]
@@ -221,12 +232,12 @@ def _command_narrate(args: argparse.Namespace) -> int:
         raise SystemExit(f"{source} is not a derivation document: {exc}") from exc
 
     try:
-        llm: StructuredLLM = AnthropicLLM(model=args.model)
+        client = AnthropicLLM(model=args.model)
     except ConfigurationError as exc:
         raise SystemExit(str(exc)) from exc
 
     try:
-        narrative = anyio.run(_narrate_for_cli, llm, document)
+        narrative = anyio.run(_narrate_for_cli, client, document)
     except LLMError as exc:
         raise SystemExit(f"the derivation could not be described: {exc}") from exc
 
@@ -234,6 +245,10 @@ def _command_narrate(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(strict_dumps(narrative), encoding="utf-8")
 
+    # Where the derivation was sent, said out loud. The shipped endpoint is a gateway rather than
+    # Anthropic's own API, and a reader should not have to infer that from a bill.
+    if (endpoint := _where(client)) is not None:
+        print(f"written at {endpoint}")
     written = len(narrative.paragraphs)
     print(f"wrote {out}: {written} paragraph(s), {len(narrative.dropped)} dropped")
     if narrative.dropped:
@@ -269,7 +284,7 @@ def _command_extract(args: argparse.Namespace) -> int:
         raise SystemExit(f"no such post: {post_path}")
 
     try:
-        llm: StructuredLLM = AnthropicLLM(model=args.model)
+        client = AnthropicLLM(model=args.model)
     except ConfigurationError as exc:
         # A missing key or a missing extra is a configuration problem, and the message names which
         # — the env var or the install — rather than arriving as a traceback.
@@ -285,9 +300,14 @@ def _command_extract(args: argparse.Namespace) -> int:
         ),
     )
     try:
-        report = anyio.run(_extract_for_cli, llm, post)
+        report = anyio.run(_extract_for_cli, client, post)
     except LLMError as exc:
         raise SystemExit(f"the post could not be read: {exc}") from exc
+
+    # Where the post was sent, said out loud: the shipped endpoint is a gateway rather than
+    # Anthropic's own API, and post text is somebody's material.
+    if (endpoint := _where(client)) is not None:
+        print(f"read at {endpoint}")
 
     print(report.format())
     if report.kept == 0:
