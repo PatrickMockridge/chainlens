@@ -31,6 +31,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from chainlens.models.base import LensModel
+from chainlens.models.calculation import Input, Operation
 from chainlens.models.enums import ClaimVerdict, VerbalScale
 from chainlens.models.wire import DetailEntry, GraphRef
 
@@ -92,6 +93,12 @@ class DerivationNode(LensModel):
         band: the verbal band, on the band and posterior nodes.
         graph_refs: the ledger nodes and edges this step rests on. Carried whether or not
             they resolve — see :class:`~chainlens.models.wire.GraphRef`.
+        input: what this node *is*, when it is one of the values a calculation rests on. A
+            quantity node carries one; every other node carries neither this nor ``operation``.
+        operation: the arithmetic, when this node is a number that was computed. Present whether or
+            not it produced a result — an operation whose inputs are one-sided or unbound travels
+            with its formula and no value, which is what makes a withheld number read as a hole in a
+            visible calculation rather than as a refusal.
         children: the steps below this one.
     """
 
@@ -104,6 +111,8 @@ class DerivationNode(LensModel):
     unit: str | None = None
     band: VerbalScale | None = None
     graph_refs: tuple[GraphRef, ...] = ()
+    input: Input | None = None
+    operation: Operation | None = None
     children: tuple[DerivationNode, ...] = ()
 
     def walk(self) -> tuple[DerivationNode, ...]:

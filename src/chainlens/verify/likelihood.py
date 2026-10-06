@@ -42,6 +42,7 @@ from enum import StrEnum
 from pydantic import Field, model_validator
 
 from chainlens.models.base import LensModel, Provenance
+from chainlens.models.calculation import OperationKind
 from chainlens.models.enums import VerbalScale
 from chainlens.verify.scale import DEFAULT_THRESHOLDS, VerbalBand, VerbalThresholds, band_for
 
@@ -54,6 +55,7 @@ __all__ = [
     "Sweep",
     "coincidence_probability",
     "evaluate_likelihood",
+    "formula_for",
     "likelihood_ratio",
     "linearisation_relative_error",
     "sensitivity_report",
@@ -178,6 +180,38 @@ def likelihood_ratio(k: int, p: float) -> float:
     if coincident == 0.0:
         return math.inf
     return 1.0 / coincident
+
+
+#: The formula each operation *is*, as a reader would write it. Evaluable with `+ - * / **` over
+#: the named inputs, which is what lets a test check the string against the function rather than
+#: take both on trust.
+_FORMULAS: dict[OperationKind, str] = {
+    OperationKind.COINCIDENCE: "1 - (1 - p) ** k",
+    OperationKind.LIKELIHOOD_RATIO: "1 / (1 - (1 - p) ** k)",
+    OperationKind.POSTERIOR: "lr * prior / (lr * prior + (1 - prior))",
+}
+
+
+def formula_for(kind: OperationKind) -> str:
+    """The expression an operation performs, for display on an artifact.
+
+    The formula lives here, beside the functions that compute the numbers, rather than in a renderer
+    or a document builder. There is one home for it, so a change to the arithmetic and a change to
+    what the artifact says it does are changes to the same file.
+
+    **It is the definition, not the evaluation.** These are computed in algebraically identical but
+    numerically stabler forms — :func:`coincidence_probability` uses ``-expm1(k * log1p(-p))``
+    because the naive form loses all its precision to cancellation for the small ``p`` this is
+    usually called with. So the displayed formula and the computed value agree to floating-point
+    error rather than bit for bit, and the test holding them together allows exactly that much. A
+    reader who recomputes ``1 - (1 - p) ** k`` by hand gets the same number to every digit they are
+    likely to write down, and the artifact is not claiming more than that.
+
+    The posterior is written in terms of the ratio and the prior directly — ``odds / (1 + odds)``
+    with ``odds = lr * prior / (1 - prior)`` cancels to this — so that every symbol is an input the
+    artifact carries rather than an intermediate a reader has to reconstruct.
+    """
+    return _FORMULAS[kind]
 
 
 def linearisation_relative_error(k: int, p: float) -> float:

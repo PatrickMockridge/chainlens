@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "Binding": {
+      "description": "Whether an input has a value at all.",
+      "enum": [
+        "bound",
+        "unbound"
+      ],
+      "title": "Binding",
+      "type": "string"
+    },
+    "BoundDirection": {
+      "description": "How much of a value a bound gives.\n\n``POINT`` is the value itself. ``LOWER`` and ``UPPER`` are one-sided: the true number is at or\nabove (or at or below) this one, and which way the error runs is stated rather than implied.\n\nThis is deliberately *not* fused into :class:`Binding`. \"Is there a value\" and \"how good is it\"\nare different questions, and a truncated scan answers the first with yes and the second with\n``LOWER`` \u2014 which a single enum could only express by inventing a member per combination.",
+      "enum": [
+        "point",
+        "lower",
+        "upper"
+      ],
+      "title": "BoundDirection",
+      "type": "string"
+    },
     "ClaimVerdict": {
       "description": "The categorical finding about a claim.\n\nDeliberately about the *match structure* rather than about probability. The\nlikelihood ratio is a separate quantity attached alongside; deriving a verdict\nfrom it would conflate \"what the chain shows\" with \"how much that is worth\",\nwhich the verification layer keeps strictly apart.",
       "enum": [
@@ -33,7 +52,7 @@
     },
     "DerivationNode": {
       "additionalProperties": false,
-      "description": "One step of a derivation, and everything a reader needs to disagree with it.\n\nAttributes:\n    id: a path-derived identifier, stable across runs \u2014 ``claim``,\n        ``claim/evidence/0`` \u2014 so a renderer can key nodes and a fixture can be\n        compared.\n    kind: what this step is.\n    label: the short thing to show on the node. Written here rather than in the\n        renderer, because a label the renderer invents is a claim the library did not\n        make.\n    summary: a sentence, when the label is not enough.\n    detail: labelled facts, in the tagged form a second language can render.\n    value: the number this step is about, when it is about one.\n    unit: what that number is counted in.\n    band: the verbal band, on the band and posterior nodes.\n    graph_refs: the ledger nodes and edges this step rests on. Carried whether or not\n        they resolve \u2014 see :class:`~chainlens.models.wire.GraphRef`.\n    children: the steps below this one.",
+      "description": "One step of a derivation, and everything a reader needs to disagree with it.\n\nAttributes:\n    id: a path-derived identifier, stable across runs \u2014 ``claim``,\n        ``claim/evidence/0`` \u2014 so a renderer can key nodes and a fixture can be\n        compared.\n    kind: what this step is.\n    label: the short thing to show on the node. Written here rather than in the\n        renderer, because a label the renderer invents is a claim the library did not\n        make.\n    summary: a sentence, when the label is not enough.\n    detail: labelled facts, in the tagged form a second language can render.\n    value: the number this step is about, when it is about one.\n    unit: what that number is counted in.\n    band: the verbal band, on the band and posterior nodes.\n    graph_refs: the ledger nodes and edges this step rests on. Carried whether or not\n        they resolve \u2014 see :class:`~chainlens.models.wire.GraphRef`.\n    input: what this node *is*, when it is one of the values a calculation rests on. A\n        quantity node carries one; every other node carries neither this nor ``operation``.\n    operation: the arithmetic, when this node is a number that was computed. Present whether or\n        not it produced a result \u2014 an operation whose inputs are one-sided or unbound travels\n        with its formula and no value, which is what makes a withheld number read as a hole in a\n        visible calculation rather than as a refusal.\n    children: the steps below this one.",
       "properties": {
         "band": {
           "anyOf": [
@@ -74,12 +93,34 @@
           "title": "Id",
           "type": "string"
         },
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Input"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "kind": {
           "$ref": "#/$defs/DerivationKind"
         },
         "label": {
           "title": "Label",
           "type": "string"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Operation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "summary": {
           "anyOf": [
@@ -247,6 +288,207 @@
         "edge"
       ],
       "title": "GraphRefKind",
+      "type": "string"
+    },
+    "Input": {
+      "additionalProperties": false,
+      "description": "One value a calculation rests on, and everything about where it stands.\n\nThe two halves are disjoint and a validator enforces it: bound inputs carry a value and a\nsource, unbound ones carry a kind and a reason. That is the structural guarantee replacing the\nprose vocabularies \u2014 there is no construction in which an input both has a value and does not.\n\nAttributes:\n    name: the stable slot this input fills \u2014 ``k``, ``p``, ``band``, ``prior``. What\n        :attr:`Operation.inputs` refers to.\n    label: what to show a reader. Written here rather than in a renderer, for the reason\n        :class:`~chainlens.models.derive.DerivationNode` gives: a label a renderer invents is a\n        claim the library did not make.\n    value: the number, when bound. A count is stored here as well as in ``detail`` \u2014 see the\n        note below.\n    unit: what the value is counted in.\n    direction: whether the value is the number or a one-sided bound on it.\n    source: where a bound value came from.\n    kind: why an unbound one has none.\n    reason: the sentence explaining an unbound one, in the words of whoever refused.\n    detail: anything else a reader needs, in the tagged form a second language can render.\n\nA note on precision: ``value`` is a float, matching :class:`DerivationNode`, and exact integers\ntravel in ``detail`` as :class:`~chainlens.models.wire.DetailEntry` \u2014 which serialises an int\nas a string for the reason its own docstring gives. Base-unit amounts need that; the counts here\n(bounded by the scan limit) do not, so they are not given a third convention of their own.",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "detail": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DetailEntry"
+          },
+          "title": "Detail",
+          "type": "array"
+        },
+        "direction": {
+          "$ref": "#/$defs/BoundDirection",
+          "default": "point"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnboundKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "label",
+        "binding"
+      ],
+      "title": "Input",
+      "type": "object"
+    },
+    "Operation": {
+      "additionalProperties": false,
+      "description": "One arithmetic step, with the formula it is.\n\nThe formula is not written here. It comes from\n:func:`chainlens.verify.likelihood.formula_for`, which sits beside the functions that compute\nthe numbers, so the displayed formula and the computed value have one home rather than two. A\ntest evaluates the formula string against the function over a grid, which is what catches an\nedit to one that missed the other.\n\nAttributes:\n    kind: which operation this is.\n    formula: the canonical expression, for a reader and for that test.\n    inputs: the **names** of the inputs it consumes, in argument order. Names rather than node\n        ids, because an :class:`RatioAttempt` carries these on a finding, where there is no tree\n        to point into.\n    result: the number, when every input is bound exactly and the answer is defined.\n    direction: whether :attr:`result` is the answer or a one-sided bound on it. An infinite\n        ratio is the case that needs this: the top of the scale is a floor, not the value.\n    reason: why there is no number, when there is none.",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/BoundDirection",
+          "default": "point"
+        },
+        "formula": {
+          "title": "Formula",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/OperationKind"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        }
+      },
+      "required": [
+        "kind",
+        "formula",
+        "inputs"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "OperationKind": {
+      "description": "Which arithmetic was done. One member per formula the library has.",
+      "enum": [
+        "coincidence",
+        "likelihood_ratio",
+        "posterior"
+      ],
+      "title": "OperationKind",
+      "type": "string"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "Where a bound value came from.\n\n``text`` is the sentence a reader needs \u2014 \"the sender's movements in the window\", \"the hedge\nword '~' licenses a 5% band\" \u2014 and ``kind`` is the part a machine can act on, so that a\nconvention can be told from a measurement without reading prose.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SourceKind"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "SourceKind": {
+      "description": "What kind of thing put a value where it is.\n\nA reader deciding how much to trust a number needs to know whether it was read off the chain,\ntallied from reads, priced from a sample, chosen by convention, or handed in by somebody \u2014 and\n\"chosen by convention\" is the kind most easily mistaken for a measurement, which is why it is a\nkind rather than a footnote.",
+      "enum": [
+        "observed",
+        "counted",
+        "estimated",
+        "convention",
+        "supplied",
+        "assumed"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "UnboundKind": {
+      "description": "Why an input has no value.\n\nThese are the three answers, and they are not interchangeable: the first says stop\nasking, the second says configure something or wait for data, and the third says nobody\nasked. A reader who cannot tell them apart cannot tell a gap in their own setup from a\nlimit of the chain.",
+      "enum": [
+        "no_method",
+        "no_data",
+        "not_requested"
+      ],
+      "title": "UnboundKind",
       "type": "string"
     },
     "VerbalScale": {
