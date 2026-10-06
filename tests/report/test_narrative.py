@@ -12,6 +12,7 @@ Every model is a `FakeLLM`, so nothing here needs a key or a network.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 import pytest
@@ -24,6 +25,7 @@ from chainlens.models.narrative import NarrativeDocument
 from chainlens.models.primitives import AssetRef
 from chainlens.report.narrative import (
     SYSTEM_PROMPT,
+    DraftNarrative,
     DraftParagraph,
     Narrator,
     numerals,
@@ -101,6 +103,25 @@ def _report(*findings: VerificationFinding) -> VerificationReport:
 
 def _paragraph(text: str, *claim_ids: str) -> dict[str, object]:
     return {"claim_ids": list(claim_ids), "text": text}
+
+
+class _RawLLM:
+    """An implementation that hands back what it got, without validating it.
+
+    The protocol says an implementation is *expected* to hold the model to the shape, not that it
+    must, so the narrator has to survive one — and that is the path that produces the
+    envelope-specific refusal rather than pydantic's own.
+    """
+
+    name = "raw"
+
+    def __init__(self, answer: Mapping[str, object]) -> None:
+        self._answer = answer
+
+    async def complete(
+        self, *, system: str, prompt: str, shape: type[object]
+    ) -> Mapping[str, object]:
+        return self._answer
 
 
 class TestTheNumeralRule:
@@ -268,6 +289,44 @@ class TestWhatItRefuses:
             await Narrator(FakeLLM({"paragraphs": [{"claim_ids": [], "text": ""}]})).narrate(
                 _report()
             )
+
+    @pytest.mark.anyio
+    async def test_a_bare_paragraph_is_a_failed_write_not_a_narrative_of_nothing(self) -> None:
+        """The conflation the extractor hit, in this shape.
+
+        An endpoint that does not hold the model to the declared schema let it answer with the
+        paragraph object alone, no ``paragraphs`` list around it. With a defaulted ``paragraphs``
+        that validated and rendered as "a model wrote nothing", which is a different fact from "the
+        model was not read" — and the app already tells those two apart, so it would have been shown
+        as the wrong one.
+        """
+        bare = {"claim_ids": [claim_id(QUOTE, chain_suffix=Chain.BITCOIN.value)], "text": "Plain."}
+        with pytest.raises(LLMError):
+            await Narrator(FakeLLM(bare)).narrate(_report())
+
+    @pytest.mark.anyio
+    async def test_a_missing_envelope_is_named_rather_than_reported_as_a_shape_error(self) -> None:
+        """An implementation that does not validate gets the message that names the difference.
+
+        ``FakeLLM`` validates what it is given, as a real client's SDK does, so it fails before this
+        path — which is why the wording is pinned through a client that hands back raw data.
+        """
+        bare = {"claim_ids": [claim_id(QUOTE, chain_suffix=Chain.BITCOIN.value)], "text": "Plain."}
+        with pytest.raises(LLMError, match="without a 'paragraphs' key") as caught:
+            await Narrator(_RawLLM(bare)).narrate(_report())
+        assert "not the same as a narrative that says nothing" in str(caught.value)
+
+    def test_the_envelope_is_required_even_when_it_would_hold_nothing(self) -> None:
+        assert DraftNarrative.model_fields["paragraphs"].is_required()
+        with pytest.raises(ValueError, match="paragraphs"):
+            DraftNarrative.model_validate({"claim_ids": [], "text": "x"})
+
+    @pytest.mark.anyio
+    async def test_an_echoed_extra_key_is_tolerated_and_the_key_is_reported(self) -> None:
+        llm = FakeLLM({"style": "analyst", "paragraphs": [_paragraph("Plain.")]})
+        narrative = await Narrator(llm).narrate(_report())
+        assert len(narrative.paragraphs) == 1, "an echoed key does not cost the prose"
+        assert any("style" in warning for warning in narrative.warnings)
 
 
 class TestWhatTheModelIsGiven:

@@ -111,9 +111,10 @@ answer's shape (`output_config.format`), and Anthropic's own API holds a model t
 accepts the parameter and ignores it. Measured rather than inferred: asked for a shape with two
 required fields it answered `Hello!`, and on a real post it returned `confidence: "high"` where the
 schema declares a number, a `txid` as a *list* where a string was declared, and no `type` at all
-though the schema requires one — three violations a schema-enforcing server cannot produce. The
-prompt therefore names every field and its type (`SYSTEM_PROMPT`), which is what makes a run against
-this endpoint work at all.
+though the schema requires one — three violations a schema-enforcing server cannot produce. **Both**
+prompts therefore name every field and its type — `SYSTEM_PROMPT` in `verify/extract.py`, and the
+two in `report/narrative.py` — which is what makes a run against this endpoint work at all. The
+narrator fails the same way without its shape block, and it was found the same way: by running it.
 
 So the shape is held in three places, and it is worth being exact about which does what:
 

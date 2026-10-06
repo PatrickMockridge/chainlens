@@ -33,7 +33,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import Field
+from pydantic import ConfigDict, Field, ValidationError
 
 from chainlens.exceptions import LLMError
 from chainlens.ledger.derive import claim_id
@@ -55,6 +55,12 @@ __all__ = [
 
 #: The prompt a narrative is written with, and therefore part of the method: two narratives made
 #: under different prompts are not comparable, so the version travels on every report.
+#:
+#: **The shape block is load-bearing, not decoration.** A request declares the answer's schema, and
+#: the shipped default endpoint ignores it — asked for a shape it answers prose. So an answer has
+#: the right shape here only because this text asked for it, and correct-by-validation because the
+#: narrator checks it locally. See `verify/extract.py`'s `SYSTEM_PROMPT` for the same arrangement
+#: and the measurement behind it.
 SYSTEM_PROMPT = """\
 You write a short narrative about a verification report that has already been computed. You add
 nothing to it.
@@ -75,6 +81,15 @@ Rules, in order of importance:
    no character, no reliability, no "likely".
 5. Write for an analyst reading the report: plain sentences, no preamble, no restatement of these
    rules, no summary of what you are about to do.
+
+Answer with one JSON object, and nothing else — no prose before it, no code fence around it:
+
+{"paragraphs": [{"claim_ids": ["claim:1234abcd"], "text": "one paragraph of the narrative"}]}
+
+Each paragraph object has exactly those two keys: "claim_ids", a list of the claim ids the
+paragraph is about, using the ids exactly as given to you ([] for a paragraph about the report as a
+whole), and "text", the paragraph itself. A paragraph sent without the "paragraphs" list around it
+is a failed answer, not a narrative of one paragraph.
 """
 
 #: The prompt for prose about a *derivation* rather than a report. Separate text rather than a
@@ -103,6 +118,15 @@ Rules, in order of importance:
    character, no reliability, no "likely".
 6. Write for an analyst reading the derivation: plain sentences, no preamble, no restatement of
    these rules, no summary of what you are about to do.
+
+Answer with one JSON object, and nothing else — no prose before it, no code fence around it:
+
+{"paragraphs": [{"claim_ids": ["claim/x/evidence"], "text": "one paragraph of the narrative"}]}
+
+Each paragraph object has exactly those two keys: "claim_ids", a list of the step ids the paragraph
+is about, using the ids exactly as given to you ([] for a paragraph about the argument as a whole),
+and "text", the paragraph itself. A paragraph sent without the "paragraphs" list around it is a
+failed answer, not a narrative of one paragraph.
 """
 
 #: A numeral, with its unit suffix when it has one. The suffix is kept because `40k` and `40` are
@@ -166,9 +190,25 @@ class DraftParagraph(LensModel):
 
 
 class DraftNarrative(LensModel):
-    """The narrative a model writes, before it is checked."""
+    """The narrative a model writes, before it is checked.
 
-    paragraphs: tuple[DraftParagraph, ...] = ()
+    **``paragraphs`` is required**, for the reason
+    :class:`~chainlens.verify.extract.DraftExtraction` gives at length: a default of ``()`` makes an
+    answer with no envelope — a bare paragraph object, which the shipped endpoint produced for the
+    extractor — validate as a narrative of zero paragraphs, which reads as "the model wrote nothing"
+    rather than "the model was not read".
+    Extras stay tolerated, because a model echoes what it was shown, and are reported rather than
+    silently dropped.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    paragraphs: tuple[DraftParagraph, ...]
+
+    @property
+    def unread_keys(self) -> tuple[str, ...]:
+        """The keys the model added that nothing here reads, sorted."""
+        return tuple(sorted(self.model_extra or ()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,7 +233,7 @@ class NarrativeReport:
     dropped: tuple[str, ...] = ()
     uncovered: tuple[str, ...] = ()
     model: str = ""
-    prompt_version: int = 1
+    prompt_version: int = 2
     warnings: tuple[str, ...] = ()
     limitations: str = ""
     numerals: frozenset[str] = field(default_factory=frozenset)
@@ -230,7 +270,7 @@ class Narrator:
     """
 
     def __init__(
-        self, llm: StructuredLLM, *, max_paragraphs: int = 20, prompt_version: int = 1
+        self, llm: StructuredLLM, *, max_paragraphs: int = 20, prompt_version: int = 2
     ) -> None:
         self._llm = llm
         self._max_paragraphs = max_paragraphs
@@ -252,19 +292,26 @@ class Narrator:
             answer = await self._llm.complete(
                 system=SYSTEM_PROMPT, prompt=_prompt_for(report), shape=DraftNarrative
             )
-            draft = DraftNarrative.model_validate(answer)
         except ValueError as exc:
-            # Wrapped around the call as well as the validation, because the shape check belongs to
-            # whoever validates first: an implementation that holds the model to `shape` fails
-            # inside its own call, and one that hands back raw data fails here. Both are the same
-            # failure to a caller, and both arrive as `LLMError`.
+            # An implementation validates against the shape it was given — a real client's SDK does
+            # — so a model that answered out of shape fails inside its own call. It wrote no
+            # narrative, which is not the same as a narrative that says nothing.
             raise LLMError(f"the model's answer is not a valid narrative: {exc}") from exc
+
+        draft = _draft_from(answer)
 
         allowed_figures = report_numerals(report)
         known = {_claim_id(finding) for finding in report.findings}
         kept: list[DraftParagraph] = []
         dropped: list[str] = []
         warnings: list[str] = []
+
+        if draft.unread_keys:
+            warnings.append(
+                "the model added field(s) the narrator does not read: "
+                f"{', '.join(draft.unread_keys)}. They were ignored rather than refused, because a "
+                "key this shape does not declare cannot reach a paragraph"
+            )
 
         if len(draft.paragraphs) > self._max_paragraphs:
             warnings.append(
@@ -336,14 +383,22 @@ class Narrator:
                 prompt=_derivation_prompt_for(document),
                 shape=DraftNarrative,
             )
-            draft = DraftNarrative.model_validate(answer)
         except ValueError as exc:
             raise LLMError(f"the model's answer is not a valid narrative: {exc}") from exc
+
+        draft = _draft_from(answer)
 
         allowed_figures = report_numerals(document)
         kept: list[NarrativeParagraph] = []
         dropped: list[str] = []
         warnings: list[str] = []
+
+        if draft.unread_keys:
+            warnings.append(
+                "the model added field(s) the narrator does not read: "
+                f"{', '.join(draft.unread_keys)}. They were ignored rather than refused, because a "
+                "key this shape does not declare cannot reach a paragraph"
+            )
 
         if len(draft.paragraphs) > self._max_paragraphs:
             warnings.append(
@@ -382,6 +437,28 @@ class Narrator:
                 "prompt_version": self._prompt_version,
             }
         )
+
+
+def _draft_from(answer: Mapping[str, Any]) -> DraftNarrative:
+    """The envelope, or a failure that says what arrived instead.
+
+    An implementation that hands back raw data rather than a validated object fails here, and the
+    message names the difference that matters: **an answer with no ``paragraphs`` key is a narrative
+    that was not written, not a narrative that says nothing.** Those two render differently in the
+    app — "a model wrote nothing usable" and "no model was asked" are already told apart there — and
+    a defaulted ``paragraphs`` would have made the first stand in for the second.
+    """
+    try:
+        return DraftNarrative.model_validate(answer)
+    except ValidationError as exc:
+        if "paragraphs" not in answer:
+            keys = ", ".join(sorted(str(key) for key in answer)) or "none"
+            raise LLMError(
+                "the model answered without a 'paragraphs' key, so no narrative was written — "
+                "which is not the same as a narrative that says nothing. The key(s) it answered "
+                f"with: {keys}"
+            ) from exc
+        raise LLMError(f"the model's answer is not a valid narrative: {exc}") from exc
 
 
 def _claim_id(finding: VerificationFinding) -> str:
