@@ -108,6 +108,18 @@ def _ratio_operation(k: Input, p: Input, ratio: LikelihoodRatio | None) -> Opera
     )
 
 
+def _unbound_input(attempt: RatioAttempt | None) -> Input | None:
+    """The first input an attempt could not obtain, if it could not obtain one.
+
+    First rather than all, because a finding turns on one thing: an unbound ``p`` says nothing
+    about whether ``k`` was counted, and the input that stopped the arithmetic is the one a
+    reader has to deal with.
+    """
+    if attempt is None:
+        return None
+    return next((item for item in attempt.inputs if item.binding is Binding.UNBOUND), None)
+
+
 def _withheld_reason(attempt: RatioAttempt | None) -> str | None:
     """The one sentence a reader gets today, taken from the calculation that replaces it.
 
@@ -232,6 +244,11 @@ class VerificationEngine:
         outcome = await self._dispatch(claim, parsed)
 
         likelihood, attempt = await self._ratio_for(outcome, parsed.elements)
+        # The checker's own gap when it could not answer, and otherwise the input that
+        # stopped the arithmetic. One field for both, because "the claim could not be
+        # resolved" and "no number could be computed" are the same shape: something the
+        # finding turns on has no value, and it says which kind of missing it is.
+        gap = outcome.gap or _unbound_input(attempt)
 
         return VerificationFinding(
             post_id=post.id,
@@ -247,6 +264,7 @@ class VerificationEngine:
             evidence=outcome.evidence,
             likelihood=likelihood,
             attempt=attempt,
+            gap=gap,
             assumptions=tuple(outcome.assumptions) + tuple(parsed.notes),
             caveats=outcome.caveats,
         )

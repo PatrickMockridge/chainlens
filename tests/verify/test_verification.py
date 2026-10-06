@@ -871,3 +871,65 @@ class _Unreachable:
             "cannot draw one, so this estimator has no method for it",
             kind=UnboundKind.NO_METHOD,
         )
+
+
+# --------------------------------------------------------------------------- #
+# The one thing a finding turns on
+# --------------------------------------------------------------------------- #
+class TestTheGap:
+    """What a finding rests on when it does not rest on a value.
+
+    Two different questions produce the same shape here, and that is deliberate: a checker
+    that could not answer and a ratio that could not be computed are both "something this
+    finding turns on has no value", and both say which kind of missing it is.
+    """
+
+    @pytest.mark.anyio
+    async def test_a_claim_no_method_exists_for_says_so_by_kind(self) -> None:
+        """UNVERIFIABLE and INSUFFICIENT_DATA *are* the two kinds — that is the whole claim.
+
+        `verdicts.py` has argued since before this vocabulary existed that the two look
+        identical in a report and mean opposite things. Deriving the kind from the verdict at
+        one site rather than at nineteen refusals is what makes them unable to disagree.
+        """
+        finding = await _finding(
+            _provider(), _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="a wallet")
+        )
+        assert finding.verdict is ClaimVerdict.UNVERIFIABLE
+        assert finding.gap is not None
+        assert finding.gap.kind is UnboundKind.NO_METHOD
+        assert "no label source is configured" in (finding.gap.reason or "")
+
+    @pytest.mark.anyio
+    async def test_a_claim_the_setup_cannot_reach_says_so_by_kind(self) -> None:
+        """The other half of the same pair, and the one a reader can do something about."""
+        provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+        finding = await _finding(provider, _claim(addresses=(A, B)))
+        assert finding.verdict is ClaimVerdict.SUPPORTED
+        assert finding.gap is not None
+        # No estimator: something could obtain `p` and this setup did not, which is `no_data`
+        # rather than `no_method` — the library ships an estimator, it just was not wired up.
+        assert finding.gap.kind is UnboundKind.NO_DATA
+        assert finding.gap.name == "p"
+
+    @pytest.mark.anyio
+    async def test_a_priced_finding_turns_on_nothing_missing(self) -> None:
+        """A finding with its arithmetic done has no gap, rather than an empty one."""
+        provider = _provider(
+            *[_tx(n, sender=A, recipient=C, sats=n * BTC) for n in range(1, 6)],
+            _tx(9, sender=A, recipient=B, sats=40 * BTC),
+        )
+        finding = await _finding(
+            provider, _claim(addresses=(A, B), amount_text="40 BTC"), estimator=_Estimator()
+        )
+        assert finding.likelihood is not None
+        assert finding.gap is None
+
+    @pytest.mark.anyio
+    async def test_a_declined_price_says_nobody_asked_not_that_data_was_missing(
+        self,
+    ) -> None:
+        provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+        finding = await _finding(provider, _claim(addresses=(A, B)), estimate_requested=False)
+        assert finding.gap is not None
+        assert finding.gap.kind is UnboundKind.NOT_REQUESTED

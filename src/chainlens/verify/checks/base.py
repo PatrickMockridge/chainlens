@@ -19,9 +19,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from chainlens.models.base import LensModel
+from chainlens.models.calculation import Binding, Input, UnboundKind
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.base import Provider
 from chainlens.verify.claims import ClaimElements
@@ -93,6 +94,23 @@ class CheckContext:
         return self.elements
 
 
+def unanswered(kind: UnboundKind, reason: str) -> Input:
+    """Why a claim has no verdict, as the input that has no value.
+
+    A checker that cannot answer is saying one thing: the claim's answer is an input it did
+    not obtain. Making that an :class:`Input` rather than a sentence is what lets a reader
+    tell *which* kind of missing it is — nothing here could obtain it, something could and
+    the data was not reachable, or nobody asked — without reading the prose.
+    """
+    return Input(
+        name="verdict",
+        label="why nothing here answers the claim",
+        binding=Binding.UNBOUND,
+        kind=kind,
+        reason=reason,
+    )
+
+
 class CheckOutcome(LensModel):
     """One checker's answer: a verdict, its evidence, and what it rests on.
 
@@ -105,9 +123,9 @@ class CheckOutcome(LensModel):
         verdict: the categorical finding.
         method: the checker's name, recorded in the finding.
         evidence: what the chain showed.
-        reason: the machine-readable explanation. Required in practice for the two
-            unanswerable verdicts and for any finding without a ratio, since those
-            are exactly the cases a reader cannot interpret unaided.
+        gap: why the claim was not resolved, when it was not — the unbound input the
+            verdict rests on. Carries its kind, so the three ways of not answering are
+            told apart by a machine and not only by a phrasing.
         assumptions: what the result rests on, including every convention applied.
         caveats: what would change it.
     """
@@ -116,8 +134,30 @@ class CheckOutcome(LensModel):
     method: str
     evidence: ClaimEvidence = Field(default_factory=lambda: ClaimEvidence())
     reason: str | None = None
+    gap: Input | None = None
     assumptions: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _the_verdict_names_the_kind(self) -> CheckOutcome:
+        """Turn a refusal into the input that has no value, typed by the verdict.
+
+        The two unanswerable verdicts *are* the two kinds — the module docstring of
+        :mod:`chainlens.verify.verdicts` has argued it since before this vocabulary existed,
+        because "stop asking" and "configure something" are different instructions. Deriving
+        the kind here rather than at each of the nineteen refusals means the two cannot drift
+        apart: a checker that says `UNVERIFIABLE` and a checker that says `no_data` would be
+        saying incompatible things, and there is one place that decides which.
+        """
+        if self.reason is None or self.gap is not None:
+            return self
+        kind = (
+            UnboundKind.NO_METHOD
+            if self.verdict is ClaimVerdict.UNVERIFIABLE
+            else UnboundKind.NO_DATA
+        )
+        object.__setattr__(self, "gap", unanswered(kind, self.reason))
+        return self
 
 
 @dataclass(frozen=True, slots=True)

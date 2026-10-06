@@ -43,7 +43,7 @@ from typing import Any, Protocol
 from pydantic import Field
 
 from chainlens.models.base import LensModel, Provenance
-from chainlens.models.calculation import RatioAttempt, UnboundKind
+from chainlens.models.calculation import Input, RatioAttempt, UnboundKind
 from chainlens.models.enums import ClaimVerdict
 from chainlens.models.primitives import Transfer
 from chainlens.providers.base import Provider
@@ -238,6 +238,9 @@ class VerificationFinding(LensModel):
         attempt: what a ratio would have rested on, whether or not one was reported. The
             inputs with their bindings, and the operation with its formula — so a withheld
             ratio travels as a calculation with a hole in it rather than as a sentence.
+        gap: the one unbound input this finding turns on, when it turns on one. A checker
+            that could not answer says so here, and so does a ratio that was withheld because
+            an input was missing — the two are the same shape, which is the point.
         assumptions: what the result rests on, including every convention applied.
         caveats: what would change it.
     """
@@ -249,6 +252,7 @@ class VerificationFinding(LensModel):
     verdict: ClaimVerdict
     method: str
     reason: str | None = None
+    gap: Input | None = None
 
     elements: ClaimElements | None = None
     evidence: ClaimEvidence = Field(default_factory=lambda: ClaimEvidence())
