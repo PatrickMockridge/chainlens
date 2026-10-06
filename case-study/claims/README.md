@@ -58,7 +58,7 @@ verdict = "SUPPORTED"
   omits every post with no chain-visible identifier — which over-represents checkable
   claims and never exercises the engine on the unpriceable majority.
 - **Author everything.** Every claim gets a record, including the ones that are not
-  about chain data. An `UNVERIFIABLE` record is a required record, not an omission:
+  about chain data. An `unresolved` record is a required record, not an omission:
   the coverage split is a finding, and it is only honest if the denominator is
   everything.
 - **`quote` is verbatim.** Not a paraphrase, not a summary. A quote that is not in the

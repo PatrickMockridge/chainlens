@@ -215,7 +215,7 @@ async def test_the_verdict_holds_the_evidence_and_the_calculation() -> None:
 async def test_an_unverifiable_finding_without_a_reason_refuses_to_render() -> None:
     """A reader must not be able to read it as an accusation.
 
-    The same rule the case-study guardrails enforce on the text: ``UNVERIFIABLE`` means no
+    The same rule the case-study guardrails enforce on the text: ``UNRESOLVED`` means no
     method here addresses this class of claim, and a derivation that rendered it bare would
     present a blank where an explanation has to be.
     """
@@ -223,7 +223,7 @@ async def test_an_unverifiable_finding_without_a_reason_refuses_to_render() -> N
         post_id="p",
         provenance_strength=ProvenanceStrength.PASTE,
         claim=_claim(),
-        verdict=ClaimVerdict.UNVERIFIABLE,
+        verdict=ClaimVerdict.UNRESOLVED,
         method="none",
         reason=None,
     )
@@ -237,12 +237,12 @@ async def test_an_unverifiable_finding_with_a_reason_renders() -> None:
         post_id="p",
         provenance_strength=ProvenanceStrength.PASTE,
         claim=_claim(),
-        verdict=ClaimVerdict.UNVERIFIABLE,
+        verdict=ClaimVerdict.UNRESOLVED,
         method="label",
         reason="no label source is configured, so no method exists for this claim",
     )
     document = derive_finding(finding)
-    assert document.verdict is ClaimVerdict.UNVERIFIABLE
+    assert document.verdict is ClaimVerdict.UNRESOLVED
     assert not document.is_informative
 
 
@@ -546,7 +546,7 @@ async def test_a_claim_that_never_reduced_still_renders() -> None:
         post_id="p",
         provenance_strength=ProvenanceStrength.PASTE,
         claim=Claim(type=ClaimType.TRANSFER, quote="q", addresses=("not-an-address",)),
-        verdict=ClaimVerdict.INSUFFICIENT_DATA,
+        verdict=ClaimVerdict.UNRESOLVED,
         method="transfer",
         reason="the claim could not be reduced to elements that can be checked",
     )

@@ -1,7 +1,7 @@
 """What a number rests on, and what happened to it.
 
 This module exists because the library used to say a great deal about *not* answering. A ratio came
-with a reason string; a verdict carried `UNVERIFIABLE` or `INSUFFICIENT_DATA`, which its own
+with a reason string; a verdict carried two members for not answering, which its own
 docstring admits look identical in a report; an estimator could refuse with `Unpriced` or with
 `None`, and the two collapsed into the same slot, so a reader could not tell a diagnosed refusal
 from a thin sample.
@@ -167,8 +167,8 @@ class Input(LensModel):
     def _exactly_one_half(self) -> Input:
         """Refuse an input that is both bound and unbound, or neither.
 
-        This is the check that makes the vocabulary one thing. Without it, `UNVERIFIABLE` and
-        `INSUFFICIENT_DATA` could drift back apart as two ways of saying the same thing, because
+        This is the check that makes the vocabulary one thing. Without it, a bound input and an
+        unbound one could drift into saying the same thing twice, because
         nothing would notice an input carrying both a value and a reason for not having one.
         """
         bound_fields = (self.value is not None, self.source is not None)

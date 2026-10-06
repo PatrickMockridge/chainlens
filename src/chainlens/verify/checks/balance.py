@@ -18,7 +18,12 @@ from chainlens.exceptions import NotFoundError
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.transport import read_provenance
-from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
+from chainlens.verify.checks.base import (
+    CheckContext,
+    Checker,
+    CheckOutcome,
+    not_reachable,
+)
 from chainlens.verify.verdicts import ClaimEvidence
 
 __all__ = ["CHECKER", "check_balance"]
@@ -34,18 +39,20 @@ async def check_balance(context: CheckContext) -> CheckOutcome:
 
     if elements.band is None:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": holder}),
-            reason="the claim names an address but no amount, so there is no holding to compare",
+            gap=not_reachable(
+                "the claim names an address but no amount, so there is no holding to compare"
+            ),
         )
 
     if not provider.supports(Capability.BALANCE):
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": holder}),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} cannot report a balance; a balance claim is "
                 "checkable in principle, so this is a gap in the configuration"
             ),
@@ -55,10 +62,10 @@ async def check_balance(context: CheckContext) -> CheckOutcome:
         balance = await provider.get_balance(holder)
     except NotFoundError:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": holder}),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} has no record of the address, so what it "
                 "holds is not visible from here"
             ),

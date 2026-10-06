@@ -113,9 +113,9 @@ depends on a corpus that is not in the repository.
 The results are per-claim verdicts, each checkable on its own, plus a **coverage
 split** of this corpus:
 
-- `UNVERIFIABLE` — terminal. No method here can address this class of claim; stop
+- `unresolved`, kind `no_method` — terminal. No method here can address this class of claim; stop
   asking. An ownership assertion, or an attribution with no label source configured.
-- `INSUFFICIENT_DATA` — actionable. Checkable in principle, not with what is
+- `unresolved`, kind `no_data` — actionable. Checkable in principle, not with what is
   configured or reachable now.
 
 Two different numbers, because only one of them is fixable. Neither is a statement

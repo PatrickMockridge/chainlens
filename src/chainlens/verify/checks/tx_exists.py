@@ -21,7 +21,12 @@ from chainlens.exceptions import NotFoundError
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.transport import read_provenance
-from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
+from chainlens.verify.checks.base import (
+    CheckContext,
+    Checker,
+    CheckOutcome,
+    not_reachable,
+)
 from chainlens.verify.verdicts import ClaimEvidence
 
 __all__ = ["CHECKER", "check_tx_exists"]
@@ -52,10 +57,10 @@ async def check_tx_exists(context: CheckContext) -> CheckOutcome:
 
     if not txid:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name),
-            reason="the claim names no transaction id to look up",
+            gap=not_reachable("the claim names no transaction id to look up"),
         )
 
     if not is_transaction_id(txid):
@@ -71,10 +76,10 @@ async def check_tx_exists(context: CheckContext) -> CheckOutcome:
 
     if not provider.supports(Capability.TX):
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"txid": txid}),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} cannot fetch a transaction by id; configure "
                 "one that can"
             ),

@@ -8,24 +8,24 @@ The verdict rule, stated once so no checker has to re-derive it:
 ``SUPPORTED``                 chain data is consistent with the claim
 ``CONTRADICTED``              chain data rules it out, including an identifier
                               that does not exist
-``UNVERIFIABLE``              **no method exists** for this class of claim, so
-                              its veracity is not a question chain data answers
-``INSUFFICIENT_DATA``         a method exists and the data it needs is missing
+``UNRESOLVED``                nothing decided it, and the finding's ``gap`` says
+                              what is missing
 ============================  ==================================================
 
-The split that earns its keep is the last two, because they look identical in a
-report and mean opposite things to a reader. ``UNVERIFIABLE`` says *stop asking*:
-"I own this address" is not a claim about the ledger, and attribution labels come
-from a third party rather than from the chain, so with no label source configured
-there is no method here — not a missing datum. ``INSUFFICIENT_DATA`` says
-*configure something*: a transfer claim against a provider that cannot list an
-address's transactions is answerable in principle and blocked in practice, and the
-reader can fix it.
+**Three members, and the third is not a finding about the claim.** It says nothing was
+decided, and the finding carries a :class:`~chainlens.models.calculation.Input` with no value
+naming what is missing. That input's *kind* holds the distinction that used to be two verdict
+members, and the distinction is worth stating because it survives intact: ``no_method`` says
+*stop asking* — "I own this address" is not a claim about the ledger, and attribution labels
+come from a third party rather than from the chain, so with no label source configured there is
+no method here rather than a missing datum — while ``no_data`` says *configure something*,
+because a transfer claim against a provider that cannot list an address's transactions is
+answerable in principle and blocked in practice. Collapsing those two into one "unknown" would
+hide both the reason and the remedy.
 
-Collapsing them into one "unknown" would hide both the reason and the remedy, which
-is why they are separate enum members and why every finding carries a
-machine-readable ``reason`` next to the verdict rather than leaving a reader to
-infer one from prose.
+What changed is where the distinction lives. It was two verdict members, which meant the same
+idea was spelled twice — once as a verdict, which is a finding about a claim, and once as a
+property of the input that is missing, which "we did not decide" actually is.
 
 The other line this module holds: **the verdict and the likelihood ratio are
 independent.** The verdict is computed from chain data; the ratio is attached to
@@ -88,10 +88,11 @@ was chosen before this tool saw it; and a claim chosen after a finding was seen 
 chosen with the evidence in view. A number a chooser can improve by choosing is a
 screen, not a weight.
 
-UNVERIFIABLE means no method here exists for that class of claim -- it is not a
-statement that the claim is false, and not a statement that it is true.
-INSUFFICIENT_DATA means the class is checkable and the data was missing; the two
-are reported separately because only one of them can be fixed.
+UNRESOLVED means nothing here decided the claim. It is not a statement that the
+claim is false, and not a statement that it is true. The finding says what is
+missing and of which kind: no method here exists for that class of claim, or the
+method exists and this run could not reach the data, or nobody asked for it. The
+first is a reason to stop asking; the second and third are not.
 """
 
 

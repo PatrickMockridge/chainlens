@@ -53,7 +53,7 @@ verdict = "SUPPORTED"
 
 Keys the format requires: `schema_version`, `quote`, and `[claim] type`. Everything else is
 optional — including `addresses`, because a claim that names nothing priceable is a question the
-*engine* answers (`INSUFFICIENT_DATA`), not a malformed file.
+*engine* answers (`unresolved` with no method for that class of claim), not a malformed file.
 
 ## What the format requires, and what a corpus adds
 

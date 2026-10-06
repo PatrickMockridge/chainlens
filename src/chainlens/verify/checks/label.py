@@ -1,20 +1,21 @@
 """``A is an exchange`` — the worked example of the verdict split.
 
-This checker is why ``UNVERIFIABLE`` and ``INSUFFICIENT_DATA`` are two enum members
+This checker is why the two kinds of *unresolved* are named apart
 rather than one, and the distinction is worth reading carefully because the two
 outcomes look identical in a report:
 
-* **No label source is configured** → ``UNVERIFIABLE``. Attribution labels are not
+* **No label source is configured** → unresolved, and the kind is ``no_method``. Labels are not
   chain data. Nothing on the ledger says an address belongs to an exchange; a third
   party asserts it. With no such source configured there is no method here at all,
   and the reader's correct response is to stop asking this machinery — not to
   configure something, because the library ships no label source to configure.
-* **A label source is configured and silent about the address** → ``INSUFFICIENT_DATA``.
-  Now a method exists, the question is answerable in principle, and the gap is in
+* **A label source is configured and silent about the address** → unresolved, and the kind is
+  ``no_data``. Now a method exists, the question is answerable in principle, and the gap is in
   the data. The reader's correct response is the opposite of the one above.
 
-Both are honest. Only one of them is fixable, and a single "unknown" would hide
-which.
+Both are honest. Only one of them is fixable, and a single "unknown" would hide which. The
+kinds used to be two verdict members; they are kinds now because "we did not decide" is not a
+finding about the claim, and what is actually missing is an input.
 
 What this checker will not do is treat a *heuristic* label as an answer. A cluster
 that a rule merged into a shape resembling an exchange is not an assertion by
@@ -27,7 +28,13 @@ from __future__ import annotations
 from chainlens.models.enums import ClaimVerdict, LabelSource
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.transport import read_provenance
-from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
+from chainlens.verify.checks.base import (
+    CheckContext,
+    Checker,
+    CheckOutcome,
+    no_method_exists,
+    not_reachable,
+)
 from chainlens.verify.verdicts import ClaimEvidence
 
 __all__ = ["CHECKER", "check_label"]
@@ -43,18 +50,20 @@ async def check_label(context: CheckContext) -> CheckOutcome:
 
     if subject is None:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name),
-            reason="the claim attributes something to no address, so there is nothing to attribute",
+            gap=not_reachable(
+                "the claim attributes something to no address, so there is nothing to attribute"
+            ),
         )
 
     if not provider.supports(Capability.LABELS):
         return CheckOutcome(
-            verdict=ClaimVerdict.UNVERIFIABLE,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": subject}),
-            reason=(
+            gap=no_method_exists(
                 "attribution labels are asserted by a third party rather than recorded on "
                 "the chain, and no label source is configured here, so no method exists "
                 "for this class of claim"
@@ -84,10 +93,10 @@ async def check_label(context: CheckContext) -> CheckOutcome:
 
     if not labels:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=evidence,
-            reason=(
+            gap=not_reachable(
                 "a label source is configured and holds nothing for this address; the "
                 "question is answerable in principle and the data is the gap"
             ),
@@ -108,17 +117,29 @@ async def check_label(context: CheckContext) -> CheckOutcome:
             ),
         )
 
-    heuristic_only = all(label.source is LabelSource.HEURISTIC for label in labels)
+    if all(label.source is LabelSource.HEURISTIC for label in labels):
+        # One library's guess is not an assertion by anybody about who controls an address, so
+        # there is no method here for the claim rather than a source that came up empty.
+        return CheckOutcome(
+            verdict=ClaimVerdict.UNRESOLVED,
+            method=METHOD,
+            evidence=evidence,
+            gap=no_method_exists(
+                "the only labels on this address come from this library's own heuristics, "
+                "which are not an assertion by anybody about who controls it"
+            ),
+            caveats=(
+                "a label source covers what it covers, so a contradiction from one is a"
+                " statement about that source's data as much as about the address",
+            ),
+        )
     return CheckOutcome(
-        verdict=ClaimVerdict.UNVERIFIABLE if heuristic_only else ClaimVerdict.CONTRADICTED,
+        verdict=ClaimVerdict.CONTRADICTED,
         method=METHOD,
         evidence=evidence,
         reason=(
-            "the only labels on this address come from this library's own heuristics, "
-            "which are not an assertion by anybody about who controls it"
-            if heuristic_only
-            else f"the label source holds {[label.name for label in labels]} for this "
-            "address, and none of them is what the claim asserts"
+            f"the label source holds {[label.name for label in labels]} for this address, "
+            "and none of them is what the claim asserts"
         ),
         caveats=(
             "a label source covers what it covers, so a contradiction from one is a"

@@ -94,14 +94,29 @@ class CheckContext:
         return self.elements
 
 
-def unanswered(kind: UnboundKind, reason: str) -> Input:
-    """Why a claim has no verdict, as the input that has no value.
+def no_method_exists(reason: str) -> Input:
+    """Nothing here could obtain the answer, and no configuration would create one.
 
-    A checker that cannot answer is saying one thing: the claim's answer is an input it did
-    not obtain. Making that an :class:`Input` rather than a sentence is what lets a reader
-    tell *which* kind of missing it is — nothing here could obtain it, something could and
-    the data was not reachable, or nobody asked — without reading the prose.
+    "I own this address" is not a question the chain answers, and an attribution label comes
+    from a third party rather than from a ledger. Saying so is telling a reader to stop asking,
+    which is why it is a different kind from the two below rather than a stronger version of
+    them.
     """
+    return _unanswered(UnboundKind.NO_METHOD, reason)
+
+
+def not_reachable(reason: str) -> Input:
+    """Something could obtain the answer, and this run's data or configuration did not.
+
+    The actionable one: add a provider, widen the window, raise the budget. A reader who cannot
+    tell this from :func:`no_method_exists` cannot tell a gap in their own setup from a limit of
+    the chain, and the two want opposite things from them.
+    """
+    return _unanswered(UnboundKind.NO_DATA, reason)
+
+
+def _unanswered(kind: UnboundKind, reason: str) -> Input:
+    """The shape both of the above have: an input named for what is missing."""
     return Input(
         name="verdict",
         label="why nothing here answers the claim",
@@ -139,25 +154,34 @@ class CheckOutcome(LensModel):
     caveats: tuple[str, ...] = ()
 
     @model_validator(mode="after")
-    def _the_verdict_names_the_kind(self) -> CheckOutcome:
-        """Turn a refusal into the input that has no value, typed by the verdict.
+    def _an_unresolved_claim_says_what_is_missing(self) -> CheckOutcome:
+        """Refuse an unresolved verdict with nothing saying why.
 
-        The two unanswerable verdicts *are* the two kinds — the module docstring of
-        :mod:`chainlens.verify.verdicts` has argued it since before this vocabulary existed,
-        because "stop asking" and "configure something" are different instructions. Deriving
-        the kind here rather than at each of the nineteen refusals means the two cannot drift
-        apart: a checker that says `UNVERIFIABLE` and a checker that says `no_data` would be
-        saying incompatible things, and there is one place that decides which.
+        This is the invariant that replaced "the verdict names the kind". There is one verdict
+        for not having decided, so the thing that must not be absent is the *reason* — a finding
+        that came out unresolved with no gap is a reader being told nothing at all, which is the
+        state the whole vocabulary exists to make unrepresentable.
         """
-        if self.reason is None or self.gap is not None:
-            return self
-        kind = (
-            UnboundKind.NO_METHOD
-            if self.verdict is ClaimVerdict.UNVERIFIABLE
-            else UnboundKind.NO_DATA
-        )
-        object.__setattr__(self, "gap", unanswered(kind, self.reason))
+        if self.verdict is ClaimVerdict.UNRESOLVED and self.gap is None:
+            raise ValueError(
+                "a claim that was not resolved must carry the input it is missing; "
+                "otherwise there is nothing telling a reader whether to stop asking or to "
+                "configure something"
+            )
         return self
+
+    @property
+    def explanation(self) -> str | None:
+        """What this outcome owes a reader, from whichever field carries it.
+
+        Two sources, because they are two different statements. An unresolved claim explains
+        *what is missing*, and the words belong to the input that has no value. A decided one
+        may explain *why it came out that way* — a contradiction whose asserted labels none of
+        the source's labels match — and that is not a gap but the finding's own reasoning.
+        """
+        if self.reason is not None:
+            return self.reason
+        return self.gap.reason if self.gap is not None else None
 
 
 @dataclass(frozen=True, slots=True)

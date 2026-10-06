@@ -7,7 +7,7 @@ not that no such evidence exists. A tool that reported "these addresses are
 different" on that basis would be reporting its own search depth as a fact about
 the world, and it would do so with the appearance of a chain finding.
 
-So `SUPPORTED` when the clustering merges them, and `INSUFFICIENT_DATA` when it does
+So `SUPPORTED` when the clustering merges them, and `UNRESOLVED` with a `no_data` gap when it does
 not. The only source of a ``CONTRADICTED`` here would be a user-declared
 non-equivalence, which is an assertion by a person rather than by the chain, and
 this checker has none.
@@ -25,7 +25,12 @@ from chainlens.exceptions import CapabilityError
 from chainlens.models.enums import ClaimVerdict
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.transport import read_provenance
-from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome
+from chainlens.verify.checks.base import (
+    CheckContext,
+    Checker,
+    CheckOutcome,
+    not_reachable,
+)
 from chainlens.verify.verdicts import ClaimEvidence
 
 __all__ = ["CHECKER", "check_identity"]
@@ -41,10 +46,10 @@ async def check_identity(context: CheckContext) -> CheckOutcome:
 
     if elements.recipient is None:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": subject}),
-            reason=(
+            gap=not_reachable(
                 "an identity claim needs at least two addresses, and the post named one; "
                 "there is nothing to test the claim against"
             ),
@@ -52,10 +57,10 @@ async def check_identity(context: CheckContext) -> CheckOutcome:
 
     if not provider.supports(Capability.ADDRESS_TXS):
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": subject}),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} cannot list an address's transactions, which "
                 "is what the clustering heuristics read"
             ),
@@ -66,10 +71,10 @@ async def check_identity(context: CheckContext) -> CheckOutcome:
         result = await engine.cluster(subject)
     except CapabilityError as exc:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name, detail={"address": subject}),
-            reason=str(exc),
+            gap=not_reachable(str(exc)),
         )
 
     cluster = result.cluster_of_seed
@@ -111,10 +116,10 @@ async def check_identity(context: CheckContext) -> CheckOutcome:
         )
 
     return CheckOutcome(
-        verdict=ClaimVerdict.INSUFFICIENT_DATA,
+        verdict=ClaimVerdict.UNRESOLVED,
         method=METHOD,
         evidence=evidence,
-        reason=(
+        gap=not_reachable(
             "the clustering did not merge the two addresses, which does not show they are "
             "distinct: it shows the evidence that would join them was not in the "
             "transactions examined"

@@ -57,7 +57,7 @@ from chainlens.verify.checks import (
     CheckerRegistry,
     default_registry,
 )
-from chainlens.verify.checks.base import CheckOutcome
+from chainlens.verify.checks.base import CheckOutcome, no_method_exists, not_reachable
 from chainlens.verify.claims import ClaimElements
 from chainlens.verify.likelihood import LikelihoodRatio, evaluate_likelihood, formula_for
 from chainlens.verify.parsing import ParsedClaim, parse_claim
@@ -259,7 +259,7 @@ class VerificationEngine:
             # Derived from the attempt while the derivation builder is migrated: `reason` is
             # one sentence where an attempt has several inputs, and the sentence a reader gets
             # is the one about the input that stopped it. This goes when nothing reads it.
-            reason=outcome.reason or _withheld_reason(attempt),
+            reason=outcome.explanation or _withheld_reason(attempt),
             elements=parsed.elements,
             evidence=outcome.evidence,
             likelihood=likelihood,
@@ -276,10 +276,10 @@ class VerificationEngine:
         checker = self._registry.for_type(claim.type)
         if checker is None:
             return CheckOutcome(
-                verdict=ClaimVerdict.UNVERIFIABLE,
+                verdict=ClaimVerdict.UNRESOLVED,
                 method="none",
                 evidence=ClaimEvidence(provider=self._provider.name),
-                reason=(
+                gap=no_method_exists(
                     f"no method exists here for a {claim.type.value!r} claim; this is not "
                     "a statement that the claim is false"
                 ),
@@ -287,10 +287,10 @@ class VerificationEngine:
 
         if checker.needs_elements and not parsed.is_priceable:
             return CheckOutcome(
-                verdict=ClaimVerdict.INSUFFICIENT_DATA,
+                verdict=ClaimVerdict.UNRESOLVED,
                 method=checker.method,
                 evidence=ClaimEvidence(provider=self._provider.name),
-                reason=(
+                gap=not_reachable(
                     "the claim could not be reduced to elements that can be checked: "
                     + "; ".join(parsed.notes)
                 ),
@@ -313,10 +313,10 @@ class VerificationEngine:
             # A provider failure is a finding about *this run*, not about the claim:
             # reporting it as a contradiction would blame the chain for our outage.
             return CheckOutcome(
-                verdict=ClaimVerdict.INSUFFICIENT_DATA,
+                verdict=ClaimVerdict.UNRESOLVED,
                 method=checker.method,
                 evidence=ClaimEvidence(provider=self._provider.name),
-                reason=f"the check did not complete: {exc}",
+                gap=not_reachable(f"the check did not complete: {exc}"),
                 caveats=("a failed lookup is not evidence for or against the claim",),
             )
 

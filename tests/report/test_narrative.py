@@ -49,7 +49,7 @@ QUOTE = "carol moved ~30,000 sats to alice"
 
 def _finding(
     *,
-    verdict: ClaimVerdict = ClaimVerdict.INSUFFICIENT_DATA,
+    verdict: ClaimVerdict = ClaimVerdict.UNRESOLVED,
     reason: str | None = "no coincidence estimator is configured",
     with_ratio: bool = False,
     quote: str = QUOTE,

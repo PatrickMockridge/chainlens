@@ -11,7 +11,7 @@ because a partial scan that found a match still found a match.
 
 **Absence is not the same as refutation, and the two are distinguished by the
 provider, not by us.** A provider that says "no such address" is a provider we
-cannot see through, and the honest answer is ``INSUFFICIENT_DATA``. A provider that
+cannot see through, and the honest answer is ``UNRESOLVED`` with no data to work from. A
 lists an address and shows no matching transfer is showing the chain's answer, and
 that is ``CONTRADICTED`` — with the caveat that a provider may be incomplete,
 which is why no ratio is reported for an absence at all.
@@ -30,7 +30,13 @@ from chainlens.models.primitives import AssetRef, Transaction, Transfer
 from chainlens.models.wire import as_edge_ref
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.transport import read_provenance
-from chainlens.verify.checks.base import CheckContext, Checker, CheckOutcome, drain
+from chainlens.verify.checks.base import (
+    CheckContext,
+    Checker,
+    CheckOutcome,
+    drain,
+    not_reachable,
+)
 from chainlens.verify.claims import ClaimElements
 from chainlens.verify.verdicts import ClaimEvidence
 
@@ -210,10 +216,10 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
 
     if not provider.supports(Capability.ADDRESS_TXS):
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(provider=provider.name),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} cannot list an address's transactions, which "
                 "is what this claim needs; configure one that can"
             ),
@@ -227,14 +233,14 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
         transactions, truncated = await _sender_transactions(context)
     except NotFoundError:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=ClaimEvidence(
                 provider=provider.name,
                 endpoint="get_address_transactions",
                 provenance=(read_provenance(provider.name),),
             ),
-            reason=(
+            gap=not_reachable(
                 f"provider {provider.name!r} has no record of the address, so what the "
                 "chain shows about it is not visible from here"
             ),
@@ -325,10 +331,10 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
 
     if truncated:
         return CheckOutcome(
-            verdict=ClaimVerdict.INSUFFICIENT_DATA,
+            verdict=ClaimVerdict.UNRESOLVED,
             method=METHOD,
             evidence=shared,
-            reason=(
+            gap=not_reachable(
                 f"no matching transfer in the {context.scan_limit} transactions walked, but "
                 "the walk was cut short, so the sender's history was not exhausted"
             ),

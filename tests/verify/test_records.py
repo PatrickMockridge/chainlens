@@ -119,7 +119,7 @@ class TestWhatItRefuses:
     def test_a_claim_with_no_addresses_loads(self, tmp_path: Path) -> None:
         """A claim can name nothing priceable, and that is the engine's answer to give.
 
-        The loader's job is the shape: refusing here would move the engine's `INSUFFICIENT_DATA`
+        The loader's job is the shape: refusing here would move the engine's `UNRESOLVED`
         verdict into a parse error, where a reader would see a broken file rather than a claim
         nothing in the data can be priced against.
         """

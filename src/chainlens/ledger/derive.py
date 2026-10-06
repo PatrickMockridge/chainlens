@@ -627,15 +627,15 @@ def derive_finding(
         prior_supplied_by: who chose it, recorded on the posterior node.
 
     Raises:
-        ValueError: the finding is ``UNVERIFIABLE`` and carries no reason. A reader must not
-            be able to read that verdict as an accusation, so the derivation refuses to
-            render it without the engine's own explanation.
+        ValueError: the finding was not resolved and carries nothing saying why. A reader must
+            not be able to read that verdict as an accusation, so the derivation refuses to
+            render it without the engine's own explanation of what is missing.
     """
-    if finding.verdict is ClaimVerdict.UNVERIFIABLE and not finding.reason:
+    if finding.verdict is ClaimVerdict.UNRESOLVED and not finding.reason:
         raise ValueError(
-            "an unverifiable verdict must carry the engine's own meaning; without it a "
+            "an unresolved verdict must carry the engine's own meaning; without it a "
             "reader could read the finding as an accusation rather than as a statement "
-            "that no method here addresses this class of claim"
+            "that nothing here addresses this class of claim"
         )
 
     chain = _chain(finding)

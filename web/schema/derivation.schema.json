@@ -20,12 +20,11 @@
       "type": "string"
     },
     "ClaimVerdict": {
-      "description": "The categorical finding about a claim.\n\nDeliberately about the *match structure* rather than about probability. The\nlikelihood ratio is a separate quantity attached alongside; deriving a verdict\nfrom it would conflate \"what the chain shows\" with \"how much that is worth\",\nwhich the verification layer keeps strictly apart.",
+      "description": "The categorical finding about a claim.\n\nDeliberately about the *match structure* rather than about probability. The\nlikelihood ratio is a separate quantity attached alongside; deriving a verdict\nfrom it would conflate \"what the chain shows\" with \"how much that is worth\",\nwhich the verification layer keeps strictly apart.\n\nThree members, and the third is not a finding about the claim at all: it says nothing was\ndecided, and *why* is carried on the finding's\n:attr:`~chainlens.verify.verdicts.VerificationFinding.gap` \u2014 an input with no value, which\nknows whether nothing here could obtain it (``no_method``), whether something could and the\ndata was not reachable (``no_data``), or whether nobody asked (``not_requested``).\n\nThe two were separate members once, ``UNVERIFIABLE`` and ``INSUFFICIENT_DATA``, on the\nargument that they mean opposite things to a reader \u2014 stop asking versus configure\nsomething. That argument was right and it is why the kinds exist; what was wrong was\nspelling it twice. A verdict is either decided or it is not, and the reason it is not is a\nproperty of an input rather than a fourth way for a claim to come out.",
       "enum": [
         "supported",
         "contradicted",
-        "unverifiable",
-        "insufficient_data"
+        "unresolved"
       ],
       "title": "ClaimVerdict",
       "type": "string"

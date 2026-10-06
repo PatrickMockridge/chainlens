@@ -223,18 +223,27 @@ class ClaimVerdict(StrEnum):
     likelihood ratio is a separate quantity attached alongside; deriving a verdict
     from it would conflate "what the chain shows" with "how much that is worth",
     which the verification layer keeps strictly apart.
+
+    Three members, and the third is not a finding about the claim at all: it says nothing was
+    decided, and *why* is carried on the finding's
+    :attr:`~chainlens.verify.verdicts.VerificationFinding.gap` — an input with no value, which
+    knows whether nothing here could obtain it (``no_method``), whether something could and the
+    data was not reachable (``no_data``), or whether nobody asked (``not_requested``).
+
+    The two were separate members once, ``UNVERIFIABLE`` and ``INSUFFICIENT_DATA``, on the
+    argument that they mean opposite things to a reader — stop asking versus configure
+    something. That argument was right and it is why the kinds exist; what was wrong was
+    spelling it twice. A verdict is either decided or it is not, and the reason it is not is a
+    property of an input rather than a fourth way for a claim to come out.
     """
 
     #: Chain data is consistent with the claim.
     SUPPORTED = "supported"
     #: Chain data contradicts it, including an unparseable identifier.
     CONTRADICTED = "contradicted"
-    #: No chain-data provider could ever answer this -- an ownership assertion, a
-    #: private fact. Terminal: no amount of data or budget changes it.
-    UNVERIFIABLE = "unverifiable"
-    #: Checkable in principle, but not with what is configured or reachable now.
-    #: Actionable: add a provider, widen the window, raise the budget.
-    INSUFFICIENT_DATA = "insufficient_data"
+    #: Nothing decided the claim, and the finding's ``gap`` says what is missing and of which
+    #: kind. Never a statement about the claim: it is not evidence for it, and not against it.
+    UNRESOLVED = "unresolved"
 
 
 class Proposition(StrEnum):

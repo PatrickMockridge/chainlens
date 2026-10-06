@@ -198,10 +198,10 @@ def test_no_character_or_motive_word_appears_in_a_finding() -> None:
 
 
 def test_no_unanswerable_verdict_is_recorded_bare() -> None:
-    """``UNVERIFIABLE`` must always say what it means, or it reads as a damning blank."""
+    """An unresolved record must always say what is missing, or it reads as a damning blank."""
     for path in _record_paths():
         raw = _text(path)
-        if "UNVERIFIABLE" not in raw and "unverifiable" not in raw:
+        if "UNRESOLVED" not in raw and "unresolved" not in raw:
             continue
         assert "no method" in raw or "not a statement" in raw, (
             f"{path.name}: an unverifiable verdict must carry the enum's own meaning, so a "

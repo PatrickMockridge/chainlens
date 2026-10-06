@@ -7,9 +7,9 @@ are right here, the model's only job is extraction, and an extraction error show
 as a diff against a golden set rather than as a wrong verdict.
 
 The properties that get the most attention are the ones that decide whether the
-output can be trusted: that ``UNVERIFIABLE`` and ``INSUFFICIENT_DATA`` are told
-apart by test, that a ratio is withheld in every case where its preconditions fail,
-and that nothing a post says can promote a verdict.
+output can be trusted: that the three ways a finding can come out are told apart by test —
+including the three ways an unresolvable one can say *why* — that a ratio is withheld in every
+case where its preconditions fail, and that nothing a post says can promote a verdict.
 """
 
 from __future__ import annotations
@@ -235,7 +235,7 @@ async def test_a_truncated_scan_reports_insufficient_data_rather_than_contradict
     """A partial walk that found nothing is not the chain saying no."""
     provider = _provider(*[_tx(n, sender=A, recipient=C, sats=n * BTC) for n in range(1, 8)])
     finding = await _finding(provider, _claim(addresses=(A, B), amount_text="40 BTC"), scan_limit=3)
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert finding.evidence.scan_complete is False
     assert "cut short" in (finding.reason or "")
 
@@ -288,7 +288,7 @@ async def test_an_address_the_provider_does_not_know_is_insufficient_data() -> N
     """We cannot see through this provider, which is not the same as the chain saying no."""
     provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
     finding = await _finding(provider, _claim(addresses=(C, B), amount_text="40 BTC"))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "no record of the address" in (finding.reason or "")
 
 
@@ -302,7 +302,7 @@ class _NoHistory(InMemoryProvider):
 async def test_a_provider_that_cannot_list_transactions_is_insufficient_data() -> None:
     provider = _NoHistory(chain=Chain.BITCOIN, transactions=())
     finding = await _finding(provider, _claim(addresses=(A, B), amount_text="40 BTC"))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "cannot list an address's transactions" in (finding.reason or "")
 
 
@@ -337,7 +337,7 @@ async def test_an_identifier_that_is_not_a_transaction_id_is_contradicted() -> N
 async def test_a_transaction_claim_with_no_identifier_is_short_of_data() -> None:
     provider = _provider()
     finding = await _finding(provider, _claim(type=ClaimType.TRANSACTION_EXISTS))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
@@ -370,7 +370,7 @@ async def test_a_balance_outside_the_claimed_band_is_contradicted() -> None:
 async def test_a_balance_claim_with_no_amount_is_short_of_data() -> None:
     provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
     finding = await _finding(provider, _claim(type=ClaimType.BALANCE, addresses=(B,)))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
@@ -402,7 +402,7 @@ async def test_addresses_that_do_not_merge_are_short_of_data_never_contradicted(
         _tx(1, sender=A, recipient=C, sats=BTC), _tx(2, sender=B, recipient=C, sats=BTC)
     )
     finding = await _finding(provider, _claim(type=ClaimType.IDENTITY, addresses=(A, B)))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "does not show they are distinct" in (finding.reason or "")
 
 
@@ -410,7 +410,7 @@ async def test_addresses_that_do_not_merge_are_short_of_data_never_contradicted(
 async def test_an_identity_claim_naming_one_address_is_short_of_data() -> None:
     provider = _provider()
     finding = await _finding(provider, _claim(type=ClaimType.IDENTITY, addresses=(A,)))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
@@ -418,32 +418,63 @@ async def test_an_identity_claim_naming_one_address_is_short_of_data() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.anyio
 async def test_no_label_source_means_no_method_exists() -> None:
-    """UNVERIFIABLE: stop asking. Labels are asserted by a third party, not the chain."""
+    """No method here addresses it: labels are asserted by a third party, not the chain."""
     provider = _provider()
     finding = await _finding(
         provider, _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="an exchange")
     )
-    assert finding.verdict is ClaimVerdict.UNVERIFIABLE
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "no method exists" in (finding.reason or "")
 
 
 @pytest.mark.anyio
 async def test_a_silent_label_source_is_a_gap_in_the_data() -> None:
-    """INSUFFICIENT_DATA: the same-looking outcome, and the opposite remedy."""
+    """The same-looking outcome, and the opposite remedy: the data was out of reach."""
     provider = _LabelProvider(chain=Chain.BITCOIN, transactions=(), labels={})
     finding = await _finding(
         provider, _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="an exchange")
     )
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "answerable in principle" in (finding.reason or "")
 
 
-def test_the_two_unanswerable_verdicts_are_different_members() -> None:
-    """A single "unknown" would hide both the reason and the remedy."""
+def test_the_three_verdicts_are_three_members_and_one_of_them_is_not_a_finding() -> None:
+    """Two decided outcomes and one admission that nothing was decided.
+
+    This used to be four members: ``UNVERIFIABLE`` and ``INSUFFICIENT_DATA`` were separate
+    verdicts, on the argument that they mean opposite things — stop asking versus configure
+    something. That argument was right and it is *why* the two kinds exist; what was wrong was
+    spelling it twice, once as a verdict and once as a property of a missing input. A claim is
+    either decided or it is not.
+    """
     values = [member.value for member in ClaimVerdict]
     assert len(values) == len(set(values)), "no verdict may be an alias of another"
-    assert "unverifiable" in values
-    assert "insufficient_data" in values
+    assert set(values) == {"supported", "contradicted", "unresolved"}
+
+
+@pytest.mark.anyio
+async def test_the_two_ways_of_not_deciding_are_still_two_different_things() -> None:
+    """The distinction the collapse moved, asserted where it now lives.
+
+    A reader still has to be able to tell "no method here addresses this class of claim" from
+    "the method exists and this setup could not reach the data", because one means stop asking
+    and the other means configure something. It is on the gap's kind rather than on the verdict,
+    which is a better home: it is the *input* that is missing, and the kind says how.
+    """
+    no_method = await _finding(
+        _provider(), _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="a wallet")
+    )
+    no_data = await _finding(
+        _NoHistory(chain=Chain.BITCOIN, transactions=()),
+        _claim(addresses=(A, B), amount_text="40 BTC"),
+    )
+
+    assert no_method.verdict is ClaimVerdict.UNRESOLVED
+    assert no_data.verdict is ClaimVerdict.UNRESOLVED
+    assert no_method.gap is not None
+    assert no_data.gap is not None
+    assert no_method.gap.kind is UnboundKind.NO_METHOD
+    assert no_data.gap.kind is UnboundKind.NO_DATA
 
 
 @pytest.mark.anyio
@@ -483,7 +514,7 @@ async def test_a_heuristic_label_is_not_an_assertion_by_anybody() -> None:
     finding = await _finding(
         provider, _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="a wallet")
     )
-    assert finding.verdict is ClaimVerdict.UNVERIFIABLE
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
 
 
 # --------------------------------------------------------------------------- #
@@ -601,7 +632,7 @@ async def test_an_estimator_that_cannot_price_the_coincidence_is_reported_as_suc
 async def test_a_claim_type_with_no_checker_is_unverifiable() -> None:
     provider = _provider()
     finding = await _finding(provider, _claim(type=ClaimType.UNSUPPORTED, addresses=(A,)))
-    assert finding.verdict is ClaimVerdict.UNVERIFIABLE
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "no method exists" in (finding.reason or "")
 
 
@@ -677,7 +708,7 @@ async def test_a_parse_failure_is_reported_as_short_of_data_not_as_contradiction
     """The failure is ours, and reporting it as a refutation would blame the claim."""
     provider = _provider()
     finding = await _finding(provider, _claim(addresses=("not-an-address",), amount_text="40 BTC"))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "could not be reduced" in (finding.reason or "")
 
 
@@ -692,7 +723,7 @@ async def test_a_provider_failure_is_a_finding_and_not_an_exception() -> None:
         fail_with={"get_address_transactions": TransportError("in-memory", "connection reset")},
     )
     finding = await _finding(provider, _claim(addresses=(A, B), amount_text="40 BTC"))
-    assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
     assert "did not complete" in (finding.reason or "")
 
 
@@ -886,7 +917,7 @@ class TestTheGap:
 
     @pytest.mark.anyio
     async def test_a_claim_no_method_exists_for_says_so_by_kind(self) -> None:
-        """UNVERIFIABLE and INSUFFICIENT_DATA *are* the two kinds — that is the whole claim.
+        """The kind the checker states is the kind the artifact carries.
 
         `verdicts.py` has argued since before this vocabulary existed that the two look
         identical in a report and mean opposite things. Deriving the kind from the verdict at
@@ -895,7 +926,7 @@ class TestTheGap:
         finding = await _finding(
             _provider(), _claim(type=ClaimType.LABEL, addresses=(A,), asserted_label="a wallet")
         )
-        assert finding.verdict is ClaimVerdict.UNVERIFIABLE
+        assert finding.verdict is ClaimVerdict.UNRESOLVED
         assert finding.gap is not None
         assert finding.gap.kind is UnboundKind.NO_METHOD
         assert "no label source is configured" in (finding.gap.reason or "")
