@@ -57,11 +57,6 @@ from chainlens.tracing.strategy import (
 
 __all__ = ["Tracer"]
 
-#: Confidence for an edge whose contributing transfers were apportioned rather than
-#: recorded. A multi-input UTXO transaction does not say which input paid which
-#: output, so the edge is real but the attribution across it is our inference.
-_APPORTIONED_CONFIDENCE = 0.5
-_DIRECT_CONFIDENCE = 1.0
 
 _SERVICE_KINDS = frozenset({EntityKind.EXCHANGE, EntityKind.MIXER, EntityKind.SERVICE})
 
@@ -362,7 +357,7 @@ class Tracer:
 
     def _add_hop(self, hop: _Hop, depth: int) -> None:
         key = (hop.src_key, hop.dst_key, str(hop.transfer.asset.kind))
-        confidence = _APPORTIONED_CONFIDENCE if hop.transfer.ambiguous else _DIRECT_CONFIDENCE
+        apportioned = hop.transfer.ambiguous
         existing = self._edges.get(key)
 
         if existing is None:
@@ -384,7 +379,7 @@ class Tracer:
                 via=hop.transfer.via,
                 path=(*self._path_to(hop.src_key), hop.dst_key),
                 is_change=hop.transfer.is_change,
-                confidence=confidence,
+                apportioned=apportioned,
                 provenance=hop.transfer.provenance,
             )
             return
@@ -402,7 +397,7 @@ class Tracer:
                 "last_seen": max(stamps) if stamps else None,
                 "hops": min(existing.hops, depth),
                 # An edge is as trustworthy as its least trustworthy component.
-                "confidence": min(existing.confidence, confidence),
+                "apportioned": existing.apportioned or apportioned,
             }
         )
 

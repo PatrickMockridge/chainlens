@@ -60,7 +60,7 @@ def _graph(*, provenance: Provenance | None = None, truncated: bool = False) -> 
             amount=25_000_000,
             txids=("tx2",),
             hops=1,
-            confidence=0.5,
+            apportioned=True,
             provenance=provenance,
         ),
     )

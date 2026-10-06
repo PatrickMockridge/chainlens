@@ -267,10 +267,11 @@ class VerificationFinding(LensModel):
     def is_informative(self) -> bool:
         """Whether the evidence distinguishes anything at all.
 
-        False for the two verdicts that mean "no answer", which a caller rendering
-        a table needs to tell apart from a finding that went one way or the other.
+        False for the verdict that means "no answer", which a caller rendering a table needs to
+        tell apart from a finding that went one way or the other. The predicate itself lives on
+        the verdict, because a derivation asks the same question of the same enum.
         """
-        return self.verdict in {ClaimVerdict.SUPPORTED, ClaimVerdict.CONTRADICTED}
+        return self.verdict.is_informative
 
     @property
     def has_ratio(self) -> bool:

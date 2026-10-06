@@ -130,10 +130,10 @@ def to_cytoscape_json(flow_graph: FlowGraph, *, indent: int | None = 2) -> str:
                 "n_transfers": edge.n_transfers,
                 "hops": edge.hops,
                 "confidence": edge.confidence,
-                # A derived flag, not a stored field: an edge is apportioned when at
-                # least one contributing transfer was, which is exactly what a
-                # confidence below 1.0 records.
-                "apportioned": edge.confidence < 1.0,
+                # Read off the field rather than inferred from the confidence. The two agree
+                # by construction — `confidence` derives from this — and the flag is the one
+                # that says what it means, where a float comparison said it by arithmetic.
+                "apportioned": edge.apportioned,
             }
         }
         for edge in flow_graph.edges

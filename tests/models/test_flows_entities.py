@@ -64,7 +64,7 @@ def _flow() -> ValueFlow:
         direction=FlowDirection.OUT,
         via=FlowVia.UTXO,
         path=("address:bitcoin:root", "entity:bitcoin:e1"),
-        confidence=0.9,
+        apportioned=True,
         heuristics=("common-input-ownership",),
     )
 
@@ -92,15 +92,28 @@ def test_value_flow_round_trips_through_json() -> None:
     assert isinstance(restored.dst, EntityRef)
 
 
-def test_value_flow_confidence_is_bounded() -> None:
-    with pytest.raises(ValidationError):
+def test_a_flow_s_confidence_cannot_be_anything_but_the_library_s_two_values() -> None:
+    """What the range check used to guard, now unrepresentable rather than validated.
+
+    ``confidence`` was ``Field(ge=0.0, le=1.0)`` and this test checked that 1.5 was refused —
+    a bound on a number that never had an estimator behind it. It is not a field any more: it
+    derives from ``apportioned``, so the only values it can take are 1.0 and 0.5, and a caller
+    cannot state a confidence the library did not choose. Stronger than the bound, and for a
+    better reason than "it was out of range".
+    """
+    # `_flow()` is the apportioned one, which is the case this file exists to cover.
+    assert _flow().confidence == 0.5
+    assert _flow().model_copy(update={"apportioned": False}).confidence == 1.0
+    with pytest.raises(ValidationError, match="confidence"):
         ValueFlow(
             chain=Chain.BITCOIN,
             src=AddressRef(chain=Chain.BITCOIN, address="a"),
             dst=AddressRef(chain=Chain.BITCOIN, address="b"),
             asset=AssetRef.native(Chain.BITCOIN),
             amount=1,
-            confidence=1.5,
+            # The point of the test: a field that no longer exists, so the argument is a type
+            # error and the assertion is that it is one at runtime too.
+            confidence=1.5,  # type: ignore[call-arg]
         )
 
 

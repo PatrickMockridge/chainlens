@@ -245,6 +245,17 @@ class ClaimVerdict(StrEnum):
     #: kind. Never a statement about the claim: it is not evidence for it, and not against it.
     UNRESOLVED = "unresolved"
 
+    @property
+    def is_informative(self) -> bool:
+        """Whether this verdict decided the claim, as opposed to admitting it could not.
+
+        One definition, because three places ask — a finding, a report, and a derivation — and
+        each used to spell out ``in {SUPPORTED, CONTRADICTED}`` for itself. With the third
+        member meaning "nothing decided", the predicate *is* that negation, and writing it that
+        way is what keeps a fourth verdict from being quietly informative.
+        """
+        return self is not ClaimVerdict.UNRESOLVED
+
 
 class Proposition(StrEnum):
     """Which of two competing propositions a likelihood ratio supports."""

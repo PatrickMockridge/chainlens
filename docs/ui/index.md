@@ -33,11 +33,12 @@ This is why the caveat is a line in the view rather than a tooltip:
 
 > **Values are recorded; the linkage is not.**
 
-The flow view (`chainlens.tracing`) apportions a transaction's inputs across its outputs with an
-explicit `confidence` of 0.5 and marks each transfer `ambiguous`. This view does not apportion, so
-it carries the ambiguity without the number — and a tidy `3 in → 2 out` picture is *more*
-dangerous than the aggregated one, not less, because tidiness invites the reading the number used
-to warn against.
+The flow view (`chainlens.tracing`) apportions a transaction's inputs across its outputs and marks
+each transfer `ambiguous`. Its edges carry a flag, `apportioned`, and a `confidence` derived from
+it that is 1.0 or 0.5 and nothing else — **a convention, not a measurement**, since there is no
+estimator behind it and never was one. This view does not apportion at all, so it carries the
+ambiguity without the number — and a tidy `3 in → 2 out` picture is *more* dangerous than the
+aggregated one, not less, because tidiness invites the reading the number used to warn against.
 
 Concretely, the app:
 

@@ -19,11 +19,12 @@ harvested from a post was selected. Three structural choices push back:
 * **A posterior never hangs off the evidence alone.** It is present only when a caller
   supplied a prior, and it names who did.
 
-And the case that is *normal today* is a shorter tree, not a taller one with holes: with no
-ratio there are no competing propositions to draw, so the third layer is the verdict and a
-node carrying the engine's own reason. Drawing a first/alternative pair above an empty ratio
-node would look broken, which is the one thing a derivation view must not do while the
-coincidence estimator is still unbuilt.
+And the case that is *normal today* is a tree with a hole in it rather than one that stops
+early: with no ratio there are no competing propositions to draw, so those are absent — drawing
+a first/alternative pair above a number that does not exist would look broken — but the
+calculation itself is drawn, with its formula and the input that stopped it. A reader sees
+where the hole is rather than being told there is one, which is the difference between a
+withheld number and an absent argument.
 """
 
 from __future__ import annotations
@@ -179,4 +180,4 @@ class DerivationDocument(LensModel):
     @property
     def is_informative(self) -> bool:
         """Whether the finding decided anything, as opposed to being unanswerable."""
-        return self.verdict in {ClaimVerdict.SUPPORTED, ClaimVerdict.CONTRADICTED}
+        return self.verdict.is_informative

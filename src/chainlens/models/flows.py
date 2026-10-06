@@ -82,6 +82,12 @@ class EntityRef(LensModel):
 NodeRef = Annotated[AddressRef | EntityRef, Field(discriminator="kind")]
 
 
+#: What a flow edge's ``confidence`` is when the chain recorded the attribution, and when it
+#: did not. The two values are a flag's, not a measurement's — see :attr:`ValueFlow.confidence`.
+DIRECT_CONFIDENCE = 1.0
+APPORTIONED_CONFIDENCE = 0.5
+
+
 class ValueFlow(LensModel):
     """An aggregated movement of value between two graph nodes.
 
@@ -111,10 +117,29 @@ class ValueFlow(LensModel):
     path: tuple[str, ...] = ()
     is_change: bool = False
 
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    #: Whether the attribution across this edge is this library's inference rather than
+    #: something the chain recorded. A multi-input UTXO transaction does not say which input
+    #: paid which output, so the edge is real and its split across the inputs is not.
+    apportioned: bool = False
     heuristics: tuple[str, ...] = ()
 
     provenance: Provenance | None = None
+
+    @property
+    def confidence(self) -> float:
+        """How much of this edge the chain recorded, as the flow view has always spelled it.
+
+        **It is a convention and not a measurement, and that is what this property is here to
+        say.** The value is 1.0 or 0.5 and nothing else — there is no estimator behind it and
+        never was one — so as a stored field it read as a confidence the library had measured.
+        The field is :attr:`apportioned`; this derives from it, one way, so the two cannot
+        disagree.
+
+        It survives at all because two exports publish it: the GraphML and the JSON both carry
+        a `confidence` per edge, and dropping a field consumers may read is a different change
+        from stopping the library from implying it measured something.
+        """
+        return APPORTIONED_CONFIDENCE if self.apportioned else DIRECT_CONFIDENCE
 
     def amount_to_decimal(self) -> Decimal:
         """Render the amount in whole units, exactly."""

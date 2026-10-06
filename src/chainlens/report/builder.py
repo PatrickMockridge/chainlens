@@ -77,7 +77,12 @@ class FlowRow(LensModel):
     hops: int = Field(ge=0)
     n_transfers: int = Field(ge=1)
     txids: tuple[str, ...] = ()
+    #: 1.0 or 0.5 and nothing else, so a renderer can say "apportioned" rather than showing a
+    #: reader a number that looks measured. Derived on :class:`~chainlens.models.flows.ValueFlow`,
+    #: and carried here because a table has a column for it.
     confidence: float = Field(ge=0.0, le=1.0)
+    #: The same fact as a flag, which is what it always was.
+    apportioned: bool = False
     is_change: bool = False
 
 
@@ -165,6 +170,7 @@ class InvestigationReport(LensModel):
                 n_transfers=edge.n_transfers,
                 txids=edge.txids,
                 confidence=edge.confidence,
+                apportioned=edge.apportioned,
                 is_change=edge.is_change,
             )
             for edge in self.flows
@@ -172,7 +178,7 @@ class InvestigationReport(LensModel):
 
     def apportioned_flow_count(self) -> int:
         """How many edges rest on an apportioned rather than recorded split."""
-        return sum(1 for edge in self.flows if edge.confidence < 1.0)
+        return sum(1 for edge in self.flows if edge.apportioned)
 
     @property
     def activity_window(self) -> tuple[datetime | None, datetime | None]:

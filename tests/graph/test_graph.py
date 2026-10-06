@@ -284,7 +284,7 @@ def test_cytoscape_json_is_valid_and_structured() -> None:
 
 
 def test_cytoscape_json_marks_apportioned_edges() -> None:
-    edge = _edge(ALICE, BOB, 100).model_copy(update={"confidence": 0.5})
+    edge = _edge(ALICE, BOB, 100).model_copy(update={"apportioned": True})
     graph = FlowGraph(
         chain=Chain.BITCOIN, seed=_ref(ALICE), nodes=(_ref(ALICE), _ref(BOB)), edges=(edge,)
     )
