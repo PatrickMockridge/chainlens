@@ -32,6 +32,27 @@ RESULTS = CASE_STUDY / "results"
 CORPUS = CASE_STUDY / "corpus"
 MANIFEST = CASE_STUDY / "corpus.manifest.yaml"
 
+
+def _layout_rows() -> list[tuple[str, str]]:
+    """``(path, committed cell)`` for every row of the README's Layout table.
+
+    Read from the markdown rather than restated here, because a copy of the list would be a second
+    description of the tree that could drift from the first — which is the failure being guarded.
+    """
+    readme = (CASE_STUDY / "README.md").read_text(encoding="utf-8")
+    section = readme.split("## Layout", 1)[1].split("\n## ", 1)[0]
+    rows: list[tuple[str, str]] = []
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.split("|")[1:-1]]
+        if len(cells) < 3 or set(cells[0]) <= set("-: "):
+            continue
+        path = cells[0].strip("`")
+        if path == "path":  # the header row
+            continue
+        rows.append((path, cells[1].strip("* ")))
+    return rows
+
+
 #: The longest a committed quote may be. Long enough to be verbatim and checkable,
 #: short enough that the artifact is not a redistribution of the post.
 MAX_QUOTE_WORDS = 25
@@ -329,4 +350,26 @@ def test_every_quote_is_verbatim_in_its_capture() -> None:
         assert needle in haystack, (
             f"{path.name}: the quote is not in the capture, so the verdict would be about a "
             "claim the post does not make"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# The layout table describes the tree that is actually there
+# --------------------------------------------------------------------------- #
+def test_the_readme_does_not_claim_a_committed_path_that_is_absent() -> None:
+    """Written because it happened twice: the Layout table listed `SELECTION.md` and `results/`
+    as committed, and neither existed — nor, for `results/`, did anything that would write it.
+
+    A table of what a reader will find is a promise about the tree, and a promise nobody checks is
+    how the artifact starts describing a study that was never run. The invariant is narrow on
+    purpose: a row that says ``yes`` must be there. Rows marked ``**no**`` are gitignored and
+    legitimately absent, ``**not yet**`` is how a row declares itself prospective, and a glob is
+    skipped because there is nothing to stat.
+    """
+    for path_text, committed in _layout_rows():
+        if committed != "yes" or "*" in path_text:
+            continue
+        assert (CASE_STUDY / path_text.rstrip("/")).exists(), (
+            f"case-study/README.md lists {path_text!r} as committed and it is not there; either "
+            "add it, or mark the row prospective"
         )

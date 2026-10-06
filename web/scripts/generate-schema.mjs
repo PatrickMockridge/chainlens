@@ -33,7 +33,7 @@
  * Their *validation* is complete; only the static type is weaker, and the property-key test
  * still holds their field set against the schema.
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jsonSchemaToZod } from "json-schema-to-zod";
@@ -129,7 +129,20 @@ function makeOverride() {
   };
 }
 
-const documents = ["ledger", "derivation", "overlay", "annotation_request", "narrative"];
+/**
+ * Every committed schema, read from the directory rather than listed here.
+ *
+ * **The list was a literal, and that made it a second description of the wire format.** The first
+ * is `DOCUMENTS` in `chainlens/ledger/schema.py`; a document added there gets its `.schema.json`
+ * from `make contract` and nothing compared the two lists. So a new document would commit
+ * cleanly, have no zod module, and no test would say so — CI's drift check diffs `web/schema` and
+ * the fixtures but not `web/src/schema`, where these modules land. Deriving the list removes the
+ * second description rather than adding a third thing to keep in sync.
+ */
+const documents = readdirSync(schemaDir)
+  .filter((file) => file.endsWith(".schema.json"))
+  .map((file) => file.replace(/\.schema\.json$/, ""))
+  .sort();
 
 for (const name of documents) {
   const raw = JSON.parse(readFileSync(join(schemaDir, `${name}.schema.json`), "utf8"));

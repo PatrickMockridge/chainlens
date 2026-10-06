@@ -73,13 +73,13 @@ no transcription for one, so a claim resting on a screenshot needs a hand-writte
 
 | path | committed | what it is |
 |---|---|---|
-| `SELECTION.md` | yes | the pre-registered rule: window, keyword predicate, no-exclusions clause. Committed **before** any claim was authored; the commit timestamp is the pre-registration evidence |
+| `SELECTION.md` | **not yet** | the pre-registered rule: window, keyword predicate, no-exclusions clause. **Not written yet, and that is the state the method requires**: it must be committed *before* the first claim is authored, because its commit timestamp *is* the pre-registration evidence, and a rule written after the corpus is not a pre-registration |
 | `AMENDMENTS.md` | yes | append-only: post edits and deletions, provider revisions, schema changes |
 | `corpus.manifest.yaml` | yes | filename → sha256, redacted URL, capture time, form |
 | `inbox/` | **no** | where posts are dropped for `make ingest` |
 | `corpus/` | **no** | the captures and their extracted text. Gitignored — see below |
 | `claims/NNNN-*.toml` | yes | one claim each: the engine's inputs, the verdict, and a falsifier |
-| `results/` | yes | the generated report and the coverage split |
+| `results/` | **not yet** | the generated report and the coverage split. Nothing writes it yet — no target and no tool mentions the directory, so the row describes what the study will produce rather than something committed |
 | `tools/ingest.py` | yes | digests the inbox into the corpus |
 | `tools/capture.py` | yes | one post at a time, from the command line |
 | `tools/verify.py` | yes | re-runs the engine per record; fails if a committed verdict does not reproduce |

@@ -125,7 +125,10 @@ jobs:
       - run: make contract
       - name: nothing drifted
         run: |
-          git diff --exit-code -- web/schema tests/ledger/fixtures tests/ui/fixtures || {
+          # `web/src/schema` is in the pathspec because the generated zod modules land there, and
+          # leaving it out meant a stale one was not a red build. It is the half of the contract the
+          # front end actually imports, so a drift there is the more dangerous of the two.
+          git diff --exit-code -- web/schema web/src/schema tests/ledger/fixtures tests/ui/fixtures || {
             echo "the generated contract is out of date; run \`make contract\` and commit the result"
             exit 1
           }
