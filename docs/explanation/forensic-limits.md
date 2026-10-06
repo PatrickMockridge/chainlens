@@ -41,6 +41,35 @@ Reports without a methodology section and a provenance section are not
 defensible, which is why the report generator makes both mandatory rather than
 optional.
 
+## A ratio is not robust to how the claim was chosen
+
+A likelihood ratio answers a question about a proposition. It says nothing about
+**why that proposition was evaluated**, and a proposition chosen with its answer
+already in view is not the question the ratio was computed for. There are three ways
+a claim reaches a ratio, and only the first is what the framework is for:
+
+| how the claim was chosen | what a ratio on it is |
+|---|---|
+| by an analyst, without regard to the evidence | a weight |
+| harvested from a post, before this tool saw it | a weight, on a proposition the post's author chose |
+| after a finding was seen, by whoever decides what is reported | a **screen**, not a weight |
+
+The third is reachable today, with no agent and no loop: extract a post into claim
+records, adjudicate them, write up the one that looked interesting. That ratio is
+correct arithmetic on a proposition chosen after its result was known, and a number a
+chooser can improve by choosing is not a weight. The sentence travels on every
+derivation's own `limitations`, so it stays with the number rather than in the code
+that computed it.
+
+**What is not available is a correction.** The library implements the one the
+framework has — the database-search term, for a ratio found by scanning a space
+rather than by prior suspicion — and that corrects for the *size of the space a match
+was found in*, not for the choice of proposition; the module says so itself. A
+selection correction needs the selection rule as an object: how many propositions were
+considered, under what stopping rule, with what distribution of rejects. An analyst
+choosing what to write up has no such rule, and neither would a model. So the honest
+artifact is the label, not a repaired number.
+
 ## What this library does not do
 
 - **It does not tell you who anyone is.** It shows which addresses move together.

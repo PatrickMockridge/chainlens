@@ -56,8 +56,9 @@ the ratio does not, which is why the ratio is the quantity a forensic report giv
 prior is the decision-maker's to choose.
 
 The ratio itself is not robust to how the claim was selected: a forensic ratio is computed
-for a proposition chosen without regard to the evidence, and a claim harvested from a post
-was not. Nothing here identifies a person.
+for a proposition chosen without regard to the evidence; a claim harvested from a post was
+chosen before this tool saw it; and a claim chosen after a finding was seen was chosen with
+the evidence in view. Nothing here identifies a person.
 """
 
 #: Which edge role an evidence movement corresponds to, so a reference to a ledger edge is

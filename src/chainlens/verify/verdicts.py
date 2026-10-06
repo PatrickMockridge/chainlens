@@ -61,6 +61,17 @@ __all__ = [
     "VerificationReport",
 ]
 
+#: The standing caveats, carried on every finding and every derivation.
+#:
+#: **The third selection case is named even though no agent ships.** The text used to run
+#: "a forensic ratio is computed for a proposition chosen without regard to the evidence, and a
+#: claim harvested from a post was not" — a list of two, written as though it were the whole list.
+#: It is not: a proposition chosen *after* a finding was seen was chosen with the evidence in view,
+#: and that is reachable without any loop in this library — whoever runs an extract over a post and
+#: then adjudicates the claim that looked interesting has done it. Naming it costs a clause and
+#: makes the other two honest, because a list that reads as complete and is not is worse than no
+#: list. It is also the sentence that would have to exist before any agentic mode could be argued
+#: for at all, which is why it was written while estimating that mode rather than after building it.
 STANDARD_VERIFICATION_LIMITATIONS = """\
 A verdict is about the match structure, not about belief. SUPPORTED means the
 chain data is consistent with the claim; it does not mean the post is honest, and
@@ -71,8 +82,10 @@ A likelihood ratio, where one is reported, is the weight of the evidence for the
 observed transfer being the *specific payment asserted* rather than a coincidental
 one by the same sender. It is not the probability that the claim is true, and it
 is not robust to how the claim was selected: a forensic ratio is computed for a
-proposition chosen without regard to the evidence, and a claim harvested from a
-post was not.
+proposition chosen without regard to the evidence; a claim harvested from a post
+was chosen before this tool saw it; and a claim chosen after a finding was seen was
+chosen with the evidence in view. A number a chooser can improve by choosing is a
+screen, not a weight.
 
 UNVERIFIABLE means no method here exists for that class of claim -- it is not a
 statement that the claim is false, and not a statement that it is true.

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from chainlens.ledger.derive import PRIOR_LIMITATIONS
 from chainlens.models.base import utcnow
 from chainlens.models.entities import Label
 from chainlens.models.enums import Chain, ClaimVerdict, EntityKind, LabelSource
@@ -39,7 +40,13 @@ from chainlens.verify.likelihood import (
     wilson_interval,
 )
 from chainlens.verify.schema import Claim, ClaimType, Extraction
-from chainlens.verify.verdicts import ClaimEvidence, RateEstimate, VerificationFinding
+from chainlens.verify.verdicts import (
+    STANDARD_VERIFICATION_LIMITATIONS,
+    ClaimEvidence,
+    RateEstimate,
+    VerificationFinding,
+    VerificationReport,
+)
 
 A = "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
 B = "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy"
@@ -677,3 +684,40 @@ async def test_a_provider_failure_is_a_finding_and_not_an_exception() -> None:
     finding = await _finding(provider, _claim(addresses=(A, B), amount_text="40 BTC"))
     assert finding.verdict is ClaimVerdict.INSUFFICIENT_DATA
     assert "did not complete" in (finding.reason or "")
+
+
+# --------------------------------------------------------------------------- #
+# What every artifact says about how the claim was chosen
+# --------------------------------------------------------------------------- #
+def test_the_selection_caveat_names_all_three_cases() -> None:
+    """A list of two written as though it were the whole list is worse than no list.
+
+    The text ran "a forensic ratio is computed for a proposition chosen without regard to the
+    evidence, and a claim harvested from a post was not" — and a proposition chosen *after* a
+    finding was seen was chosen with the evidence in view, which is a third case and not a footnote
+    to either. It is reachable today without any loop in this library: whoever extracts a post and
+    then adjudicates the claim that looked interesting has done it.
+    """
+    for text in (STANDARD_VERIFICATION_LIMITATIONS, PRIOR_LIMITATIONS):
+        # Reflowed before comparing: the source wraps these strings by hand for width, so a
+        # substring check against the raw text would be a check on the wrapping, and a clause that
+        # reads correctly but happens to break across a line would fail.
+        flat = " ".join(text.split())
+        assert "without regard to the evidence" in flat
+        assert "before this tool saw it" in flat
+        assert "with the evidence in view" in flat
+        # And the consequence, so the third case is not merely reported but *acted on* by whoever
+        # reads a number off an artifact a chooser produced.
+        assert "screen" in flat or "Nothing here identifies a person" in flat
+
+
+def test_the_ratio_a_derivation_carries_says_which_case_it_is_under() -> None:
+    """The caveat travels with the number rather than staying in the engine.
+
+    A ratio is quoted out of a derivation long after the run, so the sentence that qualifies it has
+    to be on the document — measured here on the built document rather than on the constant, because
+    the constant being right and the document not carrying it would be the same failure.
+    """
+    report = VerificationReport(post_id="p1", provenance_strength=ProvenanceStrength.PASTE)
+    assert report.limitations == STANDARD_VERIFICATION_LIMITATIONS
+    assert "with the evidence in view" in report.limitations
