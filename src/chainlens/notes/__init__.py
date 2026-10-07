@@ -20,6 +20,7 @@ discarded, and what was discarded is reported. See
 
 from __future__ import annotations
 
+from chainlens.notes.addresses import AddressMention, MentionKind, address_mentions
 from chainlens.notes.answer import (
     ANSWER_SYSTEM_PROMPT,
     AnswerDocument,
@@ -48,6 +49,7 @@ __all__ = [
     "ANSWER_SYSTEM_PROMPT",
     "DEFAULT_VISION_MODEL",
     "OLLAMA_URL",
+    "AddressMention",
     "AnswerDocument",
     "AnswerParagraph",
     "Answerer",
@@ -55,12 +57,14 @@ __all__ = [
     "CorpusError",
     "DraftAnswer",
     "Index",
+    "MentionKind",
     "Note",
     "NoteKind",
     "OllamaError",
     "OllamaVision",
     "Passage",
     "VisionReader",
+    "address_mentions",
     "read_corpus",
     "read_corpus_with",
     "tokens",

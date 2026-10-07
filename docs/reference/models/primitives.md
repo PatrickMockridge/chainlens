@@ -93,6 +93,10 @@ Render the amount in whole units, exactly.
 
 A block header plus whatever summary the provider supplied.
 
+**Attributes**
+
+- `transaction_ids` `tuple[str, ...]` — the hashes of the block's transactions, when the provider's payload carried them. An EVM node returns these for free — ``eth_getBlockByNumber`` with ``full=false`` yields hashes rather than transactions — so they are kept rather than discarded for the count, and a block number is enough to reach the transactions in the block without a full-node fetch or an index. Empty when the provider did not supply them, which is not the same as a block with no transactions: ``tx_count`` distinguishes the two.
+
 **Members**
 
 - `chain`
@@ -100,6 +104,7 @@ A block header plus whatever summary the provider supplied.
 - `height`
 - `timestamp` = None
 - `tx_count` = None
+- `transaction_ids` = ()
 - `size` = None
 - `weight` = None
 - `prev_hash` = None

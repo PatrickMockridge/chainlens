@@ -82,6 +82,7 @@
     - [primitives](reference/models/primitives.md)
     - [wire](reference/models/wire.md)
   - [notes](reference/notes/index.md)
+    - [addresses](reference/notes/addresses.md)
     - [answer](reference/notes/answer.md)
     - [corpus](reference/notes/corpus.md)
     - [identifiers](reference/notes/identifiers.md)

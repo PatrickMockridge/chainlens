@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from chainlens.notes.identifiers import implausible_addresses
+from chainlens.notes.identifiers import (
+    implausible_addresses,
+    plausible_addresses,
+    truncated_addresses,
+)
 
 #: Real, and each on a different address family, so a check that got one of the three wrong would
 #: fail here rather than in a corpus.
@@ -25,6 +29,10 @@ GARBLED = "0x8ea674fdd1fd973e21cd5ef0df56a1987b1c8e"
 #: in the middle, the same length, every character valid base58.
 CROWDSALE = "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2"
 MISREAD_CROWDSALE = "36PrZ1KHYMPmqSyAQXSG8VwbUiq2EogxLo2"
+
+#: Twenty-eight hex characters: the shortest prefix that is both address-*shaped* (the candidate
+#: matcher's floor) and clearly cut short. This is the overlap the corpus layer has to resolve.
+LONG_PREFIX = "0x1be716e43aa05317e21cd5ef0df5"
 
 
 class TestWhatIsNotFlagged:
@@ -111,3 +119,107 @@ class TestWhatIsFlagged:
 
     def test_a_good_address_beside_a_bad_one_does_not_excuse_it(self) -> None:
         assert implausible_addresses(f"{MINER} and {GARBLED}") == (GARBLED,)
+
+
+class TestTheUsableAddresses:
+    """The mirror of the check: what *can* be looked up, which is what the front door needs.
+
+    Until this existed, the only thing that could be asked of a corpus was "does it contain
+    anything impossible", and nothing could answer "what does it contain that I can follow".
+    """
+
+    def test_a_real_address_is_returned(self) -> None:
+        assert plausible_addresses(f"coins went to {MINER}") == (MINER,)
+
+    def test_it_returns_the_canonical_form(self) -> None:
+        """An all-lowercase address and its EIP-55 spelling are one address, and a lookup must not
+        depend on which one a screenshot happened to render."""
+        mixed = "0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c"
+        assert plausible_addresses(mixed) == (mixed.lower(),)
+
+    def test_each_family_is_found(self) -> None:
+        text = f"{SILK} and {GOX} and {MINER} and {SEGWIT}"
+        assert plausible_addresses(text) == (SILK, GOX, MINER, SEGWIT)
+
+    def test_the_order_is_the_order_they_appear(self) -> None:
+        assert plausible_addresses(f"{GOX} then {SILK}") == (GOX, SILK)
+
+    def test_a_repeated_address_is_returned_once(self) -> None:
+        assert plausible_addresses(f"{MINER} and again {MINER}") == (MINER,)
+
+    def test_a_garbled_address_is_not_usable(self) -> None:
+        assert plausible_addresses(GARBLED) == ()
+
+    def test_a_long_truncated_prefix_is_not_usable(self) -> None:
+        """The case where the truncation is long enough to reach the candidate matcher.
+
+        `_CANDIDATE` matches 28-to-63 hex characters, so a prefix of twenty-eight or more is
+        address-shaped *and* cut short. It is still not usable, and the interesting part is that
+        a caller with only these three functions cannot tell the two apart — which is why the
+        corpus layer resolves it (`notes/addresses.py`).
+        """
+        assert plausible_addresses(f"{LONG_PREFIX}...") == ()
+
+    def test_prose_yields_nothing(self) -> None:
+        assert plausible_addresses("the trustee said nothing about it") == ()
+
+
+class TestTheAddressesThatCannotBeLookedUp:
+    """Truncation is the common case in a corpus of block-explorer screenshots, not the edge.
+
+    It is also the case with no error in it: the page rendered a prefix, and a reader that reports
+    only what it could look up would describe a corpus of sixty abbreviations as holding none.
+    """
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("0x5ed8cee6b63b1c6afce...", ("0x5ed8cee6b63b1c6afce...",)),
+            ("0x5ed8cee6b63b1c6afce…", ("0x5ed8cee6b63b1c6afce…",)),
+            ("1F1tAaz5x1HUX...", ("1F1tAaz5x1HUX...",)),
+            ("bc1qxy2kgdygj...", ("bc1qxy2kgdygj...",)),
+        ],
+    )
+    def test_a_truncated_address_is_named(self, text: str, expected: tuple[str, ...]) -> None:
+        assert truncated_addresses(text) == expected
+
+    def test_a_full_address_is_not_truncated(self) -> None:
+        assert truncated_addresses(MINER) == ()
+
+    def test_a_fragment_with_no_ellipsis_is_not_a_truncation(self) -> None:
+        """The distinction that matters: an ellipsis means *the note abbreviated this*, and a bare
+        short run means something else entirely. Calling a fragment truncated would invent an
+        explanation the material does not support."""
+        assert truncated_addresses("the contract at 0xdeadbeef") == ()
+
+    def test_a_repeated_truncation_is_reported_once(self) -> None:
+        assert truncated_addresses("0x5ed8... and 0x5ed8...") == ("0x5ed8...",)
+
+
+class TestTheThreeAgreeWithEachOther:
+    """Three functions over one pattern. The failure to guard against is the module disagreeing
+    with itself about what an address is — a token in both the plausible and the implausible list
+    would mean a caller could look up something it had just been told was wrong."""
+
+    TEXT = (
+        f"Real {MINER} and {SILK}. Garbled {GARBLED}. Cut short 0x5ed8cee6b63b1c6afce... "
+        f"A fragment 0xfca8. A txid {'0x' + 'ab' * 32}. Swapped {MISREAD_CROWDSALE}."
+    )
+
+    def test_nothing_is_both_usable_and_implausible(self) -> None:
+        assert set(plausible_addresses(self.TEXT)) & set(implausible_addresses(self.TEXT)) == set()
+
+    def test_nothing_usable_is_also_reported_as_truncated(self) -> None:
+        assert set(plausible_addresses(self.TEXT)) & set(truncated_addresses(self.TEXT)) == set()
+
+    def test_a_truncation_may_also_be_implausible_and_that_is_not_a_contradiction(self) -> None:
+        """A 38-hex prefix is both "not an address" and "cut short", and both are true. Which
+        explanation a reader is given is decided one level up, where the corpus can say that the
+        truncation is the better one — see ``notes/addresses.py``.
+        """
+        text = f"{LONG_PREFIX}..."
+        assert implausible_addresses(text) == (LONG_PREFIX,)
+        assert truncated_addresses(text) == (text,)
+        # Which is why the corpus layer drops the first when the second explains it: reporting this
+        # as a mangled address would send a reader looking for a character the image never showed.
+        assert text.startswith(LONG_PREFIX)

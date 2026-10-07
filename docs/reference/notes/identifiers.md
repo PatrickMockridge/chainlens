@@ -34,6 +34,16 @@ not what they claim to be. Discarding the whole reading over one bad address wou
 prose that is most of a corpus; keeping it silently would be the failure this library is arranged
 against.
 
+## `TRANSCRIPTION_CAVEAT`
+
+## `chain_for`
+
+```python
+chain_for(token: str) -> Chain | None
+```
+
+Which chain the token's prefix claims it is an address on, if either.
+
 ## `implausible_addresses`
 
 ```python
@@ -64,3 +74,45 @@ image".
 
 - `` `str` — The offending tokens, verbatim and deduplicated. Empty when everything address-shaped in
 - `` `...` — the text could be an address.
+
+## `plausible_addresses`
+
+```python
+plausible_addresses(text: str) -> tuple[str, ...]
+```
+
+The addresses in ``text`` that could actually be looked up, in order, deduplicated.
+
+The mirror of `implausible_addresses`: same pattern, same validator, opposite verdict. The
+two are complements over the tokens ``_CANDIDATE`` matches, and a test asserts that — a token in
+both would mean the module disagreed with itself about what an address is.
+
+Canonical rather than verbatim, because this is the form a caller will hand to a provider: an
+all-lowercase EVM address and its EIP-55 mixed-case spelling are the same address, and a lookup
+should not depend on which one a screenshot happened to render.
+
+**Returns**
+
+- `` `tuple[str, ...]` — The usable addresses, deduplicated, in the order they appear in the text.
+
+## `truncated_addresses`
+
+```python
+truncated_addresses(text: str) -> tuple[str, ...]
+```
+
+Addresses in ``text`` that are cut short, in the order they appear, deduplicated.
+
+A truncated address is not a *wrong* address and it is not a usable one: it is a claim the image
+made that no check can falsify. Reporting it by name is the point — the alternative is a count
+of usable addresses that silently omits the majority of them, which reads as "the corpus holds
+twelve addresses" when the corpus holds twelve usable ones and sixty abbreviated ones.
+
+Measured on the corpus this was written for: **this is the common case, not the edge.** An
+Etherscan page truncates its transaction hashes and its counterparty addresses in the rendering,
+so most address-shaped strings in a screenshot of one cannot be looked up.
+
+**Returns**
+
+- `` `str` — The truncated tokens, verbatim — because what is useful about them is what the image showed,
+- `` `...` — not a canonical form they do not have.

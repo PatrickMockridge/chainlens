@@ -54,6 +54,7 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.models.primitives`](models/primitives.md)
 - [`chainlens.models.wire`](models/wire.md)
 - [`chainlens.notes`](notes/index.md)
+- [`chainlens.notes.addresses`](notes/addresses.md)
 - [`chainlens.notes.answer`](notes/answer.md)
 - [`chainlens.notes.corpus`](notes/corpus.md)
 - [`chainlens.notes.identifiers`](notes/identifiers.md)

@@ -271,12 +271,18 @@ def parse_rpc_block(
     if height is None:
         raise SchemaError(provider, f"block {block_hash} payload carries no number")
     transactions = raw.get("transactions") or []
+    # ``eth_getBlockByNumber`` with ``full=false`` returns the block's transaction **hashes**, not
+    # its transactions — so the list read here for the count also holds the identifiers, and
+    # throwing them away would be discarding the only keyless way to get from a block to what is in
+    # it. A full node would need ``full=true``, which is a much larger payload for the same ids.
+    ids = tuple(str(txid) for txid in transactions) if isinstance(transactions, list) else ()
     return Block(
         chain=chain,
         hash=block_hash,
         height=height,
         timestamp=from_hex_seconds(raw.get("timestamp")),
         tx_count=len(transactions) if isinstance(transactions, list) else None,
+        transaction_ids=ids,
         size=parse_hex_int(raw.get("size")),
         # ``weight`` is deliberately left unset: it is a Bitcoin block-weight field
         # and an EVM block's gasUsed means something else entirely. Filing one under

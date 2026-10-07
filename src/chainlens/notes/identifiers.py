@@ -36,11 +36,34 @@ against.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 
 from chainlens.models.enums import Chain
 from chainlens.verify.parsing import normalise_address
 
-__all__ = ["implausible_addresses"]
+__all__ = [
+    "TRANSCRIPTION_CAVEAT",
+    "chain_for",
+    "implausible_addresses",
+    "plausible_addresses",
+    "truncated_addresses",
+]
+
+#: The sentence to attach to anything that rests on a model's reading of a screenshot.
+#:
+#: A constant rather than prose written at each call site, because it is one argument and three
+#: artifacts carry it: the written claim record, the finding, and the derivation a reader sees. If
+#: it said something slightly different in each, a reader comparing two of them would have to work
+#: out whether the difference was meaningful.
+#:
+#: What it says is deliberately *not* "this may be wrong". It says what is true: a passing check is
+#: necessary and not sufficient, and the reason is specific — an all-lowercase EVM address carries
+#: no checksum, so a substitution inside one is invisible to every validator this library has.
+TRANSCRIPTION_CAVEAT = (
+    "this address was read by a model from a screenshot, and a transcription is not a record: a "
+    "wrong address of the right shape in an all-lowercase EVM address carries no checksum, so a "
+    "check that passed here is necessary and not sufficient"
+)
 
 #: What an address looks like — **near enough to full length to be a mangled one**, and no shorter.
 #:
@@ -71,13 +94,97 @@ _CANDIDATE = re.compile(
 )
 
 
-def _chain_for(token: str) -> Chain | None:
+#: Address-shaped tokens that stop short or carry an ellipsis — the shape a screenshot uses when it
+#: shows `0x5a0b54d5…` rather than the whole address.
+#:
+#: This is its own pattern rather than a loosening of ``_CANDIDATE``, because the two answer
+#: different questions and must not be allowed to overlap: ``_CANDIDATE`` asks "is this a mangled
+#: address?" and this asks "is this an address at all?". A prefix answers the second with *no*, and
+#: joining them would make every truncated address a candidate for being a wrong one.
+#:
+#: The ellipsis is required. A run of hex with no ellipsis and no length is a fragment, not a
+#: truncation, and the distinction is the difference between "the image abbreviated this" and "the
+#: model lost the end of it".
+_TRUNCATED = re.compile(
+    r"""
+    0x[0-9a-fA-F]{4,39}(?:…|\.\.\.)                             # an EVM address, cut short
+    | [13][a-km-zA-HJ-NP-Z1-9]{4,33}(?:…|\.\.\.)                # base58, cut short
+    | (?:bc1|BC1)[02-9ac-hj-np-z]{4,}(?:…|\.\.\.)               # bech32, cut short
+    """,
+    re.VERBOSE,
+)
+
+
+def chain_for(token: str) -> Chain | None:
     """Which chain the token's prefix claims it is an address on, if either."""
     if token[:2].lower() == "0x":
         return Chain.ETHEREUM
     if token[:3].lower() == "bc1":
         return Chain.BITCOIN
     return Chain.BITCOIN if token[0] in "13" else None
+
+
+def _candidates(text: str) -> Iterator[tuple[str, str | None]]:
+    """Every address-shaped token in ``text``, with the canonical form when it has one.
+
+    One walk, shared by all three public functions, so that "is this an address?" has exactly one
+    answer in this module. The alternative — each function running its own ``finditer`` and its own
+    validity test — is three places for the same question to drift into three answers.
+
+    A token the library cannot canonicalise yields ``None`` rather than being omitted: whether a
+    token is *usable* is a different question from whether it was *found*, and the second is what
+    the caller reporting a count needs.
+    """
+    for match in _CANDIDATE.finditer(text):
+        token = match.group(0)
+        chain = chain_for(token)
+        canonical = normalise_address(token, chain) if chain is not None else None
+        yield token, canonical
+
+
+def plausible_addresses(text: str) -> tuple[str, ...]:
+    """The addresses in ``text`` that could actually be looked up, in order, deduplicated.
+
+    The mirror of :func:`implausible_addresses`: same pattern, same validator, opposite verdict. The
+    two are complements over the tokens ``_CANDIDATE`` matches, and a test asserts that — a token in
+    both would mean the module disagreed with itself about what an address is.
+
+    Canonical rather than verbatim, because this is the form a caller will hand to a provider: an
+    all-lowercase EVM address and its EIP-55 mixed-case spelling are the same address, and a lookup
+    should not depend on which one a screenshot happened to render.
+
+    Returns:
+        The usable addresses, deduplicated, in the order they appear in the text.
+    """
+    found: list[str] = []
+    for _token, canonical in _candidates(text):
+        if canonical is not None and canonical not in found:
+            found.append(canonical)
+    return tuple(found)
+
+
+def truncated_addresses(text: str) -> tuple[str, ...]:
+    """Addresses in ``text`` that are cut short, in the order they appear, deduplicated.
+
+    A truncated address is not a *wrong* address and it is not a usable one: it is a claim the image
+    made that no check can falsify. Reporting it by name is the point — the alternative is a count
+    of usable addresses that silently omits the majority of them, which reads as "the corpus holds
+    twelve addresses" when the corpus holds twelve usable ones and sixty abbreviated ones.
+
+    Measured on the corpus this was written for: **this is the common case, not the edge.** An
+    Etherscan page truncates its transaction hashes and its counterparty addresses in the rendering,
+    so most address-shaped strings in a screenshot of one cannot be looked up.
+
+    Returns:
+        The truncated tokens, verbatim — because what is useful about them is what the image showed,
+        not a canonical form they do not have.
+    """
+    found: list[str] = []
+    for match in _TRUNCATED.finditer(text):
+        token = match.group(0)
+        if token not in found:
+            found.append(token)
+    return tuple(found)
 
 
 def implausible_addresses(text: str) -> tuple[str, ...]:
@@ -106,9 +213,7 @@ def implausible_addresses(text: str) -> tuple[str, ...]:
         the text could be an address.
     """
     found: list[str] = []
-    for match in _CANDIDATE.finditer(text):
-        token = match.group(0)
-        chain = _chain_for(token)
-        if chain is not None and normalise_address(token, chain) is None and token not in found:
+    for token, canonical in _candidates(text):
+        if canonical is None and token not in found:
             found.append(token)
     return tuple(found)
