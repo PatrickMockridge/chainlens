@@ -223,6 +223,12 @@ def _command_notes(args: argparse.Namespace) -> int:
             # be fluent and wrong, so what it says that cannot be true is said out loud.
             print(f"  caution: {note.path} — {warning}")
 
+    if args.save:
+        saved = Path(args.save)
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_text(strict_dumps(corpus), encoding="utf-8")
+        print(f"wrote {saved}")
+
     if args.read_only:
         return 0
 
@@ -600,6 +606,13 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"the ollama model to read images with, default {DEFAULT_VISION_MODEL}",
     )
     notes.add_argument("--out", help="write the answer as a document")
+    notes.add_argument(
+        "--save",
+        help=(
+            "write the corpus itself — every transcription, warning and refusal — so a reading "
+            "can be checked by eye instead of taken on the command's word"
+        ),
+    )
     notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
     notes.set_defaults(handler=_command_notes)
 

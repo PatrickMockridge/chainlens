@@ -189,3 +189,32 @@ class TestReadingScreenshots:
         # credential for: reaching it is the proof that the flag did not replace it.
         with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY"):
             _run("anything", "--from", str(root), "--vision")
+
+    def test_save_writes_the_reading_out_so_it_can_be_checked_by_eye(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A reading nobody can look at is a reading taken on the command's word.
+
+        This is how one particular question got answered: the check flagged a string that looked
+        exactly like a correct address, and the only way to find out what was actually wrong with
+        it was to read the transcription. It was two characters transposed — invisible on screen,
+        which is the entire reason the check exists.
+        """
+        import json
+
+        monkeypatch.chdir(tmp_path)
+        root = _with_a_screenshot(tmp_path)
+        self._reader(monkeypatch, text="sent to 36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2")
+        saved = tmp_path / "corpus.json"
+
+        assert (
+            _run("anything", "--from", str(root), "--read-only", "--vision", "--save", str(saved))
+            == 0
+        )
+
+        assert f"wrote {saved}" in capsys.readouterr().out
+        corpus = json.loads(saved.read_text(encoding="utf-8"))
+        assert corpus["read_by"] == "fake:fake-vision"
+        note = corpus["notes"][0]
+        assert "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2" in note["text"]
+        assert note["warnings"] == [], "a correct address is not a caution"

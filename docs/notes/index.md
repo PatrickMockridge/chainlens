@@ -159,6 +159,23 @@ chainlens notes --from ./notes "which address did the trustee consolidate into?"
 chainlens notes --from ./notes "…" --out answer.json     # the whole document
 ```
 
+## Reading it yourself
+
+An answer you cannot check is an answer you are taking on trust, and the same goes for the
+transcriptions underneath it. `--save` writes the corpus out — every transcription, every file
+that could not be read and why, and every caution:
+
+```console
+chainlens notes --from ./notes "anything" --read-only --vision --save corpus.json
+```
+
+That is not a debugging flag. It is how one question here got answered: the check flagged a string
+that looked *exactly* like the correct Ethereum crowdsale address, and the only way to find out
+what was wrong with it was to read the transcription and compare character by character. The model
+had written `…YHYPmq…` for `…YHMpq…` — two characters transposed, same length, indistinguishable
+on screen. Three separate readings of those two strings as identical happened before a diff settled
+it, and every one of them was wrong.
+
 The question is matched against your notes **lexically, by identifiers** — an address, a txid, a
 contract, a project name. That is deliberate: what gets looked up in this work is a string
 somebody copied out of a post, and `1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX` and
