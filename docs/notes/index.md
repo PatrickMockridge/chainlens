@@ -167,7 +167,13 @@ that could not be read and why, and every caution:
 
 ```console
 chainlens notes --from ./notes "anything" --read-only --vision --save corpus.json
+chainlens notes --from-corpus corpus.json --addresses      # ask again, without reading it again
 ```
+
+`--from-corpus` reads what `--save` wrote, and **that pair is the point**: reading a corpus is a
+model call per screenshot — an hour for a real one — and asking a second question about it should
+not cost that twice. Every command below takes either `--from ./notes --vision` or
+`--from-corpus corpus.json`.
 
 That is not a debugging flag. It is how one question here got answered: the check flagged a string
 that looked *exactly* like the correct Ethereum crowdsale address, and the only way to find out

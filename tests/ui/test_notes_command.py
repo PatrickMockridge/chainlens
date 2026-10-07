@@ -444,3 +444,69 @@ class TestWritingClaimsAndLabels:
 
         assert _run("--from", str(root), "--read-only") == 0
         assert "1/1 file(s) read" in capsys.readouterr().out
+
+
+class TestReadingACorpusThatWasAlreadyRead:
+    """`--save` writes a corpus; `--from-corpus` reads it back.
+
+    The point is cost. Reading a corpus is a model call per screenshot — an hour for a real one —
+    and asking a second question about it should not cost that twice. The flag also makes `--save`
+    useful rather than write-only, which it was until this existed.
+    """
+
+    def _saved(self, tmp_path: Path, *notes: tuple[str, str]) -> Path:
+        from chainlens.notes.corpus import Corpus, Note, NoteKind
+
+        corpus = Corpus(
+            root="notes",
+            notes=tuple(
+                Note(
+                    path=path,
+                    kind=NoteKind.TEXT,
+                    text=text,
+                    characters=len(text),
+                )
+                for path, text in notes
+            ),
+        )
+        saved = tmp_path / "corpus.json"
+        saved.write_text(corpus.model_dump_json(), encoding="utf-8")
+        return saved
+
+    def test_it_reports_the_addresses_without_reading_anything(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        saved = self._saved(tmp_path, ("n.txt", f"coins to {ADDRESS_IN_A_NOTE}"))
+
+        assert _run("--from-corpus", str(saved), "--addresses") == 0
+        out = capsys.readouterr().out
+        assert "0xea674fdde714fd979de3edf0f56aa9716b898ec8" in out
+        assert "1 address(es) that can be looked up" in out
+
+    def test_it_reaches_no_model_and_no_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The default directory is not even looked at: this run is about a file."""
+        monkeypatch.chdir(tmp_path)
+        saved = self._saved(tmp_path, ("n.txt", ADDRESS_IN_A_NOTE))
+
+        assert _run("--from-corpus", str(saved), "--addresses") == 0
+        assert not (tmp_path / DEFAULT_NOTES_DIR).exists()
+
+    def test_a_missing_file_is_named_rather_than_traced_back(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SystemExit, match="no such saved corpus"):
+            _run("--from-corpus", str(tmp_path / "absent.json"), "--addresses")
+
+    def test_a_file_that_is_not_a_corpus_says_so(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        wrong = tmp_path / "wrong.json"
+        wrong.write_text('{"not": "a corpus"}', encoding="utf-8")
+
+        with pytest.raises(SystemExit, match="is not a saved corpus"):
+            _run("--from-corpus", str(wrong), "--addresses")

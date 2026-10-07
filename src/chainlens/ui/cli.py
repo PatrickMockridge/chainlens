@@ -215,6 +215,21 @@ async def _read_for_cli(root: Path, reader: VisionReader) -> Corpus:
             await close()
 
 
+def _load_corpus(path: Path) -> Corpus:
+    """A corpus that was saved, read back.
+
+    Raises:
+        SystemExit: the file is missing or is not a corpus. Named rather than raised as a traceback,
+            because the likeliest cause is a path typed slightly wrong.
+    """
+    if not path.is_file():
+        raise SystemExit(f"no such saved corpus: {path}")
+    try:
+        return Corpus.model_validate_json(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise SystemExit(f"{path} is not a saved corpus: {exc}. One is written by --save") from exc
+
+
 def _report_addresses(corpus: Corpus) -> None:
     """What the corpus holds that can be followed, and what it holds that cannot.
 
@@ -439,7 +454,7 @@ def _command_notes(args: argparse.Namespace) -> int:
     import anyio
 
     root = Path(args.from_directory)
-    if not root.is_dir() and root == Path(DEFAULT_NOTES_DIR):
+    if args.from_corpus is None and not root.is_dir() and root == Path(DEFAULT_NOTES_DIR):
         # The directory nobody named, on a first run. Making it and saying where it is beats
         # failing with "not a directory to read a corpus from" — which is a *correct* message for
         # a path somebody typed and a useless one for a path they did not. A named directory that
@@ -450,11 +465,19 @@ def _command_notes(args: argparse.Namespace) -> int:
         print("in it is committed; see docs/notes/index.md.")
         return 0
 
-    reader = OllamaVision(model=args.vision_model) if args.vision else None
-    try:
-        corpus = read_corpus(root) if reader is None else anyio.run(_read_for_cli, root, reader)
-    except CorpusError as exc:
-        raise SystemExit(str(exc)) from exc
+    reader: OllamaVision | None = None
+    if args.from_corpus is not None:
+        # A corpus already read, rather than read again. Reading one costs a model call per
+        # screenshot — minutes to an hour for a real corpus — and asking a second question about
+        # it should not cost that twice. `--save` writes it; this reads it back. Checked before the
+        # directory, because a run over a saved corpus has nothing to look at on disk.
+        corpus = _load_corpus(Path(args.from_corpus))
+    else:
+        reader = OllamaVision(model=args.vision_model) if args.vision else None
+        try:
+            corpus = read_corpus(root) if reader is None else anyio.run(_read_for_cli, root, reader)
+        except CorpusError as exc:
+            raise SystemExit(str(exc)) from exc
 
     if not corpus.notes:
         # Empty is not the same as unreadable, and it has a different remedy.
@@ -916,6 +939,14 @@ def build_parser() -> argparse.ArgumentParser:
     notes.add_argument("--select-for", help="what the chooser is asked to select for")
     notes.add_argument("--leads", help="write the chooser's leads here; a lead is not a claim")
     notes.add_argument("--out", help="write the answer as a document")
+    notes.add_argument(
+        "--from-corpus",
+        help=(
+            "read a corpus saved by --save instead of reading the directory again. Reading a "
+            "corpus costs a model call per screenshot, and a second question about it should not "
+            "cost that twice"
+        ),
+    )
     notes.add_argument(
         "--addresses",
         action="store_true",
