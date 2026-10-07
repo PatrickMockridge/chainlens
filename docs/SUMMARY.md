@@ -60,6 +60,7 @@
     - [export](reference/graph/export.md)
     - [metrics](reference/graph/metrics.md)
   - [labels](reference/labels/index.md)
+    - [ingest](reference/labels/ingest.md)
     - [provider](reference/labels/provider.md)
     - [records](reference/labels/records.md)
   - [ledger](reference/ledger/index.md)

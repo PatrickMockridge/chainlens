@@ -8,13 +8,19 @@ be redistributed under.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
 
 from chainlens.labels.records import DATA_DIR, LabelFile, RecordError, load_directory, load_file
-from chainlens.models.enums import EntityKind, LabelSource
+from chainlens.models.enums import Chain, EntityKind, LabelSource
+from chainlens.notes.addresses import AddressMention
+from chainlens.providers.base import Provider
+
+#: An address the ingest tests agree on, so the record-level tests can use the same one.
+INGEST_ADDRESS = "0x" + "ab" * 20
 
 
 def _file(**overrides: object) -> dict[str, object]:
@@ -210,3 +216,209 @@ class TestTheCommittedData:
         assert labels.address == dao.addresses[0]
         assert labels.name == "The DAO"
         assert labels.provider == "events"
+
+
+class TestIngestingAScreenshotLabelColumn:
+    """A vendor's table becomes a label file, or it does not become anything.
+
+    What matters is that the format's invariants are *satisfied* rather than relaxed: a record
+    with no citable source, or with an address nobody looked up, is exactly what those two fields
+    exist to prevent, and an ingest that dodged them would be the one place in this library where
+    a label arrives with nothing behind it.
+    """
+
+    def _mentions(self, *tokens: str) -> tuple[AddressMention, ...]:
+        from chainlens.notes.addresses import MentionKind
+
+        made = []
+        for token in tokens:
+            usable = token.startswith("0x") and len(token) == 42
+            made.append(
+                AddressMention(
+                    as_written=token,
+                    kind=MentionKind.USABLE if usable else MentionKind.TRUNCATED,
+                    address=token if usable else None,
+                    note="table.png",
+                    transcribed=True,
+                )
+            )
+        return tuple(made)
+
+    def _provider(
+        self, address: str, *, balance: int = 1_000, is_contract: bool = False
+    ) -> Provider:
+        from chainlens.models.enums import Chain
+        from chainlens.models.primitives import Address, AssetRef, Balance
+        from chainlens.providers.base import BaseProvider
+        from chainlens.providers.capabilities import Capability, provides
+
+        class P(BaseProvider):
+            name = "fake-chain"
+            chain = Chain.ETHEREUM
+
+            def __init__(self) -> None:
+                super().__init__(settings=None)
+
+            @provides(Capability.ADDRESS)
+            async def get_address(self, candidate: str) -> Address:
+                return Address(chain=Chain.ETHEREUM, address=candidate, is_contract=is_contract)
+
+            @provides(Capability.BALANCE)
+            async def get_balance(self, candidate: str) -> Balance:
+                return Balance(
+                    chain=Chain.ETHEREUM,
+                    address=candidate,
+                    amount=balance,
+                    asset=AssetRef.native(Chain.ETHEREUM, symbol="ETH", decimals=18),
+                )
+
+        return P()
+
+    ADDRESS = INGEST_ADDRESS
+    TRUNCATED = "0x5ed8cee6b63b1c6afce..."
+
+    @pytest.mark.anyio
+    async def test_a_usable_address_becomes_a_corroborated_record(self) -> None:
+        from chainlens.labels.ingest import ingest_labels
+
+        report = await ingest_labels(
+            self._mentions(self.ADDRESS),
+            provider=self._provider(self.ADDRESS, balance=2_500, is_contract=True),
+            name="Some Vendor",
+            source="https://example.invalid/table",
+            kind=EntityKind.SERVICE,
+            licence="private — not for redistribution",
+        )
+
+        assert report.kept == 1
+        record = report.file.labels[0]  # type: ignore[union-attr]
+        assert record.name == "Some Vendor"
+        assert record.source == "https://example.invalid/table"
+        assert record.addresses == (self.ADDRESS,)
+        corroboration = record.corroboration[self.ADDRESS]
+        assert corroboration.is_contract is True
+        assert corroboration.balance == 2_500.0
+
+    @pytest.mark.anyio
+    async def test_a_truncated_address_becomes_nothing_and_is_reported(self) -> None:
+        """It cannot be looked up, so it cannot be corroborated, so the format refuses it — and
+        completing it or matching it by prefix would manufacture an assertion nobody made."""
+        from chainlens.labels.ingest import ingest_labels
+
+        report = await ingest_labels(
+            self._mentions(self.ADDRESS, self.TRUNCATED),
+            provider=self._provider(self.ADDRESS),
+            name="Some Vendor",
+            source="https://example.invalid/table",
+            kind=EntityKind.SERVICE,
+            licence="private — not for redistribution",
+        )
+
+        assert report.addresses == 1, "only the address that could be looked up"
+        assert [token for token, _why in report.skipped] == [self.TRUNCATED]
+        assert "truncated in the note" in report.skipped[0][1]
+
+    @pytest.mark.anyio
+    async def test_nothing_usable_means_no_file_rather_than_an_empty_one(self) -> None:
+        from chainlens.labels.ingest import ingest_labels
+
+        report = await ingest_labels(
+            self._mentions(self.TRUNCATED),
+            provider=self._provider(self.ADDRESS),
+            name="Some Vendor",
+            source="https://example.invalid/table",
+            kind=EntityKind.SERVICE,
+            licence="private — not for redistribution",
+        )
+
+        assert report.file is None
+        assert report.kept == 0
+
+    @pytest.mark.anyio
+    async def test_an_address_the_chain_could_not_read_is_left_out_not_guessed_at(self) -> None:
+        from chainlens.exceptions import NotFoundError
+        from chainlens.labels.ingest import ingest_labels
+        from chainlens.models.enums import Chain
+        from chainlens.models.primitives import Address
+        from chainlens.providers.base import BaseProvider
+        from chainlens.providers.capabilities import Capability, provides
+
+        class Missing(BaseProvider):
+            name = "missing"
+            chain = Chain.ETHEREUM
+
+            def __init__(self) -> None:
+                super().__init__(settings=None)
+
+            @provides(Capability.ADDRESS)
+            async def get_address(self, candidate: str) -> Address:
+                raise NotFoundError("missing", candidate)
+
+        report = await ingest_labels(
+            self._mentions(self.ADDRESS),
+            provider=Missing(),
+            name="Some Vendor",
+            source="https://example.invalid/table",
+            kind=EntityKind.SERVICE,
+            licence="private — not for redistribution",
+        )
+
+        assert report.file is None
+
+    @pytest.mark.anyio
+    async def test_a_provider_that_cannot_read_an_address_says_so_once(self) -> None:
+        """The format would refuse every record anyway; forty identical validator failures is a
+        worse way to say it."""
+        from chainlens.exceptions import ChainlensError
+        from chainlens.labels.ingest import ingest_labels
+        from chainlens.models.enums import Chain
+        from chainlens.providers.base import BaseProvider
+
+        class Blind(BaseProvider):
+            name = "blind"
+            chain = Chain.ETHEREUM
+
+            def __init__(self) -> None:
+                super().__init__(settings=None)
+
+        with pytest.raises(ChainlensError, match="cannot read an address"):
+            await ingest_labels(
+                self._mentions(self.ADDRESS),
+                provider=Blind(),
+                name="Some Vendor",
+                source="https://example.invalid/table",
+                kind=EntityKind.SERVICE,
+                licence="private — not for redistribution",
+            )
+
+    def test_the_format_still_refuses_a_record_that_cites_nothing(self) -> None:
+        """The invariants the ingest exists to satisfy, restated here so that relaxing one in the
+        ingest would show up as this test failing.
+
+        A label with no address says nothing about anything, and a source that is not a URL is an
+        assertion nobody can check — which is a guess with a name.
+        """
+        from chainlens.labels.records import Corroboration, LabelRecord
+
+        corroboration = {
+            INGEST_ADDRESS: Corroboration(
+                chain=Chain.ETHEREUM, observed_at=datetime.now(UTC).date()
+            )
+        }
+
+        with pytest.raises(ValueError, match="no address says nothing"):
+            LabelRecord(
+                name="x",
+                kind=EntityKind.SERVICE,
+                addresses=(),
+                source="https://example.invalid/t",
+                corroboration={},
+            )
+        with pytest.raises(ValueError, match="URL"):
+            LabelRecord(
+                name="x",
+                kind=EntityKind.SERVICE,
+                addresses=(INGEST_ADDRESS,),
+                source="not a url",
+                corroboration=corroboration,
+            )

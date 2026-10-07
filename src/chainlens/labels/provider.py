@@ -44,6 +44,10 @@ class LocalLabelProvider(BaseProvider):
             accept it alongside.
         directory: a directory of label files. Defaults to the committed data, which is what
             makes an installed ``chainlens`` know about Mt Gox without any setup.
+        name: what to call this instance. The class attribute is ``"local-labels"``, which is
+            right for the shipped data and wrong for a private set: ``check_label`` records which
+            source asserted a label so a reader can weigh it, and a vendor's assertions attributed
+            to "local-labels" would read as this library's own curation.
         settings: process settings, for the shape the base class expects. Nothing here reads
             the network, so nothing here reads a credential.
     """
@@ -60,11 +64,14 @@ class LocalLabelProvider(BaseProvider):
         *,
         chain: Chain | None = None,
         directory: Path | None = None,
+        name: str | None = None,
         settings: Settings | None = None,
     ) -> None:
         super().__init__(settings=settings)
         if chain is not None:
             self.chain = chain
+        if name is not None:
+            self.name = name
         self._files: tuple[LabelFile, ...] = tuple(load_directory(directory))
         self._by_address: Mapping[str, tuple[Label, ...]] = self._merge()
 
