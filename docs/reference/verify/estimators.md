@@ -25,6 +25,10 @@ Three further things are worth stating rather than discovering:
   where the asserted transfer should be; the movements *inside* it are the opportunities ``k``,
   which the checker counts. A rate drawn from those would be circular, so the sample is what falls
   outside.
+* **the sample is one asset's.** Base-unit amounts are only comparable within an asset, so the
+  movements counted are the claim's asset and no other. On Bitcoin this is invisible — there is one
+  asset — and on an account chain where an address moves ERC-20s it is the difference between a
+  rate about this asset and a rate about a mixture.
 * **nothing here decides anything.** The estimator returns a rate and the null it was drawn
   under. Whether a ratio is reported at all, and what it means, is the engine's and the
   likelihood module's business.
