@@ -11,6 +11,10 @@
 
 - [The graph app](ui/index.md)
 
+# Your own material
+
+- [Your own material](notes/index.md)
+
 # Explanation
 
 - [UTXO vs account models](explanation/utxo-vs-account.md)
@@ -77,6 +81,10 @@
     - [page](reference/models/page.md)
     - [primitives](reference/models/primitives.md)
     - [wire](reference/models/wire.md)
+  - [notes](reference/notes/index.md)
+    - [answer](reference/notes/answer.md)
+    - [corpus](reference/notes/corpus.md)
+    - [search](reference/notes/search.md)
   - [providers](reference/providers/index.md)
     - [base](reference/providers/base.md)
     - [capabilities](reference/providers/capabilities.md)

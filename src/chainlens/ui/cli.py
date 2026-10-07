@@ -34,6 +34,7 @@ from chainlens.models.base import utcnow
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.models.narrative import NarrativeDocument
+from chainlens.notes import AnswerDocument, Answerer, Corpus, CorpusError, read_corpus
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
@@ -134,6 +135,63 @@ async def _verify_for_cli(
         estimate_requested=estimate,
     )
     return await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
+
+
+async def _answer_for_cli(answerer: Answerer, corpus: Corpus, question: str) -> AnswerDocument:
+    """``anyio.run`` entry point for one question about a corpus."""
+    return await answerer.answer(corpus, question)
+
+
+def _command_notes(args: argparse.Namespace) -> int:
+    """Read a directory of your own material and answer a question from it.
+
+    Two steps and only the second needs a model, which is why ``--read-only`` exists: reading a
+    corpus and reporting what could not be read is worth doing on its own, before anything is sent
+    anywhere. What a question costs is one call, with the retrieved notes quoted into it.
+    """
+    import anyio
+
+    root = Path(args.from_directory)
+    try:
+        corpus = read_corpus(root)
+    except CorpusError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    print(corpus.format())
+    for note in corpus.unread:
+        # Reported rather than skipped: an answer drawn from two thirds of a corpus, with the
+        # missing third invisible, is the failure this command exists to avoid.
+        print(f"  not read: {note.path} — {note.unread_because}")
+
+    if args.read_only:
+        return 0
+
+    try:
+        client = AnthropicLLM(model=args.model)
+    except ConfigurationError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    try:
+        document = anyio.run(_answer_for_cli, Answerer(client), corpus, args.question)
+    except LLMError as exc:
+        raise SystemExit(f"the question could not be answered: {exc}") from exc
+
+    if (endpoint := _where(client)) is not None:
+        print(f"answered at {endpoint}")
+
+    print(document.format())
+    print()
+    print(document.text or "(no answer)")
+
+    for reason in document.dropped:
+        print(f"discarded: {reason}")
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(strict_dumps(document), encoding="utf-8")
+        print(f"\nwrote {out}")
+    return 0
 
 
 def _command_derive(args: argparse.Namespace) -> int:
@@ -444,6 +502,34 @@ def build_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(prog="chainlens", description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
+    notes = commands.add_parser(
+        "notes",
+        help="read a directory of your own material and answer a question from it",
+        description=(
+            "Point this at a directory you have dropped things into — screenshots, PDFs, saved "
+            "pages, pasted text, exports — and ask a question. Every file is either read or "
+            "reported with the reason it was not; an answer is checked against the notes it "
+            "rests on, and a paragraph citing a note that was not retrieved is discarded rather "
+            "than rewritten. The corpus is never uploaded and never committed: only the "
+            "retrieved passages are sent, to the same endpoint the other model commands use."
+        ),
+    )
+    notes.add_argument("question", help="what to ask, in words")
+    notes.add_argument(
+        "--from",
+        dest="from_directory",
+        default="notes",
+        help="the directory holding your material (default: ./notes)",
+    )
+    notes.add_argument(
+        "--read-only",
+        action="store_true",
+        help="report what the corpus holds and what could not be read, and send nothing",
+    )
+    notes.add_argument("--out", help="write the answer as a document")
+    notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
+    notes.set_defaults(handler=_command_notes)
+
     ui = commands.add_parser("ui", help="build, serve and inspect documents")
     ui_commands = ui.add_subparsers(dest="ui_command", required=True)
 

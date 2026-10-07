@@ -57,6 +57,11 @@ pandas = ["pandas>=2.2"]
 # carry an HTTP client for one.
 llm = ["anthropic>=1.11,<2"]
 social = ["pillow>=11"]       # image sniffing + downscaling before we send to vision
+# Reading a corpus of your own material. Optional because it is only for PDFs: every other
+# format the corpus reader accepts -- HTML, DOCX, ODT, RTF, email, plain text -- is read with
+# the standard library, and a corpus of notes and screenshots should not require a document
+# toolchain to be installed.
+notes = ["pypdf>=5"]
 all = ["chainlens[eth,nx,pandas,social]"]
 
 # The library's first console script. It has to stay importable without triggering provider

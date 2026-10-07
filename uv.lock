@@ -636,6 +636,9 @@ eth = [
 llm = [
     { name = "anthropic" },
 ]
+notes = [
+    { name = "pypdf" },
+]
 nx = [
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -690,12 +693,13 @@ requires-dist = [
     { name = "pillow", marker = "extra == 'social'", specifier = ">=11" },
     { name = "pydantic", specifier = ">=2.9,<3" },
     { name = "pydantic-settings", specifier = ">=2.4" },
+    { name = "pypdf", marker = "extra == 'notes'", specifier = ">=5" },
     { name = "rustworkx", specifier = ">=0.18" },
     { name = "tenacity", specifier = ">=9.1" },
     { name = "web3", marker = "extra == 'all'", specifier = ">=7.16,<9" },
     { name = "web3", marker = "extra == 'eth'", specifier = ">=7.16,<9" },
 ]
-provides-extras = ["all", "eth", "llm", "nx", "pandas", "social"]
+provides-extras = ["all", "eth", "llm", "notes", "nx", "pandas", "social"]
 
 [package.metadata.requires-dev]
 dev = [

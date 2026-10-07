@@ -66,7 +66,7 @@ def _load() -> griffe.Module:
     return loaded
 
 
-def _modules(root: griffe.Module) -> list[tuple[tuple[str, ...], str]]:
+def _modules(source_root: Path = SOURCE_ROOT) -> list[tuple[tuple[str, ...], str]]:
     """Every public module, as its dotted parts and the reference page it is rendered to.
 
     The mapping is the one the mkdocs generator used: a module's path under ``src/`` becomes the
@@ -75,7 +75,7 @@ def _modules(root: griffe.Module) -> list[tuple[tuple[str, ...], str]]:
     API.
     """
     found: list[tuple[tuple[str, ...], str]] = []
-    for path in sorted(SOURCE_ROOT.rglob("*.py")):
+    for path in sorted(source_root.rglob("*.py")):
         parts = list(path.relative_to(SOURCE_ROOT).with_suffix("").parts)
         # `__init__` is checked **before** the private-name rule, and the order is load-bearing:
         # an `elif` the other way round filters out every package's `__init__.py` as a private
@@ -98,6 +98,21 @@ def _modules(root: griffe.Module) -> list[tuple[tuple[str, ...], str]]:
         entry = "/".join(parts[1:])
         page = f"{entry}/index.md" if package else f"{entry}.md"
         found.append((tuple(parts), page))
+
+    # **Two modules can want the same page, and one would silently win.** A package's
+    # `__init__.py` and a module beside it called `index.py` both map to that directory's
+    # `index.md`, so a page would be overwritten by whichever came second — in a dict, without a
+    # trace. Only mdbook noticed, and only because it refuses a duplicate in its summary. Naming
+    # it here means the next such module is a red build rather than a page nobody wrote being
+    # quietly replaced by one nobody read.
+    claims: dict[str, tuple[str, ...]] = {}
+    for module_parts, module_page in found:
+        if module_page in claims:
+            raise AssertionError(
+                f"{'.'.join(module_parts)} and {'.'.join(claims[module_page])} both render to "
+                f"{module_page}; rename one, because a page can only hold one module"
+            )
+        claims[module_page] = module_parts
     return found
 
 
@@ -296,7 +311,7 @@ def _render_index(modules: list[tuple[tuple[str, ...], str]]) -> str:
 def render_reference() -> dict[str, str]:
     """Every reference page, as ``docs/reference/...`` -> markdown."""
     root = _load()
-    modules = _modules(root)
+    modules = _modules()
     pages: dict[str, str] = {"docs/reference/index.md": _render_index(modules)}
     for parts, page in modules:
         node: griffe.Object = root
@@ -338,8 +353,7 @@ def render_all() -> dict[str, str]:
     table of contents as well as the pages: a module added without its entry appearing in the book
     is the same staleness as a module added without its page.
     """
-    root = _load()
-    modules = _modules(root)
+    modules = _modules()
     rendered = render_reference()
     rendered["docs/SUMMARY.md"] = render_summary(SUMMARY.read_text(encoding="utf-8"), modules)
     return rendered

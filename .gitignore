@@ -38,6 +38,12 @@ src/chainlens/_version.py
 # --- Docs build ---
 book/
 
+# --- Working material ---
+# The directory the `chainlens notes` command reads by default. **Root-anchored**, because an
+# unanchored `notes/` matches every directory of that name — including `src/chainlens/notes/`,
+# which is the package that reads it, and the whole feature would have been ignored silently.
+/notes/
+
 # --- Notebooks ---
 .ipynb_checkpoints/
 
