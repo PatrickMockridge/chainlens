@@ -20,6 +20,7 @@ prevent.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import webbrowser
 from collections.abc import Sequence
@@ -44,12 +45,14 @@ from chainlens.notes import (
     Corpus,
     CorpusError,
     MentionKind,
+    NoteKind,
     OllamaVision,
     VisionReader,
     address_mentions,
     read_corpus,
     read_corpus_with,
 )
+from chainlens.notes.claims import strength_for
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
@@ -63,6 +66,7 @@ from chainlens.verify.extract import (
     AnthropicLLM,
     ExtractionReport,
     Extractor,
+    StructuredLLM,
 )
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import (
@@ -110,6 +114,35 @@ def _provider(name: str | None, chain: str | None) -> Provider:
     return registry.default_for(resolved, Capability.ADDRESS_TXS)
 
 
+def _address_provider(name: str | None, chain: str | None) -> Provider:
+    """Resolve a provider that can read an address, for a command that only looks one up.
+
+    Distinct from :func:`_provider`, which asks for ``ADDRESS_TXS`` — an indexed history is what a
+    walk needs and is the *strongest* thing to require here. A label's corroboration needs a
+    balance and whether there is code, which a keyless node can answer and an indexed API needs a
+    key for. Asking for more than the job needs would make a command fail for a credential it has
+    no use for.
+    """
+    registry = get_registry()
+    if name is not None:
+        return registry.get(name)
+    if chain is None:
+        raise SystemExit(
+            "give --provider, or --chain so a provider can be chosen for you. "
+            f"Available: {', '.join(sorted(registry.keys()))}"
+        )
+
+    from chainlens.models.enums import Chain
+
+    try:
+        resolved = Chain(chain)
+    except ValueError:
+        raise SystemExit(
+            f"unknown chain {chain!r}; known: {', '.join(item.value for item in Chain)}"
+        ) from None
+    return registry.default_for(resolved, Capability.ADDRESS)
+
+
 def _policy(args: argparse.Namespace) -> LedgerPolicy:
     return LedgerPolicy(
         max_depth=args.depth,
@@ -152,6 +185,10 @@ async def _verify_for_cli(
         provider,
         estimator=estimator_for(provider) if estimate else None,
         estimate_requested=estimate,
+        # Carried from the record, because the record is where a claim was chosen. A finding that
+        # travelled without it would show a ratio whose claim a model picked, and read exactly like
+        # one whose claim was fixed in advance.
+        selection=record.selection,
     )
     return await engine.verify_post(record.post, Extraction(claims=(record.claim,)))
 
@@ -222,6 +259,172 @@ def _notes_with(corpus: Corpus, mentions: Sequence[AddressMention]) -> str:
     return f"{len({mention.note for mention in mentions})} note(s)"
 
 
+async def _write_claims(args: argparse.Namespace, corpus: Corpus, client: StructuredLLM) -> int:
+    """Read the corpus into claims, choose among them, and write them as records.
+
+    The two steps are reported separately because they are separate acts and their error rates are
+    different things: the extraction's drop count is how often the model claimed something the
+    material does not say, and the selection's is how often the chooser did. A reader deciding
+    whether to trust the set needs both.
+
+    What is written is a record per claim, in the shape the rest of the library already reads —
+    so the claims are reviewable before anything is priced, and the pricing runs through the
+    engine that has always done it.
+    """
+    from chainlens.models.selection import SelectionDisclosure
+    from chainlens.notes.claims import claims_from_corpus, claims_of
+    from chainlens.notes.selection import Selector
+
+    print()
+    readings = await claims_from_corpus(corpus, client)
+    for reading in readings:
+        if reading.report.dropped:
+            print(f"  {reading.note}: {reading.report.format()}")
+
+    kept = claims_of(readings)
+    if not kept:
+        print("no claims were read out of this corpus, so there is nothing to write")
+        return 0
+
+    disclosure = SelectionDisclosure(
+        proposed_by="nobody",
+        prompt_version=0,
+        question=args.select_for or args.question,
+        corpus=corpus.root,
+        corpus_read_by=corpus.read_by,
+        corpus_read_at=corpus.read_at,
+        transcribed=any(note.kind is NoteKind.IMAGE and note.readable for note in corpus.notes),
+        selected=False,
+    )
+    chosen = kept
+    leads: tuple[str, ...] = ()
+    if args.select == "model":
+        report = await Selector(client).select(
+            corpus, readings, question=args.select_for or args.question
+        )
+        print(f"  selection: {report.format()}")
+        for quote in report.dropped:
+            print(
+                f"  discarded: a choice quoting material the corpus does not hold: {quote[:70]!r}"
+            )
+        disclosure = report.disclosure
+        leads = report.leads
+        wanted = {choice.quote for choice in report.chosen}
+        chosen = tuple((note, claim) for note, claim in kept if claim.quote in wanted)
+
+    out = Path(args.claims_out)
+    out.mkdir(parents=True, exist_ok=True)
+    by_note: dict[str, str] = {note.path: note.text for note in corpus.readable}
+    written = 0
+    for index, (note_path, claim) in enumerate(chosen, start=1):
+        record = record_for_claim(
+            claim,
+            record_id=f"{index:04d}",
+            post_text=by_note.get(note_path, claim.quote),
+            strength=strength_for(next(note for note in corpus.notes if note.path == note_path)),
+            captured_at=corpus.read_at,
+            selection=disclosure,
+        )
+        (out / f"{index:04d}.json").write_text(dump_record(record), encoding="utf-8")
+        written += 1
+
+    if args.leads and leads:
+        # Plain JSON rather than `strict_dumps`: that helper refuses non-finite floats in a
+        # document the app renders, and a list of strings has none to refuse.
+        Path(args.leads).write_text(
+            json.dumps({"leads": list(leads)}, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(f"  {len(leads)} lead(s) written to {args.leads}; a lead is not a claim")
+
+    print()
+    print(f"wrote {written} claim record(s) to {out}/")
+    print(f"  {disclosure.describe()}")
+    print("note: a falsifier and an expected verdict are a person's to add")
+    print(f"next: chainlens ui derive --claim {out}/0001.json --out derivation.json")
+    return 0
+
+
+def _write_labels(args: argparse.Namespace, corpus: Corpus) -> int:
+    """Write a private label file from a corpus's label column.
+
+    Only the usable addresses become records. A truncated address cannot be looked up, so it cannot
+    be corroborated, so the format refuses it — and the count of what was refused is the honest
+    answer to how much of the table could be checked at all.
+    """
+    import anyio
+    import yaml
+
+    from chainlens.labels.ingest import ingest_labels
+    from chainlens.models.enums import EntityKind
+
+    if not args.label_source:
+        raise SystemExit(
+            "--labels-out needs --label-source: the page the assertion is readable at. A label "
+            "nobody can check is indistinguishable from a guess, and the format refuses one "
+            "without a URL rather than inventing one"
+        )
+    mentions = address_mentions(corpus)
+    try:
+        kind = EntityKind(args.label_kind)
+    except ValueError:
+        raise SystemExit(
+            f"unknown --label-kind {args.label_kind!r}; known: "
+            f"{', '.join(item.value for item in EntityKind)}"
+        ) from None
+
+    if not any(mention.usable for mention in mentions):
+        # Asked before the provider, because there is nothing to look up: demanding a chain for a
+        # corpus whose addresses are all truncated would be requiring a credential for work that is
+        # not going to happen.
+        print(
+            "no address in this corpus can be looked up, so nothing was written to "
+            f"{args.labels_out}/"
+        )
+        for mention in mentions[:10]:
+            print(f"  {mention.as_written} — {mention.because}")
+        return 0
+
+    provider = _address_provider(args.provider, args.chain)
+    report = anyio.run(
+        lambda: ingest_labels(
+            mentions,
+            provider=provider,
+            name=args.label_provider,
+            source=args.label_source,
+            kind=kind,
+            licence=args.label_licence,
+            note=(
+                f"asserted by {args.label_provider} in the corpus at {corpus.root}; this is that "
+                "source's attribution and not established identity"
+            ),
+        )
+    )
+
+    out = Path(args.labels_out)
+    if report.file is None:
+        print(f"no address in this corpus could be looked up, so nothing was written to {out}/")
+        for token, why in report.skipped[:10]:
+            print(f"  {token} — {why}")
+        return 0
+
+    out.mkdir(parents=True, exist_ok=True)
+    written = out / f"{args.label_provider}.yaml"
+    written.write_text(
+        yaml.safe_dump(
+            report.file.model_dump(mode="json", exclude_none=True),
+            sort_keys=False,
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    print(report.format())
+    for token, why in report.skipped[:10]:
+        print(f"  not written: {token} — {why}")
+    print(f"wrote {written}")
+    print(f"next: chainlens ui derive --claim <record>.json --labels {out}")
+    return 0
+
+
 def _command_notes(args: argparse.Namespace) -> int:
     """Read a directory of your own material and answer a question from it.
 
@@ -281,13 +484,22 @@ def _command_notes(args: argparse.Namespace) -> int:
         _report_addresses(corpus)
         return 0
 
-    if args.read_only:
+    if args.labels_out:
+        return _write_labels(args, corpus)
+
+    if args.read_only and not (args.claims_out or args.labels_out):
         return 0
 
     try:
         client = AnthropicLLM(model=args.model)
     except ConfigurationError as exc:
         raise SystemExit(str(exc)) from exc
+
+    if args.claims_out:
+        return anyio.run(_write_claims, args, corpus, client)
+
+    if args.read_only:
+        return 0
 
     try:
         document = anyio.run(_answer_for_cli, Answerer(client), corpus, args.question)
@@ -332,6 +544,25 @@ def _command_derive(args: argparse.Namespace) -> int:
     elements = parse_claim(record.claim).elements
     chain = elements.chain.value if elements is not None else args.chain
     provider = _provider(args.provider, chain)
+    if args.labels:
+        # A composite, because a label claim needs both: the chain provider answers every other
+        # claim, and the private set answers `check_label`. The label provider is constructed here
+        # rather than fetched from the registry — the registry builds it with settings only, so its
+        # chain stays Bitcoin and a composite rejects the mixture.
+        from chainlens.labels.provider import LocalLabelProvider
+        from chainlens.providers.composite import CompositeProvider
+
+        chain_provider = provider
+        provider = CompositeProvider(
+            [
+                chain_provider,
+                LocalLabelProvider(
+                    chain=chain_provider.chain,
+                    directory=Path(args.labels),
+                    name=args.label_provider,
+                ),
+            ]
+        )
 
     if not provider.redistributable and not args.redistributable_ok:
         raise SystemExit(
@@ -632,7 +863,15 @@ def build_parser() -> argparse.ArgumentParser:
             "retrieved passages are sent, to the same endpoint the other model commands use."
         ),
     )
-    notes.add_argument("question", help="what to ask, in words")
+    notes.add_argument(
+        "question",
+        nargs="?",
+        default=None,
+        help=(
+            "what to ask, in words. Optional, because --addresses, --claims-out and --labels-out "
+            "do their work without a question"
+        ),
+    )
     notes.add_argument(
         "--from",
         dest="from_directory",
@@ -657,6 +896,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_VISION_MODEL,
         help=f"the ollama model to read images with, default {DEFAULT_VISION_MODEL}",
     )
+    notes.add_argument(
+        "--claims-out",
+        help=(
+            "read claims out of the corpus and write them as claim records a person can review, "
+            "which is what the derive command prices"
+        ),
+    )
+    notes.add_argument(
+        "--select",
+        choices=("model", "none"),
+        default="none",
+        help=(
+            "whether a model chooses which claims to write (default: none, so every claim read is "
+            "written and nothing was chosen — the standing limitation's second case rather than "
+            "its third)"
+        ),
+    )
+    notes.add_argument("--select-for", help="what the chooser is asked to select for")
+    notes.add_argument("--leads", help="write the chooser's leads here; a lead is not a claim")
     notes.add_argument("--out", help="write the answer as a document")
     notes.add_argument(
         "--addresses",
@@ -673,6 +931,27 @@ def build_parser() -> argparse.ArgumentParser:
             "can be checked by eye instead of taken on the command's word"
         ),
     )
+    notes.add_argument(
+        "--labels-out",
+        help=(
+            "write a private label file from the corpus's label column. Requires --label-source: "
+            "a label record must cite where the assertion can be read"
+        ),
+    )
+    notes.add_argument("--label-source", help="the page the label assertion is readable at")
+    notes.add_argument(
+        "--label-provider",
+        default="notes-corpus",
+        help="what to attribute the assertion to (default: notes-corpus)",
+    )
+    notes.add_argument(
+        "--label-kind",
+        default="service",
+        help="the category the source puts it in (default: service)",
+    )
+    notes.add_argument("--label-licence", default="", help="what the label file may be used under")
+    notes.add_argument("--provider", help="a registered provider name, for a label lookup")
+    notes.add_argument("--chain", help="a chain, so a provider can be chosen for you")
     notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")
     notes.set_defaults(handler=_command_notes)
 
@@ -691,6 +970,19 @@ def build_parser() -> argparse.ArgumentParser:
     derive.add_argument("--claim", required=True, help="a claim record, as TOML")
     derive.add_argument("--out", required=True, help="where to write the derivation")
     derive.add_argument("--provider", help="a registered provider name")
+    derive.add_argument(
+        "--labels",
+        help=(
+            "a directory of label files to check a label claim against. Built as a label source "
+            "named by --label-provider, so a private set's assertions are attributed to it and not "
+            "to this library's own curation"
+        ),
+    )
+    derive.add_argument(
+        "--label-provider",
+        default="local-labels",
+        help="what to call the label source (default: local-labels)",
+    )
     derive.add_argument("--chain", help="a chain, when the claim names none to take it from")
     derive.add_argument(
         "--corpus",

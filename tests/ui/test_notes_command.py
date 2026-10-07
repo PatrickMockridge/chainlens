@@ -311,3 +311,136 @@ class TestReportingTheAddresses:
 
         assert _run("anything", "--from", str(root), "--addresses") == 0
         assert "0xea674fdde714fd979de3edf0f56aa9716b898ec8" in capsys.readouterr().out
+
+
+class TestWritingClaimsAndLabels:
+    """The two paths that turn a corpus into something the rest of the library reads.
+
+    Both are offline here: the claims path uses a fake model, and the labels path is tested for the
+    thing it refuses — a label file with no citation behind it.
+    """
+
+    def _claim(self, quote: str) -> dict[str, object]:
+        return {"claims": [{"type": "transfer", "quote": quote}]}
+
+    def test_claims_out_writes_a_record_per_claim_with_the_disclosure_on_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import json
+
+        from chainlens.ui import cli
+
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text("alice paid bob 30000 sats", encoding="utf-8")
+
+        class FakeClient:
+            name = "fake"
+
+            async def complete(self, *, system: str, prompt: str, shape: object) -> object:
+                return {"claims": [{"type": "transfer", "quote": "alice paid bob 30000 sats"}]}
+
+        monkeypatch.setattr(cli, "AnthropicLLM", lambda **_: FakeClient())
+        out = tmp_path / "claims"
+
+        assert _run("anything", "--from", str(root), "--claims-out", str(out)) == 0
+        printed = capsys.readouterr().out
+        assert "1 claim record(s)" in printed
+        assert "no chooser" in printed, "nothing chose, and the record has to say so"
+
+        written = json.loads((out / "0001.json").read_text(encoding="utf-8"))
+        assert written["claim"]["type"] == "transfer"
+        assert written["source"]["strength"] == "paste"
+        assert written["selection"]["selected"] is False
+        assert written["selection"]["proposed_by"] == "nobody"
+
+    def test_a_corpus_with_no_claims_writes_nothing_and_says_why(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from chainlens.ui import cli
+
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text("nothing to claim here", encoding="utf-8")
+
+        class Silent:
+            name = "fake"
+
+            async def complete(self, *, system: str, prompt: str, shape: object) -> object:
+                return {"claims": []}
+
+        monkeypatch.setattr(cli, "AnthropicLLM", lambda **_: Silent())
+        out = tmp_path / "claims"
+
+        assert _run("anything", "--from", str(root), "--claims-out", str(out)) == 0
+        assert "nothing to write" in capsys.readouterr().out
+        assert not out.exists()
+
+    def test_labels_out_without_a_citation_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A label record must cite where the assertion can be read. Inventing a URL to satisfy the
+        format would defeat the field, so the command refuses instead."""
+        monkeypatch.chdir(tmp_path)
+        root = _with_a_screenshot(tmp_path)
+
+        with pytest.raises(SystemExit, match="--label-source"):
+            _run("anything", "--from", str(root), "--labels-out", str(tmp_path / "labels"))
+
+    def test_labels_out_with_nothing_usable_says_so(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text("To 0x5ed8cee6b63b1c6afce... 49,999 Ether")
+
+        assert (
+            _run(
+                "anything",
+                "--from",
+                str(root),
+                "--labels-out",
+                str(tmp_path / "labels"),
+                "--label-source",
+                "https://example.invalid/table",
+            )
+            == 0
+        )
+        printed = capsys.readouterr().out
+        assert "nothing was written" in printed
+        assert "truncated in the note" in printed
+
+    def test_an_unknown_label_kind_is_refused_by_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        root = _with_a_screenshot(tmp_path)
+
+        with pytest.raises(SystemExit, match="unknown --label-kind"):
+            _run(
+                "anything",
+                "--from",
+                str(root),
+                "--labels-out",
+                str(tmp_path / "labels"),
+                "--label-source",
+                "https://example.invalid/table",
+                "--label-kind",
+                "not-a-kind",
+            )
+
+    def test_no_question_and_nothing_asked_for_is_still_read_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """With the question made optional, a bare run must not fall through to the answering path
+        and reach for a client it has no question for."""
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text(ADDRESS_IN_A_NOTE, encoding="utf-8")
+
+        assert _run("--from", str(root), "--read-only") == 0
+        assert "1/1 file(s) read" in capsys.readouterr().out
