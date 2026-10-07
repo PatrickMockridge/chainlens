@@ -27,7 +27,7 @@ import pytest
 from chainlens.models.base import LensModel
 from chainlens.notes import CorpusError, OllamaError, OllamaVision, read_corpus, read_corpus_with
 from chainlens.notes.corpus import ImageText
-from chainlens.notes.vision import _text_from
+from chainlens.notes.vision import DEFAULT_VISION_MODEL, _text_from
 from chainlens.providers.transport import Transport
 from chainlens.social.media import MAX_DIMENSION
 
@@ -423,7 +423,10 @@ class TestTheReaderItself:
     """The request shape and the failures, against a mock transport. No ollama is running here."""
 
     def _reader(
-        self, handler: Callable[[httpx.Request], httpx.Response], *, model: str = "minicpm-v"
+        self,
+        handler: Callable[[httpx.Request], httpx.Response],
+        *,
+        model: str = DEFAULT_VISION_MODEL,
     ) -> tuple[OllamaVision, list[httpx.Request]]:
         seen: list[httpx.Request] = []
 
@@ -452,7 +455,7 @@ class TestTheReaderItself:
         assert answer == {"text": "SOLD to 1F1tA"}
         body = json.loads(seen[0].content)
         assert seen[0].url.path == "/api/generate"
-        assert body["model"] == "minicpm-v"
+        assert body["model"] == DEFAULT_VISION_MODEL
         assert body["stream"] is False
         assert base64.b64decode(body["images"][0]) == PNG
         assert "transcribe this" in body["prompt"]
@@ -468,9 +471,11 @@ class TestTheReaderItself:
     @pytest.mark.anyio
     async def test_a_model_that_has_not_been_pulled_names_the_command_that_fixes_it(self) -> None:
         reader, _ = self._reader(
-            lambda request: httpx.Response(404, json={"error": "model 'minicpm-v' not found"})
+            lambda request: httpx.Response(
+                404, json={"error": f"model {DEFAULT_VISION_MODEL!r} not found"}
+            )
         )
-        with pytest.raises(OllamaError, match="ollama pull minicpm-v"):
+        with pytest.raises(OllamaError, match=f"ollama pull {DEFAULT_VISION_MODEL}"):
             await reader.read_image(
                 image=PNG, media_type="image/png", instruction="x", shape=ImageText
             )
@@ -498,7 +503,7 @@ class TestTheReaderItself:
         await reader.aclose()
 
     def test_it_says_which_model_it_is_without_being_asked(self) -> None:
-        """Because the corpus records ``ollama:minicpm-v`` from these two attributes, and a reader
+        """Because the corpus records ``ollama:<model>`` from these two attributes, and a reader
         that named neither would be recorded as nothing."""
         reader = OllamaVision(model="llava")
         assert (reader.name, reader.model) == ("ollama", "llava")

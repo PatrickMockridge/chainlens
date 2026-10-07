@@ -197,7 +197,7 @@ class Corpus(LensModel):
         root: what was read.
         notes: every file found, whether or not it could be read. The unread ones are *in* the
             list: a corpus that omitted them would report a coverage it does not have.
-        read_by: which reader transcribed the images — ``"ollama:minicpm-v"``, say — or ``None``
+        read_by: which reader transcribed the images — ``"ollama:qwen2.5vl:7b"``, say — or ``None``
             when there were none to transcribe. A transcription is a model's reading of a
             screenshot, and *which* model read it is the difference between two corpora that
             otherwise look identical, so it travels here rather than being forgotten at the point
@@ -497,10 +497,10 @@ def _for_vision(path: str, data: bytes, media_type: str) -> tuple[bytes, str]:
 
     **This is not tidiness, it is the difference between minutes and hours.** A screenshot is
     usually a full-resolution capture — the corpus this was written against holds several at
-    4096 pixels wide — and a vision model does not scale it down, it *tiles* it: minicpm-v slices
-    a large image into a grid and encodes every panel, so a 4096-pixel capture is many times the
-    work of the same picture at 2000. Measured: the four-way batch stalled for minutes on the
-    largest captures in the corpus and finished a smaller one in twenty-four seconds.
+    4096 pixels wide — and a vision model does not scale it down, it *tiles* it: the model slices a
+    large image into a grid and encodes every panel, so a 4096-pixel capture is many times the work
+    of the same picture at 2000. Measured: one capture at 4096x1049 took minutes to read whole and
+    2.5 seconds at 2000x512, which is the same picture.
 
     It reuses :func:`chainlens.social.media.downscale`, which is the library's existing ingest path
     for exactly this — the same 2000-pixel edge — and deliberately *not*
@@ -548,7 +548,7 @@ def _reader_name(reader: VisionReader) -> str | None:
     Asked of the object rather than required by the protocol, for the reason
     :func:`chainlens.ui.cli._where` gives: the contract is one method, and a fake that transcribes
     nothing satisfies it fully. A reader that names itself and its model is recorded as
-    ``"ollama:minicpm-v"``; one that names neither is recorded as nothing, which is honest — an
+    ``"ollama:qwen2.5vl:7b"``; one that names neither is recorded as nothing, which is honest — an
     unrecorded provenance beats a guessed one.
     """
     name = getattr(reader, "name", None)

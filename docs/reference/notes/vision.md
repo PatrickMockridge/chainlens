@@ -13,8 +13,8 @@ reasons that are not technical preference:
 * **no credential, no per-image cost.** A corpus is read and re-read as it grows, and a reader that
   bills per screenshot is a reader somebody stops using.
 
-**Why not OCR.** tesseract is not installed here and would be the wrong tool if it were: it
-confuses `0` with `O` and `1` with `l` and `I`, which is fatal when the string being transcribed is
+**Why not OCR.** tesseract would be the wrong tool even if it were installed: it confuses `0` with
+`O` and `1` with `l` and `I`, which is fatal when the string being transcribed is
 `1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX`. One character is the whole difference between two addresses,
 so the reader has to be one that reads text rather than recognises glyphs.
 
@@ -26,11 +26,18 @@ can constrain a reply with ``format``, and on this model and version doing so is
 `OllamaVision.read_image` for the measurement. The schema goes in the prompt and the check
 does the rest, which is how every other endpoint without schema enforcement is handled here.
 
-**A transcription is not a record.** Reading a screenshot is one model's account of it, and the
-account can be fluent and wrong: measured on a table of mining-pool addresses, the model dropped
-characters from the middle of an address and returned something that looked entirely reasonable.
-That is why what a reader produces is checked for identifiers that could not be addresses
-(`chainlens.notes.identifiers`) before a corpus is allowed to rely on it.
+**A transcription is not a record, and no model this library can run makes it one.** Read the same
+table of mining-pool addresses with two models and both are fluent and both are wrong: ``minicpm-v``
+dropped eight characters from the middle of an address, and ``qwen2.5vl`` — the better of the two —
+substituted two characters inside the Ethereum crowdsale address, at the right length, in valid
+base58, looking exactly like the address it was not. Neither error is visible to a person reading
+the text.
+
+So the answer is not a better model, because the error is not one a reader catches. A transcription
+is checked for identifiers that could not be addresses (`chainlens.notes.identifiers`) before a
+corpus is allowed to rely on it, and what failed the check is reported beside the note. The default
+model is the one measured to make *fewer* errors, at sixty-five seconds a screenshot rather than
+sixteen — not one that makes none.
 
 ## `OllamaError`
 

@@ -11,8 +11,8 @@ reasons that are not technical preference:
 * **no credential, no per-image cost.** A corpus is read and re-read as it grows, and a reader that
   bills per screenshot is a reader somebody stops using.
 
-**Why not OCR.** tesseract is not installed here and would be the wrong tool if it were: it
-confuses `0` with `O` and `1` with `l` and `I`, which is fatal when the string being transcribed is
+**Why not OCR.** tesseract would be the wrong tool even if it were installed: it confuses `0` with
+`O` and `1` with `l` and `I`, which is fatal when the string being transcribed is
 `1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX`. One character is the whole difference between two addresses,
 so the reader has to be one that reads text rather than recognises glyphs.
 
@@ -24,11 +24,18 @@ can constrain a reply with ``format``, and on this model and version doing so is
 :meth:`OllamaVision.read_image` for the measurement. The schema goes in the prompt and the check
 does the rest, which is how every other endpoint without schema enforcement is handled here.
 
-**A transcription is not a record.** Reading a screenshot is one model's account of it, and the
-account can be fluent and wrong: measured on a table of mining-pool addresses, the model dropped
-characters from the middle of an address and returned something that looked entirely reasonable.
-That is why what a reader produces is checked for identifiers that could not be addresses
-(:mod:`chainlens.notes.identifiers`) before a corpus is allowed to rely on it.
+**A transcription is not a record, and no model this library can run makes it one.** Read the same
+table of mining-pool addresses with two models and both are fluent and both are wrong: ``minicpm-v``
+dropped eight characters from the middle of an address, and ``qwen2.5vl`` — the better of the two —
+substituted two characters inside the Ethereum crowdsale address, at the right length, in valid
+base58, looking exactly like the address it was not. Neither error is visible to a person reading
+the text.
+
+So the answer is not a better model, because the error is not one a reader catches. A transcription
+is checked for identifiers that could not be addresses (:mod:`chainlens.notes.identifiers`) before a
+corpus is allowed to rely on it, and what failed the check is reported beside the note. The default
+model is the one measured to make *fewer* errors, at sixty-five seconds a screenshot rather than
+sixteen — not one that makes none.
 """
 
 from __future__ import annotations
@@ -62,13 +69,26 @@ OLLAMA_URL = "http://127.0.0.1:11434"
 #: that had gone — the corpus got slower the more of it there was.
 READ_TIMEOUT_SECONDS = 300.0
 
-#: The model images are read with unless another is named: a small general vision model, chosen
-#: because it runs on a CPU — which is the point of a reader that has to run on the machine the
-#: material is already on. It is a *default*, not a recommendation, and a dense screenshot is
-#: exactly where a small model struggles, so ``--vision-model`` names a larger one. Whichever is
-#: used is recorded (``Corpus.read_by``), because two transcriptions of the same screenshot made by
+#: The model images are read with unless another is named. **Measured, and neither model is
+#: trustworthy — which is the point.**
+#:
+#: Read the same table of mining-pool addresses with two models:
+#:
+#: * ``minicpm-v`` returned ``0x8ea674fdd1fd973e21cd5ef0df56a1987b1c8e`` for
+#:   ``0xea674fdde714fd979de3edf0f56aa9716b898ec8`` — characters dropped, eight short. It also
+#:   truncated addresses with ``…``, summarised a dense table instead of transcribing it, refused
+#:   outright on one screenshot, and took 16 seconds.
+#: * ``qwen2.5vl:7b`` produced complete, correctly laid out rows with no refusals — and still wrote
+#:   ``36PrZ1KHYMPmqSyAQXSG8VwbUiq2EogxLo2`` for the Ethereum crowdsale address
+#:   ``36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2``: two substitutions, same length, every character valid
+#:   base58, invisible on screen. It took 65 seconds.
+#:
+#: The larger model is the default because it makes *fewer* errors and never truncates or refuses,
+#: not because it makes none. Both figures are from real reads; the errors are recorded in
+#: :mod:`chainlens.notes.identifiers`, which is what makes either model usable. Whichever is used is
+#: recorded (``Corpus.read_by``), because two transcriptions of the same screenshot made by
 #: different models are not the same material — the rule every other model call here follows.
-DEFAULT_VISION_MODEL = "minicpm-v"
+DEFAULT_VISION_MODEL = "qwen2.5vl:7b"
 
 
 class OllamaError(ChainlensError):

@@ -33,7 +33,7 @@ A directory of working material, read into text.
 
 - `root` `str` — what was read.
 - `notes` `tuple[Note, ...]` — every file found, whether or not it could be read. The unread ones are *in* the list: a corpus that omitted them would report a coverage it does not have.
-- `read_by` `str | None` — which reader transcribed the images — ``"ollama:minicpm-v"``, say — or ``None`` when there were none to transcribe. A transcription is a model's reading of a screenshot, and *which* model read it is the difference between two corpora that otherwise look identical, so it travels here rather than being forgotten at the point the model was called.
+- `read_by` `str | None` — which reader transcribed the images — ``"ollama:qwen2.5vl:7b"``, say — or ``None`` when there were none to transcribe. A transcription is a model's reading of a screenshot, and *which* model read it is the difference between two corpora that otherwise look identical, so it travels here rather than being forgotten at the point the model was called.
 - `read_at` `AwareDatetime` — when it was read, so a stale index can be told from a fresh one.
 
 **Members**

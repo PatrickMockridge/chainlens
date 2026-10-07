@@ -75,45 +75,77 @@ timeline to be transcribed is a disclosure that has to be deliberate, and a loca
 not to have to make it.
 
 ```console
-ollama pull minicpm-v        # the default; --vision-model names another
+ollama pull qwen2.5vl:7b     # the default; --vision-model names another
 ```
+
+This needs **ollama 0.40 or newer** — `qwen2.5vl` is refused by older releases, and so is most of
+what the library has landed on since.
+
+**Which model, and why that one.** Read the same table of mining-pool addresses with two of them:
+
+| model | what it got wrong | time |
+|---|---|---|
+| `qwen2.5vl:7b` | the Ethereum crowdsale address with two characters substituted — `36PrZ1KHYMPmqS…` for `36PrZ1KHYMpqS…` | 65 s |
+| `minicpm-v` | four of ten addresses short or truncated, a table summarised instead of transcribed, one outright refusal | 16 s |
+
+The larger model is the default because it makes **fewer** errors and never truncates or refuses —
+not because it makes none. Both answers are fluent, and **neither error is visible to a person
+reading the screen**: the crowdsale address is the right length, every character is valid base58,
+and it looks exactly like the address it is not. That is why the check below exists, and why the
+model choice is a matter of degree rather than of trust.
 
 **Why not OCR.** `tesseract` confuses `0` with `O` and `1` with `l`/`I`, which is fatal when the
 string being transcribed is `1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX`: one character is the whole
 difference between two addresses. The reader has to be one that *reads* rather than one that
 recognises glyphs, so it is a vision model and not an OCR pass.
 
-**What it costs.** A 5-to-8 GB model on a laptop GPU reads a screenshot in tens of seconds, so a
-corpus of a few hundred is a coffee break rather than an instant. Images are read a few at a time
-(`IMAGE_CONCURRENCY`), but a single GPU serving one model is the bottleneck and parallelism buys
-little. Point `--vision-model` at a larger model if the transcriptions matter more than the wait.
+**What it costs, and the two things that make it cheaper.** A screenshot is read in about a minute
+on a laptop GPU, so a corpus of a few hundred is an afternoon rather than an instant — and a
+screenshot is the one thing here that cannot be made quicker by a better index, because it is a
+model doing the reading.
+
+- **Images are shrunk before the model sees them.** These are full-resolution captures — several at
+  4096 pixels wide — and a vision model does not scale an image, it *tiles* it. The same capture
+  took minutes at 4096×1049 and **2.5 seconds at 2000×512**. This happens automatically, so a
+  4096-pixel screenshot costs no more than the picture it contains.
+- **One at a time.** `IMAGE_CONCURRENCY` is 1: ollama serves one model with one context, so extra
+  requests queue and the queue is counted against the read — four in flight read one screenshot and
+  then sat until the timeout killed them. Raise it only for a reader that genuinely serves
+  concurrently.
 
 **A transcription is one model's account of a screenshot, and the account can be fluent and
-wrong.** Measured here, reading a table of mining-pool addresses: the model returned an address
-with characters dropped from the middle, laid out exactly like the real one, and no reader would
-notice. So what comes back is checked before a corpus is allowed to rely on it, and the check is
-reported rather than applied quietly:
+wrong.** Read a table of mining-pool addresses with either model and both return an address that is
+not the one in the image — one dropped eight characters, the other substituted two — and **neither
+error is visible to a person reading the text**. So what comes back is checked before a corpus
+relies on it, and the check is reported rather than applied quietly:
 
 ```console
 4/4 file(s) read, 12,884 characters
-  caution: notes/shot-3.png — the transcription contains 2 address-shaped string(s) that are not
-           the shape of an address (0x8ea674fdd1fd973e21cd5ef0df56a1987b1c8e, …) — a vision model
-           drops and substitutes characters, and a string matching an address is not evidence that
-           this one is one
+  caution: notes/shot-3.png — the transcription contains 1 address-shaped string(s) that are not
+           the shape of an address (36PrZ1KHYMPmqSyAQXSG8VwbUiq2EogxLo2) — a vision model drops
+           and substitutes characters, and a string matching an address is not evidence that this
+           one is one
 ```
 
 The reading is **kept** — it is mostly right, and the tweet around the address is in it — and the
 identifier that could not be true is named. The check is on identifiers rather than prose because
 prose is forgiving and an identifier is not: a dropped character in a tweet is still the tweet, and
-a dropped character in an address is a different address. It catches an EVM address of the wrong
-length and a Bitcoin address whose checksum does not verify. **It does not catch a wrong address of
-the right shape** — an all-lowercase EVM address carries no checksum — so a transcription is
-material to read, never a record to trust. See
+a dropped character in an address is a different address.
+
+It only examines strings **near an address's true length**, which was a correction rather than a
+first guess: an earlier version matched any hex run and raised a caution on twenty-eight of
+twenty-eight screenshots, mostly for four-character fragments like `0xfca8`, which are
+abbreviations the reader transcribed faithfully. A warning on every note is a warning nobody reads.
+
+**It does not catch a wrong address of the right shape in an all-lowercase EVM address** — that
+carries no checksum — so a transcription is material to read, never a record to trust. The
+substitution above *was* caught, because base58 carries a checksum; the same error inside a
+checksum-less EVM address would not be. See
 [`chainlens.notes.identifiers`](../reference/notes/identifiers.md).
 
 What else comes back is **text**, transcribed under one fixed instruction for the whole corpus, and
 there is no field in the shape for the model to put anything else. Which model read it is recorded:
-`Corpus.read_by` holds `ollama:minicpm-v`, and the answer carries it, because two transcriptions of
+`Corpus.read_by` holds `ollama:qwen2.5vl:7b`, and the answer carries it, because two transcriptions of
 the same screenshot made by different models are not the same material.
 
 A reader is one method — the `VisionReader` protocol — so a caller who wants their screenshots read
