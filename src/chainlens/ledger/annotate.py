@@ -98,6 +98,9 @@ def _label_item(label: Label, address: str) -> EvidenceItem:
                 "name": label.name,
                 "kind": label.kind.value,
                 "source": label.source.value,
+                # Which source asserted it, which `source` alone cannot say once several are
+                # merged: `provider` is "ofac-sdn" or an adapter's name, not "provider".
+                "asserted_by": label.provider,
                 "url": label.url,
                 "address": address,
             }

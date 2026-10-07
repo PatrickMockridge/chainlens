@@ -5303,6 +5303,12 @@
                 "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
               },
               {
+                "key": "asserted_by",
+                "kind": "null",
+                "unit": null,
+                "value": null
+              },
+              {
                 "key": "kind",
                 "kind": "string",
                 "unit": null,
@@ -5342,6 +5348,12 @@
                 "kind": "string",
                 "unit": null,
                 "value": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+              },
+              {
+                "key": "asserted_by",
+                "kind": "null",
+                "unit": null,
+                "value": null
               },
               {
                 "key": "kind",

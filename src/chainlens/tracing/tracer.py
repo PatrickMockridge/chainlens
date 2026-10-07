@@ -58,7 +58,13 @@ from chainlens.tracing.strategy import (
 __all__ = ["Tracer"]
 
 
-_SERVICE_KINDS = frozenset({EntityKind.EXCHANGE, EntityKind.MIXER, EntityKind.SERVICE})
+#: Kinds a walk treats as a place value stops, for `StopRule.KNOWN_SERVICE`. A marketplace
+#: belongs here for the same reason an exchange does: value reaching one has left the
+#: observable neighbourhood. A fundraiser or a DAO does not — those are events an address
+#: took part in, not a service it belongs to.
+_SERVICE_KINDS = frozenset(
+    {EntityKind.EXCHANGE, EntityKind.MIXER, EntityKind.SERVICE, EntityKind.MARKETPLACE}
+)
 
 #: How a walk ended, when the tracer (rather than the caller's stop rules) ended it.
 BUDGET_DEPTH = "budget_depth"

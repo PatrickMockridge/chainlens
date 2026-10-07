@@ -78,6 +78,7 @@ esplora-mempool = "chainlens.adapters.mempool_space:MempoolSpaceProvider"
 esplora-blockstream = "chainlens.adapters.blockstream:BlockstreamProvider"
 jsonrpc-eth = "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"
 etherscan = "chainlens.adapters.etherscan:EtherscanProvider"
+local-labels = "chainlens.labels.provider:LocalLabelProvider"
 
 [project.entry-points."chainlens.heuristics"]
 common-input-ownership = "chainlens.analysis.heuristics.common_input:CommonInputOwnership"

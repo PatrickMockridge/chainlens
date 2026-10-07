@@ -73,6 +73,11 @@ An attribution attached to an address or entity.
 or an import -- the difference between an exchange confirming an address and
 a guess. ``address`` is set when the label applies to one address only.
 
+**Attributes**
+
+- `provider` `str | None` — *which* source asserted this — ``"ofac-sdn"``, ``"events"``, an adapter's name. ``source`` says a third party is responsible; once several are merged into one answer, that is no longer enough to act on, and the difference between a sanctions list and a curated file is not one a reader should have to infer from a URL.
+- `url` `str | None` — where the assertion can be read. For a curated label this is the citation, and a label with no URL is an assertion nobody can check.
+
 **Members**
 
 - `name`
@@ -81,6 +86,7 @@ a guess. ``address`` is set when the label applies to one address only.
 - `confidence` = Field(default=None, ge=0.0, le=1.0)
 - `address` = None
 - `url` = None
+- `provider` = None
 
 ## `Merge`
 

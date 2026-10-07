@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve ingest verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -94,6 +94,11 @@ ui-check:  ## Lint, typecheck, test and build the front end, and fail on a stale
 		echo "the committed bundle is out of date; run \`make ui\` and commit the result"; \
 		exit 1; \
 	}
+
+labels-verify:  ## Re-check every label corroboration against the chain
+	# Not part of `check`: it needs the network and the suite runs under --block-network. The
+	# offline half -- that every record *carries* a dated corroboration -- is a test.
+	uv run python tests/labels/verify_corroboration.py
 
 docs-reference:  ## Regenerate the API reference from the docstrings
 	# The pages are committed, so the guard is `tests/docs/test_reference.py` -- it runs under

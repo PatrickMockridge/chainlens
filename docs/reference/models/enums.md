@@ -130,6 +130,17 @@ Traversal direction requested from the tracer.
 
 What kind of real-world actor an entity is believed to be.
 
+**A member here is a category, not an identity.** "This is an exchange" is a claim a source
+makes; "this is Mt Gox" is the label's `chainlens.models.entities.Label.name`. Keeping
+those apart is what lets the same address be an exchange in one source and sanctioned in
+another without either being wrong.
+
+`MARKETPLACE`, `FUNDRAISER` and `DAO` exist because the seven members above could only
+approximate a darknet market, a crowdsale and a named fund — Silk Road, the Ethereum sale and
+AssangeDAO were each being recorded as a generic `SERVICE`, which is a category that tells a
+reader nothing. A DAO is often also a fundraiser, and AssangeDAO is both; the *label* picks
+one, because an enum cannot hold two answers and a reader only needs the one that was meant.
+
 **Members**
 
 - `HEURISTIC` = 'heuristic'
@@ -138,6 +149,9 @@ What kind of real-world actor an entity is believed to be.
 - `MIXER` = 'mixer'
 - `SANCTIONED` = 'sanctioned'
 - `INDIVIDUAL` = 'individual'
+- `MARKETPLACE` = 'marketplace'
+- `FUNDRAISER` = 'fundraiser'
+- `DAO` = 'dao'
 - `UNKNOWN` = 'unknown'
 
 ## `FlowDirection`
