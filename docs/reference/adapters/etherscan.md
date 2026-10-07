@@ -85,6 +85,42 @@ Note this is ERC-20 only. Etherscan exposes ERC-721 and ERC-1155 transfers
 through separate endpoints (``tokennfttx``, ``tokennfttx``/``token1155tx``)
 which this adapter does not yet read; they are not silently merged in.
 
+### `get_window_transfers`
+
+```python
+get_window_transfers(address: str, *, since: datetime | None = None, until: datetime | None = None, limit: int | None = None, cursor: str | None = None) -> AsyncIterator[Transfer]
+```
+
+The movements involving one address, newest first.
+
+**Both native and token movements, in one stream.** This is the sample a coincidence rate
+is counted over, and the count it is contrasted with — the transfer checker's ``k`` —
+counts a native value transfer *plus one movement per token log*. A rate drawn only from
+native movements would price a different population from the ``k`` it is set against, which
+would be a comparison between two numbers that are not about the same thing.
+
+The two endpoints are walked in turn rather than interleaved: each is already newest-first,
+and a caller is counting a rate over a sample, not reading a timeline. Merging them into one
+order would cost a sort over pages that have not been fetched.
+
+**The bound is by block, not by time.** Etherscan's ``txlist`` takes ``startblock`` and
+``endblock`` and has no time range, so a ``since`` stops the walk early — the order is
+descending, so everything past the first movement older than the bound is older still — and
+cannot be pushed down to the provider. That is why a caller sampling the *outside* of a
+window pays for every page between now and the window's start, exactly as
+`EsploraProvider.get_window_transfers` does.
+
+**A heavy address is capped by Etherscan, silently.** The free tier returns at most the
+10,000 most recent records for these endpoints and does not say so in the response; the walk
+simply ends. That is the same gap Esplora documents — "the provider cannot know whether the
+history was exhausted" — and it is worse here only because a plausible-looking answer comes
+back rather than a short one. A caller that needs to know must count what it got.
+
+**Raises**
+
+- `ConfigurationError` — the API key is missing or rejected.
+- `RateLimitError` — the quota is exhausted.
+
 ### `aclose`
 
 ```python
