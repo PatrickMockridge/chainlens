@@ -64,6 +64,10 @@ __all__ = ["main"]
 
 DEFAULT_PORT = 8765
 
+#: Where `chainlens notes` reads from when nobody says otherwise. Made on first use, because a
+#: command whose default is a directory that does not exist cannot be tried.
+DEFAULT_NOTES_DIR = "notes"
+
 
 def _provider(name: str | None, chain: str | None) -> Provider:
     """Resolve a provider, defaulting to one that can walk an address.
@@ -152,10 +156,26 @@ def _command_notes(args: argparse.Namespace) -> int:
     import anyio
 
     root = Path(args.from_directory)
+    if not root.is_dir() and root == Path(DEFAULT_NOTES_DIR):
+        # The directory nobody named, on a first run. Making it and saying where it is beats
+        # failing with "not a directory to read a corpus from" — which is a *correct* message for
+        # a path somebody typed and a useless one for a path they did not. A named directory that
+        # is missing is still an error, because that is a typo.
+        root.mkdir(parents=True, exist_ok=True)
+        print(f"made {root}/. Drop your material in it — screenshots, PDFs, saved pages, text,")
+        print("exports, whatever you have — and run this again. Nothing is uploaded and nothing")
+        print("in it is committed; see docs/notes/index.md.")
+        return 0
+
     try:
         corpus = read_corpus(root)
     except CorpusError as exc:
         raise SystemExit(str(exc)) from exc
+
+    if not corpus.notes:
+        # Empty is not the same as unreadable, and it has a different remedy.
+        print(f"{root} is empty. Drop your material in it and run this again.")
+        return 0
 
     print(corpus.format())
     for note in corpus.unread:
@@ -518,8 +538,8 @@ def build_parser() -> argparse.ArgumentParser:
     notes.add_argument(
         "--from",
         dest="from_directory",
-        default="notes",
-        help="the directory holding your material (default: ./notes)",
+        default=DEFAULT_NOTES_DIR,
+        help=f"the directory holding your material (default: ./{DEFAULT_NOTES_DIR})",
     )
     notes.add_argument(
         "--read-only",

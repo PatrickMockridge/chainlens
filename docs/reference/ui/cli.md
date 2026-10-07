@@ -18,6 +18,8 @@ notebook cannot disagree about what a document looks like — and each document 
 because a replay mistaken for a live read is the failure this library's caching already works to
 prevent.
 
+## `DEFAULT_NOTES_DIR`
+
 ## `DEFAULT_PORT`
 
 ## `build_parser`

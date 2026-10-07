@@ -11,8 +11,15 @@ chainlens notes --from ./notes "where did the Silk Road coins go?"
 
 ## Dropping things in
 
-Make a directory and put things in it. Any of these, mixed together, in subdirectories if you
-like:
+```console
+$ chainlens notes "anything"
+made notes/. Drop your material in it — screenshots, PDFs, saved pages, text,
+exports, whatever you have — and run this again. Nothing is uploaded and nothing
+in it is committed; see docs/notes/index.md.
+```
+
+That is the whole setup: run the command once and it makes the directory, then drop things in.
+Any of these, mixed together, in subdirectories if you like:
 
 | what you dropped | how it is read |
 |---|---|
@@ -23,6 +30,9 @@ like:
 | `.docx`, `.odt` | the document part inside the archive |
 | `.rtf`, `.eml`, `.mbox` | the words it carries |
 | screenshots — `.png`, `.jpg`, `.gif`, `.webp` | **not read by default**; see below |
+
+A directory you name yourself with `--from` has to exist — a missing path *there* is a typo, and
+creating it would hide the mistake. The default is `./notes`, and `notes/` is gitignored.
 
 PDF support needs the extra:
 
