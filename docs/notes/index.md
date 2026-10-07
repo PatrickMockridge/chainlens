@@ -187,6 +187,87 @@ A question with nothing in common with the corpus gets **no model call at all** 
 so and stops. A model asked a question with no material behind it answers from its weights, which
 is not a reading of your notes.
 
+## Following it onto the chain
+
+An answer is a reading. The next question is usually "can I check that", and the corpus can be made
+to say what it is claiming in a form the rest of the library already prices.
+
+```console
+# What is in there that can be looked up at all — no model, no chain, no key.
+chainlens notes --from ./notes --read-only --vision --addresses
+
+# The claims, written out for review before anything is spent on them.
+chainlens notes --from ./notes --vision --claims-out claims/ --leads leads.json
+
+# One of them, through the machinery that has always done this.
+chainlens ui derive --claim claims/0001.json --out derivation.json
+```
+
+**Start with `--addresses`.** It reports what the corpus holds that can be followed and what it
+holds that only looks like it, because for a corpus of block-explorer screenshots the second is
+usually the larger part:
+
+```console
+1 address(es) that can be looked up, in 1 note(s):
+  ethereum 0xea674fdde714fd979de3edf0f56aa9716b898ec8
+    n.txt: To 0x5ed8cee6b63b1c6afce... 49,999 Ether and 0xea674fdde714fd979de3edf0f56aa9716b898ec8
+
+1 address-shaped string(s) that cannot be looked up:
+  1 truncated, in 1 note(s)
+    0x5ed8cee6b63b1c6afce...  (n.txt)
+    why: truncated in the note — the note shows only the start of it, so no lookup can find it and
+         no check can falsify anything written about it
+```
+
+Three kinds, and only the first is usable: a **usable** address can be looked up; a **garbled** one
+is address-shaped and wrong, which sends you back to the image; a **truncated** one is what the page
+being screenshotted chose to render, which sends you nowhere, because the characters are not there
+to find. A corpus that reported only the usable ones would describe forty abbreviations as holding
+nothing.
+
+### The claim records
+
+`--claims-out` reads every note and writes one record per claim, in the same shape the case study
+uses. Each carries the quote it was read from, the note it came from, and how strong that note's
+provenance is — a screenshot is the weakest there is, because it carries no text at all until
+something reads it.
+
+**`--select model` has a model choose which claims to write; `--select none`, the default, writes
+every claim the reading produced.** That is a real difference and it is recorded rather than
+implied. A ratio is not robust to how a claim was selected, and this library has said so since
+before anything could select: *"a claim chosen after a finding was seen was chosen with the evidence
+in view"*. So every record carries a `selection` block naming what chose, from which corpus, under
+which prompt, answering which question — or saying plainly that nothing chose, which is the better
+standing for the same number. The derivation a reader sees carries it too.
+
+`--leads` writes the chooser's suggestions to their own file. **A lead is not a claim.** It is where
+to look next, and it can only become something checkable by being read out of the material again
+with a verbatim quote — which is what stops a suggestion from arriving as a finding.
+
+### Labels your material carries
+
+A screenshot of a vendor's table is a *source asserting* something, and `--labels-out` writes those
+assertions as a label file the derive command can check a label claim against:
+
+```console
+chainlens notes --from ./notes --vision \
+  --labels-out labels/ --label-source https://example.invalid/table --label-provider "Some Vendor"
+
+chainlens ui derive --claim claims/0001.json --out derivation.json --labels labels/
+```
+
+`--label-source` is required and has no default. A label record must cite where its assertion can be
+read, and inventing a URL to satisfy the format would defeat the field — a label nobody can check is
+indistinguishable from a guess. `--label-provider` names the source, so a vendor's attributions are
+recorded as theirs and not as this library's own curation.
+
+Two things it will not do. It will not turn a **truncated address** into a record, because a prefix
+cannot be looked up and so cannot be corroborated — it is reported by name instead. And it does not
+infer identity: a vendor naming a person is *that vendor's assertion*, recorded with their name on
+it. `check_label` already reports a label's name, source and kind separately and already carries the
+caveat that a label is "an attribution by a third party, recorded here with its source so it can be
+weighed rather than trusted".
+
 ## What comes back, and what it is worth
 
 An answer is **checked against the notes it was written from**, the same way prose about a
