@@ -44,6 +44,7 @@ from pydantic import AwareDatetime
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import utcnow
 from chainlens.models.enums import ClaimVerdict
+from chainlens.models.selection import SelectionDisclosure
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.verify.claims import ActivityWindow
 from chainlens.verify.schema import Claim, ClaimType
@@ -87,6 +88,10 @@ class ClaimRecord:
         falsifier: what would show the claim to be false, when the author stated one.
         expected: the verdict the author recorded, when the format is being used as a
             pre-registration. ``None`` for a record written to ask rather than to check.
+        selection: how this claim came to be one of the claims written, when a chooser picked it.
+            On the record because the record is where a claim was *chosen*, and a set of records
+            that did not say so would read as a set fixed in advance. ``None`` for a record a
+            person wrote by hand, which is the pre-registered case.
     """
 
     path: Path
@@ -97,6 +102,7 @@ class ClaimRecord:
     assertion: str = ""
     falsifier: str = ""
     expected: ClaimVerdict | None = None
+    selection: SelectionDisclosure | None = None
 
 
 def _require(mapping: dict[str, Any], key: str, where: str) -> Any:
@@ -237,6 +243,16 @@ def load_record(path: Path, *, corpus_dir: Path | None = None) -> ClaimRecord:
         except ValueError as exc:
             raise RecordError(f"{where}: unknown expected.verdict: {exc}") from exc
 
+    selection: SelectionDisclosure | None = None
+    selection_raw = raw.get("selection")
+    if selection_raw is not None:
+        if not isinstance(selection_raw, dict):
+            raise RecordError(f"{where}: selection must be a table")
+        try:
+            selection = SelectionDisclosure.model_validate(selection_raw)
+        except ValueError as exc:
+            raise RecordError(f"{where}: {exc}") from exc
+
     return ClaimRecord(
         path=path,
         id=str(raw.get("id", path.stem)),
@@ -246,6 +262,7 @@ def load_record(path: Path, *, corpus_dir: Path | None = None) -> ClaimRecord:
         assertion=str(raw.get("assertion", "")),
         falsifier=str(raw.get("falsifier", "")).strip(),
         expected=expected,
+        selection=selection,
     )
 
 
@@ -275,6 +292,7 @@ def record_for_claim(
     strength: ProvenanceStrength = ProvenanceStrength.PASTE,
     captured_at: AwareDatetime | None = None,
     url: str | None = None,
+    selection: SelectionDisclosure | None = None,
 ) -> ClaimRecord:
     """Build a record for one claim, with the post it was read from carried as its own text.
 
@@ -282,6 +300,11 @@ def record_for_claim(
     id and capture time. **No falsifier and no expectation**, because those are a person's — a
     falsifier is what would show the claim to be false, which is a judgement no extractor makes, and
     an expectation is the case study's pre-registration. A caller that has them sets them.
+
+    ``selection`` is different from those two and is a caller's to pass but not to judge: it says
+    how the claim came to be written, which a tool that chose it knows and a person writing one by
+    hand does not. Passing ``None`` is the claim that nothing chose this claim — which is the
+    better standing and is therefore asserted deliberately rather than defaulted into.
     """
     post = Post(
         id=record_id,
@@ -302,6 +325,7 @@ def record_for_claim(
         assertion="",
         falsifier="",
         expected=None,
+        selection=selection,
     )
 
 
@@ -350,4 +374,8 @@ def dump_record(record: ClaimRecord) -> str:
         payload["falsifier"] = record.falsifier
     if record.expected is not None:
         payload["expected"] = {"verdict": record.expected.value}
+    if record.selection is not None:
+        # Written whole rather than field by field: the disclosure is the artifact, and a record
+        # that dropped a field would be a record that understated how its claim was chosen.
+        payload["selection"] = record.selection.model_dump(mode="json")
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"

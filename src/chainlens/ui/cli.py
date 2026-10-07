@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import sys
 import webbrowser
+from collections.abc import Sequence
 from pathlib import Path
 
 from chainlens.exceptions import ConfigurationError, LLMError
@@ -37,12 +38,15 @@ from chainlens.models.narrative import NarrativeDocument
 from chainlens.notes import (
     DEFAULT_VISION_MODEL,
     OLLAMA_URL,
+    AddressMention,
     AnswerDocument,
     Answerer,
     Corpus,
     CorpusError,
+    MentionKind,
     OllamaVision,
     VisionReader,
+    address_mentions,
     read_corpus,
     read_corpus_with,
 )
@@ -174,6 +178,50 @@ async def _read_for_cli(root: Path, reader: VisionReader) -> Corpus:
             await close()
 
 
+def _report_addresses(corpus: Corpus) -> None:
+    """What the corpus holds that can be followed, and what it holds that cannot.
+
+    The counts are printed separately and the unusable ones by name, because the two are the answer
+    to different questions and the second is the one a reader is most likely to be misled about. A
+    corpus of screenshots of a block explorer is mostly *truncated* addresses — the page rendered a
+    prefix and stopped — so a report that counted only what it could look up would describe the
+    material as holding a handful of addresses when it holds a handful it can use and many more it
+    can only show.
+    """
+    mentions = address_mentions(corpus)
+    usable = [mention for mention in mentions if mention.usable]
+    unusable = [mention for mention in mentions if not mention.usable]
+
+    print()
+    print(f"{len(usable)} address(es) that can be looked up, in {_notes_with(corpus, usable)}:")
+    for mention in usable:
+        mark = " (from a transcription)" if mention.transcribed else ""
+        print(f"  {mention.chain.value if mention.chain else '?'} {mention.address}{mark}")
+        print(f"    {mention.note}: {mention.context}")
+
+    if unusable:
+        # Grouped by reason rather than listed flat, because the remedies differ: a garbled address
+        # is worth going back to the image for and a truncated one is not.
+        print()
+        print(f"{len(unusable)} address-shaped string(s) that cannot be looked up:")
+        for kind in (MentionKind.TRUNCATED, MentionKind.GARBLED):
+            same = [mention for mention in unusable if mention.kind is kind]
+            if not same:
+                continue
+            print(f"  {len(same)} {kind.value}, in {_notes_with(corpus, same)}")
+            for mention in same[:10]:
+                print(f"    {mention.as_written}  ({mention.note})")
+            if len(same) > 10:
+                print(f"    … and {len(same) - 10} more")
+            if same[0].because:
+                print(f"    why: {same[0].because}")
+
+
+def _notes_with(corpus: Corpus, mentions: Sequence[AddressMention]) -> str:
+    """Which notes the mentions came from, as a count — the note list is printed per mention."""
+    return f"{len({mention.note for mention in mentions})} note(s)"
+
+
 def _command_notes(args: argparse.Namespace) -> int:
     """Read a directory of your own material and answer a question from it.
 
@@ -228,6 +276,10 @@ def _command_notes(args: argparse.Namespace) -> int:
         saved.parent.mkdir(parents=True, exist_ok=True)
         saved.write_text(strict_dumps(corpus), encoding="utf-8")
         print(f"wrote {saved}")
+
+    if args.addresses:
+        _report_addresses(corpus)
+        return 0
 
     if args.read_only:
         return 0
@@ -606,6 +658,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"the ollama model to read images with, default {DEFAULT_VISION_MODEL}",
     )
     notes.add_argument("--out", help="write the answer as a document")
+    notes.add_argument(
+        "--addresses",
+        action="store_true",
+        help=(
+            "report every address the corpus holds — the ones that can be looked up and the ones "
+            "that cannot — and stop; no model, no chain, no key"
+        ),
+    )
     notes.add_argument(
         "--save",
         help=(

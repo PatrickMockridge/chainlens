@@ -505,6 +505,7 @@
         "value": null
       },
       "schema_version": 1,
+      "selection": null,
       "verdict": "supported"
     },
     "ratio_without_prior": {
@@ -1510,6 +1511,7 @@
         "value": null
       },
       "schema_version": 1,
+      "selection": null,
       "verdict": "supported"
     },
     "with_ratio": {
@@ -2554,6 +2556,7 @@
         "value": null
       },
       "schema_version": 1,
+      "selection": null,
       "verdict": "supported"
     }
   },

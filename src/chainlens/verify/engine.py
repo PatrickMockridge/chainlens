@@ -47,6 +47,7 @@ from chainlens.models.calculation import (
     UnboundKind,
 )
 from chainlens.models.enums import ClaimVerdict
+from chainlens.models.selection import SelectionDisclosure
 from chainlens.models.wire import detail_entries
 from chainlens.providers.base import Provider
 from chainlens.social.models import Post
@@ -106,6 +107,22 @@ def _ratio_operation(k: Input, p: Input, ratio: LikelihoodRatio | None) -> Opera
         ),
         reason=None if ratio is not None else _why_withheld(k, p),
     )
+
+
+def _selection_caveats(selection: SelectionDisclosure | None) -> tuple[str, ...]:
+    """What a finding has to say about how its claim was chosen, and whether it was transcribed.
+
+    Two caveats rather than one, because a claim can be chosen by nobody and still rest on a model's
+    reading of a screenshot, and it can be chosen by a model and rest on a PDF. A reader weighing a
+    number needs to be able to tell which of the two applies — collapsing them into one sentence
+    would make "this was picked" and "this was read by a model" look like the same fact.
+    """
+    if selection is None:
+        return ()
+    notes = [selection.limitation]
+    if (transcription := selection.transcription_note) is not None:
+        notes.append(transcription)
+    return tuple(notes)
 
 
 def _unbound_input(attempt: RatioAttempt | None) -> Input | None:
@@ -186,6 +203,7 @@ class VerificationEngine:
         transfer_limit: int = DEFAULT_TRANSFER_LIMIT,
         thresholds: VerbalThresholds = DEFAULT_THRESHOLDS,
         estimate_requested: bool = True,
+        selection: SelectionDisclosure | None = None,
     ) -> None:
         self._provider = provider
         self._estimator = estimator
@@ -198,6 +216,10 @@ class VerificationEngine:
         self._scan_limit = scan_limit
         self._transfer_limit = transfer_limit
         self._thresholds = thresholds
+        #: How the claims reached this engine, when a chooser picked them. Stamped on every
+        #: finding and added to its caveats, because the alternative — carrying it on the batch —
+        #: lets a finding travel on its own with a ratio that reads as pre-registered.
+        self._selection = selection
 
     @property
     def provider(self) -> Provider:
@@ -266,7 +288,8 @@ class VerificationEngine:
             attempt=attempt,
             gap=gap,
             assumptions=tuple(outcome.assumptions) + tuple(parsed.notes),
-            caveats=outcome.caveats,
+            caveats=outcome.caveats + _selection_caveats(self._selection),
+            selection=self._selection,
         )
 
     # -- internals -----------------------------------------------------------

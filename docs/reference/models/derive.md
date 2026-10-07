@@ -43,6 +43,7 @@ One finding's derivation, as a document a front end can render.
 - `root` `DerivationNode` — the tree.
 - `limitations` `str` — the standing caveats. **Replaced when a prior was supplied**, because the standard text says the library reports no posterior and a rendered posterior beside it would make the artifact contradict itself.
 - `prior_supplied_by` `str | None` — who supplied the prior, when one was.
+- `selection` `SelectionDisclosure | None` — how the claim came to be one of the claims priced, when a chooser picked it. On the document because the document is what a reader sees, and a ratio whose claim was chosen would otherwise render exactly like one whose claim was fixed in advance.
 
 **Members**
 
@@ -55,6 +56,7 @@ One finding's derivation, as a document a front end can render.
 - `root`
 - `limitations`
 - `prior_supplied_by` = None
+- `selection` = None
 
 ### `node_count`
 

@@ -165,6 +165,7 @@ One claim, adjudicated, with everything a reader needs to disagree.
 - `gap` `Input | None` — the one unbound input this finding turns on, when it turns on one. A checker that could not answer says so here, and so does a ratio that was withheld because an input was missing — the two are the same shape, which is the point.
 - `assumptions` `tuple[str, ...]` — what the result rests on, including every convention applied.
 - `caveats` `tuple[str, ...]` — what would change it.
+- `selection` `SelectionDisclosure | None` — how this claim came to be one of the claims priced, when a chooser picked it. Carried on the finding rather than only on the record it was written from, because a consumer of a finding has to be able to see that a ratio prices a *chosen* claim — and a reader who sees only the finding would otherwise read the number as pre-registered.
 
 **Members**
 
@@ -179,6 +180,7 @@ One claim, adjudicated, with everything a reader needs to disagree.
 - `evidence` = Field(default_factory=lambda: ClaimEvidence())
 - `likelihood` = None
 - `attempt` = None
+- `selection` = None
 - `assumptions` = ()
 - `caveats` = ()
 

@@ -52,6 +52,10 @@ PNG = (
 )
 
 
+#: A note holding one address that can be looked up — the shape `--addresses` is about.
+ADDRESS_IN_A_NOTE = "2 0xea674fdde714fd979de3edf0f56aa9716b898ec8 Ethermine"
+
+
 def _with_a_screenshot(tmp_path: Path) -> Path:
     root = tmp_path / "mine"
     root.mkdir()
@@ -218,3 +222,92 @@ class TestReadingScreenshots:
         note = corpus["notes"][0]
         assert "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2" in note["text"]
         assert note["warnings"] == [], "a correct address is not a caution"
+
+
+class TestReportingTheAddresses:
+    """`--addresses`, which is the checkpoint the rest of this work depends on.
+
+    Before building anything that looks an address up on chain, the question worth answering is how
+    much of a real corpus holds addresses that *can* be looked up. For a corpus of block-explorer
+    screenshots the honest answer is usually "fewer than it looks", and this is the command that
+    says so without a model, a chain, or a key.
+    """
+
+    def test_it_reports_the_usable_ones_and_stops(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text(
+            "2 0xea674fdde714fd979de3edf0f56aa9716b898ec8 Ethermine", encoding="utf-8"
+        )
+
+        assert _run("anything", "--from", str(root), "--addresses") == 0
+        out = capsys.readouterr().out
+        assert "1 address(es) that can be looked up" in out
+        assert "0xea674fdde714fd979de3edf0f56aa9716b898ec8" in out
+        assert "Ethermine" in out, "the context is what lets a reader find it in the screenshot"
+
+    def test_a_truncated_address_is_counted_apart_from_a_usable_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The distinction the whole report turns on. A corpus that said "three addresses" when it
+        holds one it can look up and two it cannot has misled its reader toward confidence."""
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text(
+            "To 0x5ed8cee6b63b1c6afce... 49,999 Ether\n"
+            "From 0x1a5f4f3b427c4849ae... 49,999 Ether\n"
+            "and 0xea674fdde714fd979de3edf0f56aa9716b898ec8 can be looked up",
+            encoding="utf-8",
+        )
+
+        assert _run("anything", "--from", str(root), "--addresses") == 0
+        out = capsys.readouterr().out
+        assert "1 address(es) that can be looked up" in out
+        assert "2 address-shaped string(s) that cannot be looked up" in out
+        assert "2 truncated" in out
+        assert "0x5ed8cee6b63b1c6afce..." in out
+        assert "truncated in the note" in out
+
+    def test_a_garbled_address_is_reported_as_a_different_kind_of_problem(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A model got this wrong, which sends a reader back to the image; a truncation does not."""
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text(
+            "Ethermine 0x8ea674fdd1fd973e21cd5ef0df56a1987b1c8e", encoding="utf-8"
+        )
+
+        assert _run("anything", "--from", str(root), "--addresses") == 0
+        out = capsys.readouterr().out
+        assert "1 garbled" in out
+        assert "drops and substitutes" in out
+
+    def test_nothing_usable_is_said_plainly(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text("To 0x5ed8cee6b63b1c6afce... 49,999 Ether")
+
+        assert _run("anything", "--from", str(root), "--addresses") == 0
+        assert "0 address(es) that can be looked up" in capsys.readouterr().out
+
+    def test_it_reaches_no_model(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """No credential is configured in this environment, so building a client at all would fail
+        — which is what makes this a test of "nothing was sent" rather than of a message."""
+        monkeypatch.chdir(tmp_path)
+        root = tmp_path / "mine"
+        root.mkdir()
+        (root / "note.txt").write_text(ADDRESS_IN_A_NOTE, encoding="utf-8")
+
+        assert _run("anything", "--from", str(root), "--addresses") == 0
+        assert "0xea674fdde714fd979de3edf0f56aa9716b898ec8" in capsys.readouterr().out

@@ -40,6 +40,7 @@ from chainlens.models.calculation import (
 from chainlens.models.derive import DerivationDocument, DerivationKind, DerivationNode
 from chainlens.models.enums import Chain, ClaimVerdict, Proposition, VerbalScale
 from chainlens.models.ledger import address_node_key, transaction_node_key
+from chainlens.models.selection import SELECTION_NOTE
 from chainlens.models.wire import (
     DetailEntry,
     DetailKind,
@@ -672,6 +673,13 @@ def derive_finding(
     root = claim_node.model_copy(update={"children": children})
     has_posterior = ratio is not None and prior is not None
     limitations = PRIOR_LIMITATIONS if has_posterior else STANDARD_VERIFICATION_LIMITATIONS
+    selection = finding.selection
+    if selection is not None:
+        # Appended rather than substituted. The standing text is about a class — "a claim chosen
+        # after a finding was seen was chosen with the evidence in view" — and this is about the
+        # claim on screen: which chooser, which corpus, which question. A reader weighing the
+        # number beside it needs both, and the general sentence is not the specific one.
+        limitations = f"{limitations}\n{SELECTION_NOTE}"
     return DerivationDocument(
         claim_id=identifier,
         claim_quote=finding.claim.quote,
@@ -681,6 +689,7 @@ def derive_finding(
         root=root,
         limitations=limitations,
         prior_supplied_by=prior_supplied_by if has_posterior else None,
+        selection=selection,
     )
 
 

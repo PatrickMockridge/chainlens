@@ -80,6 +80,7 @@
     - [narrative](reference/models/narrative.md)
     - [page](reference/models/page.md)
     - [primitives](reference/models/primitives.md)
+    - [selection](reference/models/selection.md)
     - [wire](reference/models/wire.md)
   - [notes](reference/notes/index.md)
     - [addresses](reference/notes/addresses.md)

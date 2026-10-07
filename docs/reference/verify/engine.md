@@ -34,7 +34,7 @@ no estimator", and they want three different things from a reader.
 ## `VerificationEngine`
 
 ```python
-VerificationEngine(provider: Provider, *, estimator: CoincidenceEstimator | None = None, registry: CheckerRegistry | None = None, scan_limit: int = DEFAULT_SCAN_LIMIT, transfer_limit: int = DEFAULT_TRANSFER_LIMIT, thresholds: VerbalThresholds = DEFAULT_THRESHOLDS, estimate_requested: bool = True)
+VerificationEngine(provider: Provider, *, estimator: CoincidenceEstimator | None = None, registry: CheckerRegistry | None = None, scan_limit: int = DEFAULT_SCAN_LIMIT, transfer_limit: int = DEFAULT_TRANSFER_LIMIT, thresholds: VerbalThresholds = DEFAULT_THRESHOLDS, estimate_requested: bool = True, selection: SelectionDisclosure | None = None)
 ```
 
 Adjudicates claims from one post against one provider.

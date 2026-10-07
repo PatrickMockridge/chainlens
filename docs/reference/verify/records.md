@@ -35,7 +35,7 @@ knows:
 ## `ClaimRecord`
 
 ```python
-ClaimRecord(path: Path, id: str, claim: Claim, post: Post, quote: str, assertion: str = '', falsifier: str = '', expected: ClaimVerdict | None = None)
+ClaimRecord(path: Path, id: str, claim: Claim, post: Post, quote: str, assertion: str = '', falsifier: str = '', expected: ClaimVerdict | None = None, selection: SelectionDisclosure | None = None)
 ```
 
 One claim record, parsed.
@@ -50,6 +50,7 @@ One claim record, parsed.
 - `assertion` `str` — what the post says, in the author's words. Never read by the engine.
 - `falsifier` `str` — what would show the claim to be false, when the author stated one.
 - `expected` `ClaimVerdict | None` — the verdict the author recorded, when the format is being used as a pre-registration. ``None`` for a record written to ask rather than to check.
+- `selection` `SelectionDisclosure | None` — how this claim came to be one of the claims written, when a chooser picked it. On the record because the record is where a claim was *chosen*, and a set of records that did not say so would read as a set fixed in advance. ``None`` for a record a person wrote by hand, which is the pre-registered case.
 
 **Members**
 
@@ -61,6 +62,7 @@ One claim record, parsed.
 - `assertion` = ''
 - `falsifier` = ''
 - `expected` = None
+- `selection` = None
 
 ## `RecordError`
 
@@ -107,7 +109,7 @@ Every claim record in a directory, by filename. An empty directory is not an err
 ## `record_for_claim`
 
 ```python
-record_for_claim(claim: Claim, *, record_id: str, post_text: str, strength: ProvenanceStrength = ProvenanceStrength.PASTE, captured_at: AwareDatetime | None = None, url: str | None = None) -> ClaimRecord
+record_for_claim(claim: Claim, *, record_id: str, post_text: str, strength: ProvenanceStrength = ProvenanceStrength.PASTE, captured_at: AwareDatetime | None = None, url: str | None = None, selection: SelectionDisclosure | None = None) -> ClaimRecord
 ```
 
 Build a record for one claim, with the post it was read from carried as its own text.
@@ -116,3 +118,8 @@ The shape a tool writes when it has read a post: the claim, the text it was read
 id and capture time. **No falsifier and no expectation**, because those are a person's — a
 falsifier is what would show the claim to be false, which is a judgement no extractor makes, and
 an expectation is the case study's pre-registration. A caller that has them sets them.
+
+``selection`` is different from those two and is a caller's to pass but not to judge: it says
+how the claim came to be written, which a tool that chose it knows and a person writing one by
+hand does not. Passing ``None`` is the claim that nothing chose this claim — which is the
+better standing and is therefore asserted deliberately rather than defaulted into.

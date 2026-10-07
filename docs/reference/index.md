@@ -52,6 +52,7 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.models.narrative`](models/narrative.md)
 - [`chainlens.models.page`](models/page.md)
 - [`chainlens.models.primitives`](models/primitives.md)
+- [`chainlens.models.selection`](models/selection.md)
 - [`chainlens.models.wire`](models/wire.md)
 - [`chainlens.notes`](notes/index.md)
 - [`chainlens.notes.addresses`](notes/addresses.md)
