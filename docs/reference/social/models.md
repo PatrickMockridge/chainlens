@@ -353,4 +353,5 @@ truncation visible instead of looking like an absence of claims.
 - `TEXT` = 'text'
 - `NOTE_TWEET` = 'note_tweet'
 - `PASTED` = 'pasted'
+- `TRANSCRIPTION` = 'transcription'
 - `OCR` = 'ocr'

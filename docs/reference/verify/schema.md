@@ -107,6 +107,21 @@ How many claims survived validation.
 
 How many were removed.
 
+## `quote_appears`
+
+```python
+quote_appears(quote: str, *sources: str) -> bool
+```
+
+Whether ``quote`` appears in one of ``sources``, whitespace aside.
+
+Public and separate from `validate_quotes` so that every place asking this question asks
+it the same way. A second implementation would be a second answer to "is this quote in the
+material?", and the two would eventually differ on some quirk of normalisation — at which point
+one caller would be keeping a quote the other discarded, for no reason anybody could see.
+
+An empty quote does not appear anywhere: nothing can be tied to a span that is not there.
+
 ## `validate_quotes`
 
 ```python
