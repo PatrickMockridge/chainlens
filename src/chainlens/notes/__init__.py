@@ -37,9 +37,17 @@ from chainlens.notes.corpus import (
     read_corpus_with,
 )
 from chainlens.notes.search import Index, Passage, tokens
+from chainlens.notes.vision import (
+    DEFAULT_VISION_MODEL,
+    OLLAMA_URL,
+    OllamaError,
+    OllamaVision,
+)
 
 __all__ = [
     "ANSWER_SYSTEM_PROMPT",
+    "DEFAULT_VISION_MODEL",
+    "OLLAMA_URL",
     "AnswerDocument",
     "AnswerParagraph",
     "Answerer",
@@ -49,6 +57,8 @@ __all__ = [
     "Index",
     "Note",
     "NoteKind",
+    "OllamaError",
+    "OllamaVision",
     "Passage",
     "VisionReader",
     "read_corpus",

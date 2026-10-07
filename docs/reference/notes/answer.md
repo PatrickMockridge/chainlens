@@ -37,6 +37,7 @@ not read. An answer that travelled alone would read as though it covered everyth
 - `dropped` `tuple[str, ...]` — paragraphs discarded, each with the reason. Never repaired.
 - `consulted` `tuple[str, ...]` — the notes that were quoted, in retrieval order.
 - `unreadable` `tuple[str, ...]` — files in the corpus that contributed nothing, with why. Carried on the answer because an answer drawn from part of a corpus has to say which part.
+- `corpus_read_by` `str | None` — which reader transcribed the corpus's images, when there were any. Two answers over the same screenshots are not comparable if a different model transcribed them, so the reader travels with the answer for the same reason ``model`` does.
 - `model` `str | None` — which model wrote it.
 - `prompt_version` `int` — which prompt it was written under.
 - `generated_at` `datetime` — when.
@@ -49,6 +50,7 @@ not read. An answer that travelled alone would read as though it covered everyth
 - `dropped` = ()
 - `consulted` = ()
 - `unreadable` = ()
+- `corpus_read_by` = None
 - `model` = None
 - `prompt_version` = PROMPT_VERSION
 - `generated_at` = Field(default_factory=utcnow)

@@ -125,6 +125,9 @@ class AnswerDocument(LensModel):
         consulted: the notes that were quoted, in retrieval order.
         unreadable: files in the corpus that contributed nothing, with why. Carried on the answer
             because an answer drawn from part of a corpus has to say which part.
+        corpus_read_by: which reader transcribed the corpus's images, when there were any. Two
+            answers over the same screenshots are not comparable if a different model transcribed
+            them, so the reader travels with the answer for the same reason ``model`` does.
         model: which model wrote it.
         prompt_version: which prompt it was written under.
         generated_at: when.
@@ -136,6 +139,7 @@ class AnswerDocument(LensModel):
     dropped: tuple[str, ...] = ()
     consulted: tuple[str, ...] = ()
     unreadable: tuple[str, ...] = ()
+    corpus_read_by: str | None = None
     model: str | None = None
     prompt_version: int = PROMPT_VERSION
     generated_at: datetime = Field(default_factory=utcnow)
@@ -189,6 +193,7 @@ class Answerer:
                 question=question,
                 consulted=(),
                 unreadable=unreadable,
+                corpus_read_by=corpus.read_by,
                 model=self.llm.name,
                 prompt_version=self.prompt_version,
                 dropped=(
@@ -245,6 +250,7 @@ class Answerer:
             dropped=tuple(dropped),
             consulted=cited,
             unreadable=unreadable,
+            corpus_read_by=corpus.read_by,
             model=self.llm.name,
             prompt_version=self.prompt_version,
         )

@@ -29,7 +29,7 @@ Any of these, mixed together, in subdirectories if you like:
 | `.html`, `.htm` | the page's text, with scripts and tags removed |
 | `.docx`, `.odt` | the document part inside the archive |
 | `.rtf`, `.eml`, `.mbox` | the words it carries |
-| screenshots — `.png`, `.jpg`, `.gif`, `.webp` | **not read by default**; see below |
+| screenshots — `.png`, `.jpg`, `.gif`, `.webp` | **not read by default**; add `--vision` |
 
 A directory you name yourself with `--from` has to exist — a missing path *there* is a typo, and
 creating it would hide the mistake. The default is `./notes`, and `notes/` is gitignored.
@@ -54,18 +54,71 @@ $ chainlens notes --from ./notes "anything" --read-only
 That distinction is not pedantry. "This is a scan" and "this is a format nobody taught me" have
 different fixes, and a corpus that quietly dropped a third of its files would answer questions as
 though the missing third had never been asked. `--read-only` reads and reports **without sending
-anything anywhere**, which is worth running before you let a model see the material at all.
+anything anywhere**, which is worth running before you let a model see the material at all — and
+the file it names is the fix: `--vision` reads a screenshot, and the PDF's problem is a scan that
+needs the same treatment.
 
 ## Screenshots
 
-Screenshots are how most people keep a tweet, and they are the one thing the default setup cannot
-read: the endpoint this library ships a default for does not accept images. So a screenshot is
-findable by its filename and contributes nothing else, and says so in the report.
+Screenshots are how most people keep a tweet, and they are the one thing nothing on your disk can
+read: the text in them is pixels, so a model is required. Add `--vision`:
 
-To have them read, point the reader at a model that accepts images — the `VisionReader` protocol is
-one method, and `social/media.py` already prepares and downscales an image for vision. What a
-vision model returns is **text**, transcribed under a fixed instruction, and there is no field in
-the shape for it to put anything else.
+```console
+chainlens notes --from ./notes "where did the Silk Road coins go?" --vision
+chainlens notes --from ./notes "anything" --read-only --vision   # transcribe, ask nothing
+```
+
+That reads every screenshot with **ollama**, on `127.0.0.1:11434`, and **nothing leaves the
+machine**. The material people collect is usually somebody else's posts and often enough the
+subject of the investigation rather than a bystander; sending four hundred screenshots of a
+timeline to be transcribed is a disclosure that has to be deliberate, and a local model is the way
+not to have to make it.
+
+```console
+ollama pull minicpm-v        # the default; --vision-model names another
+```
+
+**Why not OCR.** `tesseract` confuses `0` with `O` and `1` with `l`/`I`, which is fatal when the
+string being transcribed is `1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX`: one character is the whole
+difference between two addresses. The reader has to be one that *reads* rather than one that
+recognises glyphs, so it is a vision model and not an OCR pass.
+
+**What it costs.** A 5-to-8 GB model on a laptop GPU reads a screenshot in tens of seconds, so a
+corpus of a few hundred is a coffee break rather than an instant. Images are read a few at a time
+(`IMAGE_CONCURRENCY`), but a single GPU serving one model is the bottleneck and parallelism buys
+little. Point `--vision-model` at a larger model if the transcriptions matter more than the wait.
+
+**A transcription is one model's account of a screenshot, and the account can be fluent and
+wrong.** Measured here, reading a table of mining-pool addresses: the model returned an address
+with characters dropped from the middle, laid out exactly like the real one, and no reader would
+notice. So what comes back is checked before a corpus is allowed to rely on it, and the check is
+reported rather than applied quietly:
+
+```console
+4/4 file(s) read, 12,884 characters
+  caution: notes/shot-3.png — the transcription contains 2 address-shaped string(s) that are not
+           the shape of an address (0x8ea674fdd1fd973e21cd5ef0df56a1987b1c8e, …) — a vision model
+           drops and substitutes characters, and a string matching an address is not evidence that
+           this one is one
+```
+
+The reading is **kept** — it is mostly right, and the tweet around the address is in it — and the
+identifier that could not be true is named. The check is on identifiers rather than prose because
+prose is forgiving and an identifier is not: a dropped character in a tweet is still the tweet, and
+a dropped character in an address is a different address. It catches an EVM address of the wrong
+length and a Bitcoin address whose checksum does not verify. **It does not catch a wrong address of
+the right shape** — an all-lowercase EVM address carries no checksum — so a transcription is
+material to read, never a record to trust. See
+[`chainlens.notes.identifiers`](../reference/notes/identifiers.md).
+
+What else comes back is **text**, transcribed under one fixed instruction for the whole corpus, and
+there is no field in the shape for the model to put anything else. Which model read it is recorded:
+`Corpus.read_by` holds `ollama:minicpm-v`, and the answer carries it, because two transcriptions of
+the same screenshot made by different models are not the same material.
+
+A reader is one method — the `VisionReader` protocol — so a caller who wants their screenshots read
+by something else (a hosted endpoint, a different local model) satisfies the protocol and passes it
+to `read_corpus_with`. Nothing about the corpus, the search or the checking changes.
 
 ## Asking
 
@@ -106,7 +159,9 @@ of here treats its output as one.
 
 Nothing in this command uploads a corpus. What is sent is the retrieved passages, to the same
 endpoint the extraction and narration commands use (`ANTHROPIC_BASE_URL`), and the command prints
-which host that was. `notes/` is gitignored.
+which host that was. **Screenshots are the exception and go nowhere**: they are read by `--vision`
+on your own machine, and the transcriptions are what reaches the endpoint, if anything does.
+`notes/` is gitignored.
 
 This is the wide half of a narrow rule. What the library **ships** as a label set is small — OFAC,
 a curated set of events, and whatever else may be redistributed — because a shipped dataset

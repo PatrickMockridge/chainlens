@@ -72,10 +72,11 @@ class TestReadingWhateverIsThere:
     def test_an_image_is_indexed_and_says_it_was_not_read(self, tmp_path: Path) -> None:
         """Not silently skipped, and not silently empty.
 
-        The library ships no vision reader because its default endpoint does not accept images, so
-        a screenshot is findable by name and contributes nothing else — which is a fact about the
-        run that has to be reported, because a corpus answering from two thirds of itself without
-        saying so is the failure this module exists to prevent.
+        Reading offline is the default because it is the cheap half — a reader has to be asked for
+        (`--vision`, or :func:`read_corpus_with`) and the library ships one that runs the images
+        through a local model. So a screenshot read offline is findable by name and contributes
+        nothing else, which is a fact about the run that has to be reported: a corpus answering
+        from two thirds of itself without saying so is the failure this module exists to prevent.
         """
         corpus = _corpus(tmp_path)
         image = next(note for note in corpus.notes if note.path == "shot.png")

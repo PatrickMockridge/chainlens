@@ -34,7 +34,18 @@ from chainlens.models.base import utcnow
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.ledger import LedgerGraph, LedgerPolicy
 from chainlens.models.narrative import NarrativeDocument
-from chainlens.notes import AnswerDocument, Answerer, Corpus, CorpusError, read_corpus
+from chainlens.notes import (
+    DEFAULT_VISION_MODEL,
+    OLLAMA_URL,
+    AnswerDocument,
+    Answerer,
+    Corpus,
+    CorpusError,
+    OllamaVision,
+    VisionReader,
+    read_corpus,
+    read_corpus_with,
+)
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import get_registry
@@ -146,12 +157,33 @@ async def _answer_for_cli(answerer: Answerer, corpus: Corpus, question: str) -> 
     return await answerer.answer(corpus, question)
 
 
+async def _read_for_cli(root: Path, reader: VisionReader) -> Corpus:
+    """``anyio.run`` entry point for reading a corpus with a model reading the images.
+
+    The reader is closed here rather than by the caller, because the transport it holds is bound to
+    the event loop it was used on and this is the only loop it ever runs in. ``aclose`` is asked of
+    the object rather than required by the protocol, for the reason :func:`_where` gives: a reader
+    that holds nothing to close satisfies the protocol fully, and demanding a ``close`` would make
+    every fake carry a method with no body.
+    """
+    try:
+        return await read_corpus_with(root, reader)
+    finally:
+        close = getattr(reader, "aclose", None)
+        if callable(close):
+            await close()
+
+
 def _command_notes(args: argparse.Namespace) -> int:
     """Read a directory of your own material and answer a question from it.
 
     Two steps and only the second needs a model, which is why ``--read-only`` exists: reading a
     corpus and reporting what could not be read is worth doing on its own, before anything is sent
     anywhere. What a question costs is one call, with the retrieved notes quoted into it.
+
+    ``--vision`` adds the third thing a model is needed for — a screenshot, whose text is pixels —
+    and it is a separate flag rather than a default because the reader it enables is a *different*
+    model from the one that answers: a local one, which is the whole point of using it.
     """
     import anyio
 
@@ -167,8 +199,9 @@ def _command_notes(args: argparse.Namespace) -> int:
         print("in it is committed; see docs/notes/index.md.")
         return 0
 
+    reader = OllamaVision(model=args.vision_model) if args.vision else None
     try:
-        corpus = read_corpus(root)
+        corpus = read_corpus(root) if reader is None else anyio.run(_read_for_cli, root, reader)
     except CorpusError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -178,10 +211,17 @@ def _command_notes(args: argparse.Namespace) -> int:
         return 0
 
     print(corpus.format())
+    if reader is not None:
+        print(f"images read by {reader.model} on this machine at {OLLAMA_URL}")
     for note in corpus.unread:
         # Reported rather than skipped: an answer drawn from two thirds of a corpus, with the
         # missing third invisible, is the failure this command exists to avoid.
         print(f"  not read: {note.path} — {note.unread_because}")
+    for note in corpus.notes:
+        for warning in note.warnings:
+            # Read, and not to be relied on. A model's transcription is the one text here that can
+            # be fluent and wrong, so what it says that cannot be true is said out loud.
+            print(f"  caution: {note.path} — {warning}")
 
     if args.read_only:
         return 0
@@ -545,6 +585,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--read-only",
         action="store_true",
         help="report what the corpus holds and what could not be read, and send nothing",
+    )
+    notes.add_argument(
+        "--vision",
+        action="store_true",
+        help=(
+            "read screenshots with a model on this machine (ollama), rather than reporting them "
+            "as unread — nothing leaves the machine"
+        ),
+    )
+    notes.add_argument(
+        "--vision-model",
+        default=DEFAULT_VISION_MODEL,
+        help=f"the ollama model to read images with, default {DEFAULT_VISION_MODEL}",
     )
     notes.add_argument("--out", help="write the answer as a document")
     notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")

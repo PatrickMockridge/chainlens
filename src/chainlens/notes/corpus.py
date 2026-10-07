@@ -14,9 +14,11 @@ Three kinds of input, in the order they are tried:
 * **Anything that decodes as UTF-8** and is not mostly control characters. An unknown extension
   is not a reason to refuse a file: most of what people save *is* text under an unusual name.
 * **Images**, which are indexed by name and marked unread unless a vision reader is configured.
-  The library ships none, because the endpoint it defaults to does not accept images — so this is
-  the one thing that needs a caller to point it at a model, and until then a screenshot is
-  findable by filename and contributes nothing else.
+  Screenshots are the one thing a model is *required* for — the text in them is pixels — and the
+  library ships a reader for them (:class:`~chainlens.notes.vision.OllamaVision`, over a model on
+  this machine). It is opt-in rather than default, because the endpoint the rest of the library
+  defaults to does not accept images, so until a caller asks for one a screenshot is findable by
+  filename and contributes nothing else.
 
 The corpus is never committed. It is working material, and the licences that make a *shipped*
 label set narrow do not apply to what a person keeps on their own disk.
@@ -32,13 +34,16 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
+import anyio
 from pydantic import AwareDatetime, Field
 
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import LensModel, utcnow
+from chainlens.notes.identifiers import implausible_addresses
 from chainlens.social.media import sniff_media_type
 
 __all__ = [
+    "IMAGE_CONCURRENCY",
     "IMAGE_INSTRUCTION",
     "Corpus",
     "CorpusError",
@@ -110,6 +115,21 @@ IMAGE_INSTRUCTION = (
     "do not describe the image."
 )
 
+#: How many images are in flight at once: **one**, because the reader this library ships is a local
+#: model and a local model serves one request at a time.
+#:
+#: Measured, and the measurement is the reason this is not four. Ollama runs a single model with one
+#: context here, so requests two through four do not run in parallel — they **queue**, and the time
+#: spent queueing counts against the *client's* timeout rather than against anything the client
+#: asked for. Four in flight therefore read one screenshot and then sat for five minutes until the
+#: timeout killed them, having burned the queue for nothing. The corpus got slower the more of it
+#: was offered, which is exactly backwards.
+#:
+#: Raise it for a reader that genuinely serves concurrently — a hosted endpoint, or a local model
+#: started with a larger ``OLLAMA_NUM_PARALLEL``. It is a parameter because whether it helps is a
+#: property of the reader, and the default has to be the one that works with the one that ships.
+IMAGE_CONCURRENCY = 1
+
 
 class ImageText(LensModel):
     """What a model answers when asked to read an image.
@@ -126,9 +146,10 @@ class VisionReader(Protocol):
     """Reads an image into text.
 
     One method, like :class:`~chainlens.verify.extract.StructuredLLM`, and for the same reason: a
-    fake has to be as easy to write as the thing it stands in for. The library ships **no**
-    implementation, because the endpoint it defaults to does not accept images — so a caller who
-    wants their screenshots read points this at a model that can.
+    fake has to be as easy to write as the thing it stands in for. The library ships one
+    implementation, :class:`~chainlens.notes.vision.OllamaVision`, which reads with a model on this
+    machine; a caller who wants their screenshots read by something else satisfies this protocol
+    and passes it to :func:`read_corpus_with`.
     """
 
     name: str
@@ -148,6 +169,10 @@ class Note(LensModel):
         characters: how much text it contributed, so a corpus can be judged at a glance.
         unread_because: why ``text`` is empty, in words. A file with no text and no reason would
             be the silent skip this module exists to prevent.
+        warnings: things about the text a reader has to know before relying on it. Populated for
+            text a *model* read: a transcription is the one thing here that can be fluent and
+            wrong, and this is where that is said. See
+            :mod:`chainlens.notes.identifiers`.
         bytes: the file's size, so a corpus can be surveyed without opening anything.
     """
 
@@ -156,6 +181,7 @@ class Note(LensModel):
     text: str = ""
     characters: int = 0
     unread_because: str | None = None
+    warnings: tuple[str, ...] = ()
     bytes: int = Field(default=0, ge=0)
 
     @property
@@ -171,11 +197,17 @@ class Corpus(LensModel):
         root: what was read.
         notes: every file found, whether or not it could be read. The unread ones are *in* the
             list: a corpus that omitted them would report a coverage it does not have.
+        read_by: which reader transcribed the images — ``"ollama:minicpm-v"``, say — or ``None``
+            when there were none to transcribe. A transcription is a model's reading of a
+            screenshot, and *which* model read it is the difference between two corpora that
+            otherwise look identical, so it travels here rather than being forgotten at the point
+            the model was called.
         read_at: when it was read, so a stale index can be told from a fresh one.
     """
 
     root: str
     notes: tuple[Note, ...] = ()
+    read_by: str | None = None
     read_at: AwareDatetime = Field(default_factory=utcnow)
 
     @property
@@ -186,6 +218,13 @@ class Corpus(LensModel):
     def unread(self) -> tuple[Note, ...]:
         """The files that contributed nothing, with the reason each gave."""
         return tuple(note for note in self.notes if not note.readable)
+
+    @property
+    def unread_images(self) -> tuple[Note, ...]:
+        """The images nothing has read yet, which is what a vision reader is called for."""
+        return tuple(
+            note for note in self.notes if note.kind is NoteKind.IMAGE and not note.readable
+        )
 
     @property
     def characters(self) -> int:
@@ -367,7 +406,11 @@ def read_corpus(root: Path) -> Corpus:
 
 
 async def read_corpus_with(
-    root: Path, reader: VisionReader, *, instruction: str = IMAGE_INSTRUCTION
+    root: Path,
+    reader: VisionReader,
+    *,
+    instruction: str = IMAGE_INSTRUCTION,
+    concurrency: int = IMAGE_CONCURRENCY,
 ) -> Corpus:
     """Read a corpus, with a model reading the images.
 
@@ -377,32 +420,139 @@ async def read_corpus_with(
 
     A failed image is recorded on its note rather than raised: one unreadable screenshot should not
     cost you the other four hundred.
+
+    Images are read concurrently, at most ``concurrency`` of them at a time — but see
+    :data:`IMAGE_CONCURRENCY` before raising that: against the local reader this library ships, more
+    than one is slower rather than faster, because the model queues them and the queue is counted
+    against the read. Order is by path regardless of which read finishes first, the same rule the
+    tracer's batch expansion follows, so the same corpus always reads the same way.
+
+    Args:
+        root: the directory to read.
+        reader: the model that reads the images.
+        instruction: what every image is read under. One instruction for the whole corpus, because
+            two corpora read under different instructions are not comparable.
+        concurrency: how many images are in flight at once.
     """
     corpus = read_corpus(root)
-    notes: list[Note] = []
-    for note in corpus.notes:
-        if note.kind is not NoteKind.IMAGE or not note.unread_because:
-            notes.append(note)
-            continue
-        data = (root / note.path).read_bytes()
-        media_type = sniff_media_type(data)
-        try:
-            if media_type is None:  # pragma: no cover - an image only by having been sniffed
-                raise CorpusError("the bytes are not an image format vision can read")
-            answer = await reader.read_image(
-                image=data, media_type=media_type, instruction=instruction, shape=ImageText
-            )
-            text = str(answer.get("text", "")).strip()
-            if not text:
-                raise CorpusError("the model read the image and found no text in it")
-        except CorpusError as exc:
-            notes.append(note.model_copy(update={"unread_because": str(exc)}))
-        except Exception as exc:
-            notes.append(note.model_copy(update={"unread_because": f"the reader failed: {exc}"}))
-        else:
-            notes.append(
-                note.model_copy(
-                    update={"text": text, "characters": len(text), "unread_because": None}
-                )
-            )
-    return corpus.model_copy(update={"notes": tuple(notes)})
+    if not corpus.unread_images:
+        # Nothing to transcribe, so no reader is called and none is named. A corpus of PDFs is not
+        # one that "was read by ollama" — saying so would put a model's name on material no model
+        # ever saw.
+        return corpus
+
+    read: dict[int, Note] = {}
+    semaphore = anyio.Semaphore(concurrency)
+
+    async def transcribe(index: int, note: Note) -> None:
+        async with semaphore:
+            read[index] = await _transcribe(root, note, reader, instruction)
+
+    async with anyio.create_task_group() as task_group:
+        for index, note in enumerate(corpus.notes):
+            if note.kind is NoteKind.IMAGE and note.unread_because:
+                task_group.start_soon(transcribe, index, note)
+
+    notes = tuple(read.get(index, note) for index, note in enumerate(corpus.notes))
+    return corpus.model_copy(update={"notes": notes, "read_by": _reader_name(reader)})
+
+
+async def _transcribe(root: Path, note: Note, reader: VisionReader, instruction: str) -> Note:
+    """One image, as a note — transcribed, or explaining why it was not.
+
+    Nothing here raises. A reader that is down, a model that has been renamed, an image the model
+    found nothing in: each of those is a fact about this one file, and the note carries it.
+    """
+    data = (root / note.path).read_bytes()
+    media_type = sniff_media_type(data)
+    try:
+        if media_type is None:  # pragma: no cover - an image only by having been sniffed
+            raise CorpusError("the bytes are not an image format vision can read")
+        data, media_type = _for_vision(note.path, data, media_type)
+        answer = await reader.read_image(
+            image=data, media_type=media_type, instruction=instruction, shape=ImageText
+        )
+        text = str(answer.get("text", "")).strip()
+        if not text:
+            raise CorpusError("the model read the image and found no text in it")
+    except ChainlensError as exc:
+        # Bare, not prefixed: a reader that raises a library error has already written the sentence
+        # a person needs — `ollama does not have 'minicpm-v'; pull it with ...` — and wrapping that
+        # in "the reader failed" buries the one line that says what to do.
+        return note.model_copy(update={"unread_because": str(exc)})
+    except Exception as exc:
+        return note.model_copy(update={"unread_because": f"the reader failed: {exc}"})
+    return note.model_copy(
+        update={
+            "text": text,
+            "characters": len(text),
+            "unread_because": None,
+            "warnings": _transcription_warnings(text),
+        }
+    )
+
+
+def _for_vision(path: str, data: bytes, media_type: str) -> tuple[bytes, str]:
+    """The bytes to show a reader: the image, shrunk to the size a model can read.
+
+    **This is not tidiness, it is the difference between minutes and hours.** A screenshot is
+    usually a full-resolution capture — the corpus this was written against holds several at
+    4096 pixels wide — and a vision model does not scale it down, it *tiles* it: minicpm-v slices
+    a large image into a grid and encodes every panel, so a 4096-pixel capture is many times the
+    work of the same picture at 2000. Measured: the four-way batch stalled for minutes on the
+    largest captures in the corpus and finished a smaller one in twenty-four seconds.
+
+    It reuses :func:`chainlens.social.media.downscale`, which is the library's existing ingest path
+    for exactly this — the same 2000-pixel edge — and deliberately *not*
+    ``prepare_for_vision``, whose byte ceiling exists for a request payload and would refuse a
+    perfectly readable screenshot for being a large PNG.
+
+    Raises:
+        CorpusError: the image could not be shrunk — which is Pillow's absence, or bytes that are
+            not the image they were sniffed as. Kept as a ``CorpusError`` so the note carries the
+            reason rather than the read failing.
+    """
+    from chainlens.social.media import blob_from_bytes, downscale
+
+    try:
+        blob = downscale(blob_from_bytes(path, data))
+    except ChainlensError as exc:
+        raise CorpusError(str(exc)) from exc
+    return blob.data, blob.content_type
+
+
+def _transcription_warnings(text: str) -> tuple[str, ...]:
+    """What a model's text says that cannot be true as written.
+
+    The check is on the *identifiers* rather than on the prose, because the prose is forgiving and
+    an identifier is not: a transcription that drops a character from an address has produced
+    something the corpus will match exactly and quote exactly, and it will be wrong. Named here
+    rather than silently kept, and named rather than discarded — the reading is mostly right, and
+    throwing it away over one address would throw away the tweet around it.
+    """
+    broken = implausible_addresses(text)
+    if not broken:
+        return ()
+    return (
+        "the transcription contains "
+        f"{len(broken)} address-shaped string(s) that are not the shape of an address "
+        f"({', '.join(broken[:3])}{', …' if len(broken) > 3 else ''}) — a vision model drops and "
+        "substitutes characters, and a string matching an address is not evidence that this one is "
+        "one",
+    )
+
+
+def _reader_name(reader: VisionReader) -> str | None:
+    """Which reader transcribed, as well as it can say.
+
+    Asked of the object rather than required by the protocol, for the reason
+    :func:`chainlens.ui.cli._where` gives: the contract is one method, and a fake that transcribes
+    nothing satisfies it fully. A reader that names itself and its model is recorded as
+    ``"ollama:minicpm-v"``; one that names neither is recorded as nothing, which is honest — an
+    unrecorded provenance beats a guessed one.
+    """
+    name = getattr(reader, "name", None)
+    model = getattr(reader, "model", None)
+    if not isinstance(name, str) or not name:
+        return str(model) if isinstance(model, str) and model else None
+    return f"{name}:{model}" if isinstance(model, str) and model else name
