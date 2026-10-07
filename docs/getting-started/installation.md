@@ -43,10 +43,10 @@ Copy `.env.example` to `.env` and fill in only what you need:
 
 Keys are held as `SecretStr`, so `print(settings)` renders `**********`.
 
-!!! note "Licensing"
-    Several commercial providers prohibit redistributing their raw data. Read
-    [Data licensing](../explanation/data-licensing.md) before embedding provider
-    payloads in a report or committing them as test fixtures.
+> **Licensing**
+> Several commercial providers prohibit redistributing their raw data. Read
+> [Data licensing](../explanation/data-licensing.md) before embedding provider
+> payloads in a report or committing them as test fixtures.
 
 ## Cache
 

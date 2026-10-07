@@ -104,15 +104,10 @@ dev = [
   "pypdf>=5",
   "anthropic>=1.11,<2",       # the [llm] extra, exercised by the extractor's tests
 ]
-docs = [
-  "mkdocs-material>=9.6",
-  "mkdocstrings[python]>=0.27",
-  "mkdocs-jupyter>=0.26",
-  "mkdocs-gen-files>=0.5",
-  "mkdocs-literate-nav>=0.6",
-  "mkdocs-section-index>=0.3",
-  "mike>=2.1",
-]
+# The API reference is rendered from the docstrings into markdown and committed, so griffe is the
+# whole Python side of the docs; the book itself is built by mdbook, which is not a Python
+# dependency. See `tests/docs/gen_reference.py` and `book.toml`.
+docs = ["griffelib>=2.3"]
 notebooks = ["jupyter>=1.1", "nbval>=0.11", "matplotlib>=3.9"]
 
 [tool.hatch.version]

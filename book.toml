@@ -1,0 +1,40 @@
+# The book, built by mdbook.
+#
+# `src = "docs"` is not a preference. mdbook defaults to a directory called `src/`, and in this
+# repository `src/` is the Python package — so the default would try to build a book out of the
+# library's own modules.
+#
+# The gate that matters is not here. `make docs-check` regenerates the API reference and fails on
+# a diff, in Python, so it runs wherever `make check` runs. This file is what `mdbook build` and
+# `mdbook serve` read.
+
+[book]
+title = "chainlens"
+description = "Async-first blockchain chain-analysis and on-chain forensics toolkit"
+authors = ["Patrick Mockridge"]
+language = "en"
+src = "docs"
+
+[output.html]
+# The link on every page back to the source file it came from, which `edit_uri` used to be.
+git-repository-url = "https://github.com/PatrickMockridge/chainlens"
+edit-url-template = "https://github.com/PatrickMockridge/chainlens/edit/main/docs/{path}"
+site-url = "/chainlens/"
+no-section-label = true
+
+[output.html.search]
+limit-results = 30
+
+# Broken internal links fail the build, which is what `strict: true` did for the mkdocs build.
+#
+# It is an **output backend**, not a preprocessor, and the binary is `mdbook-linkcheck2` while the
+# backend mdbook looks for is called `linkcheck` — hence the `command` override. Getting this
+# wrong is quiet in one direction and loud in the other: as a preprocessor it is invoked with
+# `supports html`, prints its usage, and the build carries on.
+#
+# Web links are NOT followed: the build must not depend on the network, and a docs job that goes
+# red because somebody's homepage is down is a job people learn to ignore. `make check` runs under
+# `--block-network` for the same reason.
+[output.linkcheck]
+command = "mdbook-linkcheck2"
+follow-web-links = false
