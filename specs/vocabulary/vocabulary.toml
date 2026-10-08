@@ -19,6 +19,22 @@
 # the human-readable part — so a family is listed when a codec can check it here.
 # `bitcoin_cash`'s cashaddr is *not* listed, because nothing in this tree implements it.
 #
+# **And a family is not enough to identify a chain.** Bitcoin, testnet bitcoin, litecoin,
+# dogecoin and bitcoin cash all use base58check; which one an address is on is decided by its
+# *version byte*, and which bech32 chain it is by its *human-readable part*. Those are the two
+# fields below, and they exist because without them the table named a family and nothing could
+# act on the name: `src/chainlens/notes/identifiers.py` hardcoded `[13]` and `bc1` instead, so a
+# litecoin address was not recognised at all.
+#
+# **bitcoin and bitcoin_cash share `[0, 5]`, and that is a fact rather than a mistake.** A legacy
+# bitcoin cash address is indistinguishable from a bitcoin one at the string level; the chains
+# forked and kept the format. The library resolves it to the first row that matches, and
+# `chain_for`'s companion `chains_for` reports *all* the matches so a caller can see the
+# ambiguity rather than being handed a confident answer.
+#
+# `src/chainlens/codec/btc_script.py::NETWORKS` carries the same numbers for bitcoin's four
+# networks, and a test compares the two rather than trusting either.
+#
 # Every row is a claim about a chain, and one of them is checkable against something outside
 # this repository: `tests/vocabulary/test_cross_check.py` holds the bitcoin row's decimals to
 # `pycoin`'s `SATOSHI_PER_COIN` — a library that already knows the number rather than a
@@ -33,6 +49,8 @@ symbol = "BTC"
 decimals = 8
 families = ["base58check", "bech32"]
 note = "The native coin of Bitcoin, and the only asset this library can price from a post."
+base58check_versions = [0, 5]
+bech32_hrp = "bc"
 
 [[assets]]
 id = "tbtc"
@@ -43,6 +61,8 @@ families = ["base58check", "bech32"]
 note = """
 Testnet bitcoin, which shares the mainnet ticker: the symbol is a display convention and the
 chain is what tells them apart, so `(chain, asset)` is the identity and not `symbol`."""
+base58check_versions = [111, 196]
+bech32_hrp = "tb"
 
 [[assets]]
 id = "ltc"
@@ -51,6 +71,8 @@ symbol = "LTC"
 decimals = 8
 families = ["base58check", "bech32"]
 note = "No provider in this tree serves Litecoin yet; the row exists so its decimals are not written down elsewhere."
+base58check_versions = [48, 50]
+bech32_hrp = "ltc"
 
 [[assets]]
 id = "doge"
@@ -59,6 +81,7 @@ symbol = "DOGE"
 decimals = 8
 families = ["base58check"]
 note = "No provider in this tree serves Dogecoin yet. Dogecoin has no bech32 address form."
+base58check_versions = [30, 22]
 
 [[assets]]
 id = "bch"
@@ -69,6 +92,7 @@ families = ["base58check"]
 note = """
 No provider in this tree serves Bitcoin Cash yet. Its cashaddr form is deliberately not listed:
 `families` names what this library can validate, and nothing here implements it."""
+base58check_versions = [0, 5]
 
 [[assets]]
 id = "eth"

@@ -69,7 +69,14 @@ CHAINS = (
 FAMILIES = ("base58check", "bech32", "eip55")
 
 REQUIRED = ("id", "chain", "symbol", "decimals", "families")
-OPTIONAL = ("note",)
+OPTIONAL = ("note", "base58check_versions", "bech32_hrp")
+
+#: Which parameter a family needs, and the rule that makes the table readable rather than merely
+#: complete: **a family a row names must carry the parameter that identifies the chain within it.**
+#: Without that, a row can claim `bech32` and leave nothing for a caller to match on — which is
+#: exactly the state this table was in when `notes/identifiers.py` hardcoded `bc1` instead of
+#: reading it.
+FAMILY_PARAMETERS = {"base58check": "base58check_versions", "bech32": "bech32_hrp"}
 
 
 class VocabularyError(Exception):
@@ -152,6 +159,29 @@ def load(path: Path = TABLE) -> tuple[dict[str, Any], ...]:
         if not isinstance(note, str):
             _refuse(where, f"note must be a string, not {type(note).__name__}")
 
+        versions = row.get("base58check_versions")
+        if "base58check" in families:
+            if not isinstance(versions, list) or not versions:
+                _refuse(where, "a row naming base58check must state base58check_versions")
+            for version in versions:
+                is_byte = isinstance(version, int) and not isinstance(version, bool)
+                if not is_byte or not 0 <= version <= 255:
+                    _refuse(where, f"version {version!r} must be a byte in 0..255")
+        elif versions is not None:
+            _refuse(where, "base58check_versions is stated but the row does not name base58check")
+
+        hrp = row.get("bech32_hrp")
+        if "bech32" in families:
+            if not isinstance(hrp, str) or not hrp:
+                _refuse(where, "a row naming bech32 must state bech32_hrp")
+            if hrp != hrp.lower():
+                _refuse(
+                    where,
+                    f"bech32_hrp {hrp!r} must be lowercase; bech32 defines the part that way",
+                )
+        elif hrp is not None:
+            _refuse(where, "bech32_hrp is stated but the row does not name bech32")
+
         seen_ids.add(row_id)
         seen_chains.add(chain)
         out.append(
@@ -161,6 +191,8 @@ def load(path: Path = TABLE) -> tuple[dict[str, Any], ...]:
                 "symbol": row["symbol"],
                 "decimals": decimals,
                 "families": tuple(families),
+                "base58check_versions": tuple(row.get("base58check_versions") or ()),
+                "bech32_hrp": row.get("bech32_hrp"),
                 "note": " ".join(note.split()),
             }
         )
@@ -185,6 +217,40 @@ def render_asset_schema(rows: Sequence[Mapping[str, Any]]) -> str:
     return json.dumps(document, indent=2) + "\n"
 
 
+def _by_version(rows: Sequence[Mapping[str, Any]]) -> dict[int, list[int]]:
+    """The row *positions* claiming each base58check version byte.
+
+    Positions rather than rows, and that is the fix for a real slip: the first version of this
+    indexed the group with `others.index(row)`, which returns a position *within the group* and
+    so emitted the same binding for every row after the first. The artefact would have attributed
+    every chain's version byte to bitcoin, silently.
+    """
+    out: dict[int, list[int]] = {}
+    for index, row in enumerate(rows):
+        for version in row["base58check_versions"]:
+            out.setdefault(version, []).append(index)
+    return out
+
+
+def _by_hrp(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[int]]:
+    """The row positions claiming each bech32 human-readable part."""
+    out: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        hrp = row["bech32_hrp"]
+        if hrp is not None:
+            out.setdefault(hrp, []).append(index)
+    return out
+
+
+def _group(indices: Sequence[int]) -> str:
+    """A tuple of row bindings, always with a trailing comma.
+
+    The comma matters for the one-element case: `(_ROW_2)` is not a tuple, it is a parenthesised
+    name, and the mapping would hold an `AssetRow` where the type says a tuple of them.
+    """
+    return "(" + ", ".join(f"_ROW_{index}" for index in indices) + ",)"
+
+
 def render_python(rows: Sequence[Mapping[str, Any]]) -> str:
     """The rows, as a module the rest of the library imports.
 
@@ -198,11 +264,24 @@ def render_python(rows: Sequence[Mapping[str, Any]]) -> str:
         f'        symbol="{row["symbol"]}",\n'
         f"        decimals={row['decimals']},\n"
         f"        families={row['families']!r},\n"
+        f"        base58check_versions={row['base58check_versions']!r},\n"
+        f"        bech32_hrp={row['bech32_hrp']!r},\n"
         f'        note="{row["note"]}",\n'
         "    )"
         for row in rows
     )
     by_id = "\n".join(f'    "{row["id"]}": _ROW_{index},' for index, row in enumerate(rows))
+    # The two indexes the identifier layer attributes an address with. Rendered as lines rather
+    # than written into the template as comprehensions, because the template is an f-string and a
+    # comprehension's braces would have to be doubled — which is a way to get it subtly wrong
+    # rather than a way to be clear.
+    by_version = "\n".join(
+        f"    {version}: {_group(indices)},"
+        for version, indices in sorted(_by_version(rows).items())
+    )
+    by_hrp = "\n".join(
+        f'    "{hrp}": {_group(indices)},' for hrp, indices in sorted(_by_hrp(rows).items())
+    )
     by_chain = "\n".join(f'    "{row["chain"]}": _ROW_{index},' for index, row in enumerate(rows))
     bindings = "\n".join(f"_ROW_{index} = ASSETS[{index}]" for index in range(len(rows)))
     return f'''"""GENERATED FILE - DO NOT EDIT BY HAND.
@@ -224,7 +303,14 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
-__all__ = ["ASSETS", "BY_CHAIN", "BY_ID", "AssetRow"]
+__all__ = [
+    "ASSETS",
+    "BY_BASE58CHECK_VERSION",
+    "BY_BECH32_HRP",
+    "BY_CHAIN",
+    "BY_ID",
+    "AssetRow",
+]
 
 
 class AssetRow(NamedTuple):
@@ -236,6 +322,12 @@ class AssetRow(NamedTuple):
         symbol: the ticker a person writes. Not an identity - two chains may share one.
         decimals: how many decimal places one whole unit has.
         families: the address families this library validates for the chain.
+        base58check_versions: the version bytes that identify this chain within base58check —
+            P2PKH then P2SH. Empty when the row does not name that family, and **two chains may
+            share a byte**: bitcoin and bitcoin cash both use `0` and `5`, because the chains
+            forked and kept the format. That is a fact about them and not a gap here.
+        bech32_hrp: the human-readable part that identifies this chain within bech32, or `None`
+            when it has no bech32 form.
         note: the table's prose about the row, empty when it has none.
     """
 
@@ -244,6 +336,8 @@ class AssetRow(NamedTuple):
     symbol: str
     decimals: int
     families: tuple[str, ...]
+    base58check_versions: tuple[int, ...]
+    bech32_hrp: str | None
     note: str
 
 
@@ -252,6 +346,25 @@ ASSETS: Final[tuple[AssetRow, ...]] = (
 )
 
 {bindings}
+
+
+#: The rows that claim a version byte, keyed by it. **A list**, because bitcoin and bitcoin cash
+#: share theirs — an address on that byte is genuinely two chains' and a caller is entitled to
+#: know rather than being handed whichever row came first.
+BY_BASE58CHECK_VERSION: Final[Mapping[int, tuple[AssetRow, ...]]] = MappingProxyType(
+    {{
+{by_version}
+    }}
+)
+
+#: The rows that claim a bech32 human-readable part, keyed by it. A list for the same reason,
+#: though no two shipped rows share one today: the type is what makes a shared one visible rather
+#: than silently resolved.
+BY_BECH32_HRP: Final[Mapping[str, tuple[AssetRow, ...]]] = MappingProxyType(
+    {{
+{by_hrp}
+    }}
+)
 
 BY_ID: Final[Mapping[str, AssetRow]] = MappingProxyType(
     {{

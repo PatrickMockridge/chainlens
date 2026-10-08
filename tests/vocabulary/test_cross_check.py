@@ -26,10 +26,12 @@ import pytest
 
 from chainlens.adapters._evm import WEI_DECIMALS
 from chainlens.codec.btc_amount import SATS_PER_BTC, btc_to_sats, sats_to_btc
+from chainlens.codec.btc_script import NETWORKS
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import AssetRef
 from chainlens.verify.parsing import parse_amount
-from chainlens.vocabulary import decimals_for
+from chainlens.vocabulary import ASSETS, decimals_for, row_for
+from chainlens.vocabulary._generated import BY_BASE58CHECK_VERSION
 
 
 class TestTheBitcoinRow:
@@ -106,3 +108,86 @@ class TestTheWholeTable:
         assert asset.chain is chain
         assert asset.decimals == decimals_for(chain)
         assert asset.symbol == AssetRef.of_native(chain).symbol
+
+
+class TestTheAddressingParameters:
+    """The version bytes and human-readable parts, held to something outside the table.
+
+    **These are what the `families` column was missing.** The table named a family per chain and
+    nothing could act on the name: `notes/identifiers.py` hardcoded `[13]` and `bc1` instead, so a
+    litecoin address — a row the table had, a family the codecs implement — was not recognised at
+    all. The parameters are here now, and they are checked rather than trusted.
+    """
+
+    def test_bitcoins_row_is_the_networks_table(self) -> None:
+        """An in-tree cross-check: `codec/btc_script.py::NETWORKS` has carried these numbers for
+        bitcoin's four networks since before the table existed, and the two must agree.
+
+        Compared rather than restated in either direction — the table is not written from the
+        network dict, and the dict is not written from the table, so a change to one that the
+        other does not follow fails here.
+        """
+        mainnet = NETWORKS["mainnet"]
+        bitcoin = row_for(Chain.BITCOIN)
+        assert bitcoin.base58check_versions == (mainnet.p2pkh_version, mainnet.p2sh_version)
+        assert bitcoin.bech32_hrp == mainnet.hrp
+
+        testnet = NETWORKS["testnet"]
+        tbtc = row_for(Chain.BITCOIN_TESTNET)
+        assert tbtc.base58check_versions == (testnet.p2pkh_version, testnet.p2sh_version)
+        assert tbtc.bech32_hrp == testnet.hrp
+
+    def test_every_chain_pycoin_knows_is_attributed_to_the_same_chain(self) -> None:
+        """**The oracle, and it is end-to-end rather than a constant comparison.**
+
+        `pycoin` generates an address for each chain's own network parameters; this library is
+        asked which chain that address is on; the two must agree. That is stronger than comparing
+        version bytes, because it exercises the codec, the table and the attribution together —
+        and a mistake in any of the three shows up as a disagreement with a library that has no
+        stake in this repository's opinion.
+
+        Bitcoin Cash is the one that cannot be asserted as an equality: pycoin produces the *same
+        string* for `BTC` and `BCH`, because the chains forked and kept the format. It is asserted
+        as the ambiguity it is.
+        """
+        from pycoin.networks.registry import network_for_netcode
+
+        from chainlens.notes.identifiers import chains_for
+
+        hash160 = bytes(range(20))
+        expected = {
+            "BTC": {Chain.BITCOIN},
+            "XTN": {Chain.BITCOIN_TESTNET},
+            "LTC": {Chain.LITECOIN},
+            "DOGE": {Chain.DOGECOIN},
+            "BCH": {Chain.BITCOIN_CASH},
+        }
+        for netcode, chains in expected.items():
+            network = network_for_netcode(netcode)
+            for method in ("for_p2pkh", "for_p2sh", "for_p2pkh_wit"):
+                try:
+                    address = getattr(network.address, method)(hash160)
+                except Exception:
+                    continue
+                answered = set(chains_for(address))
+                assert answered >= chains, f"{netcode}.{method}: {address} -> {answered}"
+
+    def test_a_family_a_row_names_always_has_its_parameters(self) -> None:
+        """The rule the generator enforces, asserted here as well: a row that claims a family and
+        states nothing to match on is a claim no caller can act on — which is the state this table
+        was in for two tranches."""
+        for row in ASSETS:
+            if "base58check" in row.families:
+                assert row.base58check_versions, f"{row.id} claims base58check and states no bytes"
+            if "bech32" in row.families:
+                assert row.bech32_hrp, f"{row.id} claims bech32 and names no human-readable part"
+            if "base58check" not in row.families:
+                assert not row.base58check_versions
+            if "bech32" not in row.families:
+                assert row.bech32_hrp is None
+
+    def test_two_chains_may_share_a_version_byte(self) -> None:
+        """Not a fault in the table — a fact about the chains, and the reason the lookup returns a
+        tuple. Asserted so that a future tidy-up that made the mapping one-to-one fails here."""
+        shared = BY_BASE58CHECK_VERSION[0x00]
+        assert {row.chain for row in shared} == {"bitcoin", "bitcoin_cash"}

@@ -38,12 +38,16 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
+from chainlens.codec.base58 import b58check_decode_versioned
 from chainlens.models.enums import Chain
 from chainlens.verify.parsing import normalise_address
+from chainlens.vocabulary import ASSETS
+from chainlens.vocabulary._generated import BY_BASE58CHECK_VERSION, BY_BECH32_HRP
 
 __all__ = [
     "TRANSCRIPTION_CAVEAT",
     "chain_for",
+    "chains_for",
     "implausible_addresses",
     "plausible_addresses",
     "truncated_addresses",
@@ -84,14 +88,75 @@ TRANSCRIPTION_CAVEAT = (
 #: than "at most this length". Without it ``{28,63}`` happily matches the first sixty-three
 #: characters of a hundred-and-sixty-character blob and reports the prefix of a hash as a mangled
 #: address.
-_CANDIDATE = re.compile(
-    r"""
-    0x[0-9a-fA-F]{28,63}(?![0-9a-fA-F])          # an EVM address, or one that lost a character
-    | [13][a-km-zA-HJ-NP-Z1-9]{25,34}(?![a-km-zA-HJ-NP-Z1-9])   # base58 P2PKH/P2SH, 26-35 chars
-    | (?:bc1|BC1)[02-9ac-hj-np-z]{20,70}(?![02-9ac-hj-np-z])    # bech32 / bech32m
-    """,
-    re.VERBOSE,
-)
+#: The base58 alphabet, in the order `codec/base58.py` writes it.
+_BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+#: The bech32 character set, which excludes `1`, `b`, `i` and `o`.
+_BECH32 = "023456789acdefghjklmnpqrstuvwxyz"
+
+
+def _family_patterns() -> list[str]:
+    """One shape per address family **the vocabulary table names**, in the table's row order.
+
+    **Built from the table rather than written here, and that is the whole point of the change
+    that introduced this.** The pattern used to hardcode `[13]` and `bc1` — two chains' prefixes
+    spelled into a *shape*, in the module that exists to ask what an address is. The table has a
+    row for litecoin saying `base58check`, and a litecoin address is 26 to 35 base58 characters
+    starting with `L`; the hardcoded `[13]` meant it was **not found at all**, and neither were
+    dogecoin's, testnet's, or any bech32 chain whose human-readable part is not `bc`.
+
+    What is *not* in the shape is which chain a token is on, and that is deliberate: the shape
+    asks "could this be an address of some chain this library knows", and `chain_for` answers the
+    other question by decoding. A token whose shape matches and whose checksum fails is reported
+    as found-but-unusable, which is the distinction this module already draws.
+    """
+    patterns: list[str] = []
+    families = {family for row in ASSETS for family in row.families}
+    if "eip55" in families:
+        patterns.append(r"0x[0-9a-fA-F]{28,63}(?![0-9a-fA-F])")
+    if "base58check" in families:
+        # **Both lookarounds**, and the lookbehind is the one that was missing. Without it the
+        # pattern matches a *suffix* of a longer run — a sixty-four character transaction hash is
+        # all base58-valid characters, so `{26,35}` matched its last twenty-seven and reported
+        # the tail of a txid as a mangled address. The prefix test this replaced anchored on `1`
+        # or `3`, which happens to exclude a hex blob, so the flaw was invisible until the shape
+        # became general.
+        patterns.append(rf"(?<![{_BASE58}])[{_BASE58}]{{26,35}}(?![{_BASE58}])")
+    if "bech32" in families:
+        # Every human-readable part the table names, in both cases: bech32 is defined lowercase
+        # and the upper-case form is the same string for a QR code.
+        hrps = "|".join(sorted(BY_BECH32_HRP))
+        patterns.append(
+            rf"(?<![{_BECH32}])(?:{hrps}|{hrps.upper()})1[{_BECH32}]{{20,70}}(?![{_BECH32}])"
+        )
+    return patterns
+
+
+#: What an address looks like — **near enough to full length to be a mangled one**, and no shorter.
+#:
+#: The length bounds are the whole design, and they were measured rather than guessed. A first
+#: version of this matched anything from four hex digits up, on the reasoning that a truncated
+#: address should still be examined; run over twenty-eight screenshots it raised a caution on
+#: **twenty-eight of them**, most of them for four-character fragments like ``0xfca8``. A warning on
+#: every note is a warning nobody reads, and those fragments are not mangled addresses — a tweet
+#: screenshot that shows ``0xfca8`` is showing an abbreviation, and transcribing it faithfully is
+#: the reader doing its job.
+#:
+#: So each family is matched only around its true length: an EVM address at 28-63 hex characters —
+#: short enough to catch a dropped character, and stopping before 64, which is a transaction hash
+#: and not a claim to be an address at all — and base58 and bech32 at theirs. A short abbreviation
+#: is not examined because it is not a claim that a check can falsify.
+#:
+#: **The chain is not in the shape.** It was, and that is the bug this replaced: the base58
+#: alternative began `[13]`, so every chain whose addresses start with something else was invisible.
+#: The shape now asks whether a token could be an address on *some* chain the table names, and
+#: `chain_for` answers which by decoding — the checksum a rewritten pattern cannot fake.
+#:
+#: Each run ends with a negative lookahead, which is what makes the bound mean "this length" rather
+#: than "at most this length". Without it ``{28,63}`` happily matches the first sixty-three
+#: characters of a hundred-and-sixty-character blob and reports the prefix of a hash as a mangled
+#: address.
+_CANDIDATE = re.compile("|".join(_family_patterns()))
 
 
 #: Address-shaped tokens that stop short or carry an ellipsis — the shape a screenshot uses when it
@@ -105,23 +170,61 @@ _CANDIDATE = re.compile(
 #: The ellipsis is required. A run of hex with no ellipsis and no length is a fragment, not a
 #: truncation, and the distinction is the difference between "the image abbreviated this" and "the
 #: model lost the end of it".
+#:
+#: Its base58 alternative keeps a *shape* rather than a prefix, for the same reason `_CANDIDATE`'s
+#: does — and a truncated run is one no checksum can confirm, so this pattern is where the
+#: distinction between "address-shaped" and "an address" is doing the most work.
 _TRUNCATED = re.compile(
     r"""
     0x[0-9a-fA-F]{4,39}(?:…|\.\.\.)                             # an EVM address, cut short
-    | [13][a-km-zA-HJ-NP-Z1-9]{4,33}(?:…|\.\.\.)                # base58, cut short
-    | (?:bc1|BC1)[02-9ac-hj-np-z]{4,}(?:…|\.\.\.)               # bech32, cut short
+    | [123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{4,33}(?:…|\.\.\.)  # base58
+    | (?:bc|tb|ltc|BC|TB|LTC)1[023456789acdefghjklmnpqrstuvwxyz]{4,}(?:…|\.\.\.)      # bech32
     """,
     re.VERBOSE,
 )
 
 
-def chain_for(token: str) -> Chain | None:
-    """Which chain the token's prefix claims it is an address on, if either."""
+def chains_for(token: str) -> tuple[Chain, ...]:
+    """Every chain the token could be an address on, by decoding it rather than by its prefix.
+
+    **A tuple and not one chain, because the answer is genuinely plural for some tokens.**
+    Bitcoin and Bitcoin Cash kept the same base58check version bytes when they forked, so a legacy
+    address on `1…` is *both* chains' and no amount of decoding separates them — the information
+    is not in the string. Returning one would be a confident answer to a question with two.
+
+    What this buys over the prefix test it replaced is the other direction: an address is
+    attributed by its **checksum and version byte**, which a rewrite cannot fake, rather than by
+    the first character. A litecoin address decodes to version ``0x30`` and the table says that is
+    litecoin's; a bech32 address names its human-readable part and the table says which chain that
+    is.
+    """
     if token[:2].lower() == "0x":
-        return Chain.ETHEREUM
-    if token[:3].lower() == "bc1":
-        return Chain.BITCOIN
-    return Chain.BITCOIN if token[0] in "13" else None
+        return tuple(Chain(row.chain) for row in ASSETS if "eip55" in row.families)
+
+    separator = token.lower().find("1")
+    if separator > 0:
+        rows = BY_BECH32_HRP.get(token[:separator].lower(), ())
+        if rows:
+            return tuple(Chain(row.chain) for row in rows)
+
+    try:
+        version, _ = b58check_decode_versioned(token)
+    except (ValueError, TypeError):
+        return ()
+    return tuple(Chain(row.chain) for row in BY_BASE58CHECK_VERSION.get(version, ()))
+
+
+def chain_for(token: str) -> Chain | None:
+    """Which chain the token is an address on, or ``None``.
+
+    The first of :func:`chains_for`'s answers, in the vocabulary table's row order — so a token
+    that is genuinely two chains' resolves the same way every run. **A caller that needs to know
+    the answer is ambiguous should ask `chains_for`**, and the note this module writes for an
+    unusable token says which chains were considered, so a reader of a corpus is not handed a
+    silent choice.
+    """
+    answers = chains_for(token)
+    return answers[0] if answers else None
 
 
 def _candidates(text: str) -> Iterator[tuple[str, str | None]]:

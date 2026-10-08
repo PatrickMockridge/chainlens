@@ -30,8 +30,20 @@ position* — so rows are appended, never reordered in place.
 
 from __future__ import annotations
 
-from chainlens.models.enums import Chain
+from typing import TYPE_CHECKING
+
 from chainlens.vocabulary._generated import ASSETS, AssetRow
+
+if TYPE_CHECKING:
+    # **Annotation-only, and importing it at run time was a cycle.** `chainlens.models.enums`
+    # is a leaf, but importing it runs `chainlens/models/__init__.py`, which imports the flow
+    # models, which import the primitives, which import *this* module — so
+    # `import chainlens.vocabulary` failed whenever it came first and worked whenever something
+    # had already imported `chainlens.models`. Test collection order hid that for two tranches.
+    #
+    # Nothing here needs the class at run time: the table's rows key a chain by the *string* it
+    # is written as, and `_spelling` below reads that off whatever a caller passes.
+    from chainlens.models.enums import Chain
 
 __all__ = [
     "ASSETS",
@@ -53,6 +65,18 @@ class VocabularyError(LookupError):
     """
 
 
+def _spelling(chain: Chain | str) -> str:
+    """A chain as the table writes it, from either a `Chain` or a bare string.
+
+    `getattr` rather than `isinstance` against `Chain`, because that check is the only thing that
+    needed the class at run time and importing it is what made this module unimportable on its
+    own. Every member of `Chain` is a `StrEnum`, so a member carries the table's spelling as
+    ``value`` and a plain string is already one.
+    """
+    value: object = getattr(chain, "value", chain)
+    return value if isinstance(value, str) else str(value)
+
+
 def maybe_row_for(chain: Chain | str) -> AssetRow | None:
     """The native asset's row for ``chain``, or ``None`` if the table does not name it.
 
@@ -61,7 +85,7 @@ def maybe_row_for(chain: Chain | str) -> AssetRow | None:
     would make "the table does not name this chain" indistinguishable from "that is not a
     chain", which are different facts.
     """
-    wanted = chain.value if isinstance(chain, Chain) else chain
+    wanted = _spelling(chain)
     return next((row for row in ASSETS if row.chain == wanted), None)
 
 
@@ -75,7 +99,7 @@ def row_for(chain: Chain | str) -> AssetRow:
     """
     row = maybe_row_for(chain)
     if row is None:
-        named = chain.value if isinstance(chain, Chain) else chain
+        named = _spelling(chain)
         raise VocabularyError(
             f"the vocabulary table names no asset on {named!r}; add a row to "
             f"specs/vocabulary/vocabulary.toml and run `make vocabulary`"

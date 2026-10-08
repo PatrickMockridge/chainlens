@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from chainlens.codec import address_to_script, is_valid_address, normalize_address
+from chainlens.codec.btc_script import params_for
 from chainlens.keycard import SHIPPED
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import AssetRef
@@ -173,7 +174,15 @@ def normalise_address(address: str, chain: Chain) -> str | None:
     try:
         if chain.is_evm:
             return normalize_address(address) if is_valid_address(address) else None
-        address_to_script(address)
+        # **Against the chain's own parameters, not bitcoin mainnet's.** `address_to_script`
+        # defaults to mainnet, and this function did not override it — so a litecoin address
+        # failed a check that was validating it as a bitcoin one, and the corpus layer reported
+        # every non-bitcoin base58check address as unusable. The numbers come from the vocabulary
+        # table now; `params_for` is the reader.
+        params = params_for(chain)
+        if params is None:
+            return None
+        address_to_script(address, params)
     except (ValueError, TypeError):
         return None
     return address

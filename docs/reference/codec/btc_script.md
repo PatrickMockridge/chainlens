@@ -51,6 +51,30 @@ Classify a hex-encoded output script.
 Returns `ScriptType.UNKNOWN` if ``script_hex`` is not valid hex at all,
 and `ScriptType.NONSTANDARD` for valid hex that matches no template.
 
+## `params_for`
+
+```python
+params_for(chain: Chain | str) -> NetworkParams | None
+```
+
+The address parameters for a chain, from the vocabulary table, or ``None``.
+
+**The table is where these numbers live, and this is one of the readers.** They were written
+here for bitcoin's four *networks* — mainnet, testnet, signet, regtest — which is a different
+axis from the `Chain` enum, and it left every other base58check chain addressing as if it were
+bitcoin: a litecoin address failed an `address_to_script` call that defaulted to mainnet, so
+the corpus layer found it and then reported it as unusable. Measured, before this existed:
+
+    chain_for("LKDxGDJq5fF4FohAB8zJH24mDDNHDNtqsE")  ->  None
+    plausible_addresses("paid to LKDx…")             ->  ()
+
+`signet` and `regtest` have no `Chain` member and are therefore not in the table; they stay in
+`NETWORKS` for a caller that names a network rather than a chain. `mainnet` and `testnet`
+are compared against the table's `btc` and `tbtc` rows by a test, so the two cannot drift.
+
+A chain with no bech32 form gets an empty ``hrp``, which is what `address_to_script` reads as
+"do not look for a segwit address here".
+
 ## `script_to_address`
 
 ```python

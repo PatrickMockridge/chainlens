@@ -132,13 +132,17 @@ class TestTheRefusals:
         return gen_vocabulary.load(path)
 
     def _row(self, **overrides: object) -> str:
-        # Pre-rendered TOML fragments, so a caller overrides one and the rest stay valid.
+        # Pre-rendered TOML fragments, so a caller overrides one and the rest stay valid. The
+        # addressing parameters are here because a row naming a family must state what identifies
+        # the chain within it — the rule the generator enforces, and one of these tests is the
+        # reason it exists.
         fields: dict[str, object] = {
             "id": '"btc"',
             "chain": '"bitcoin"',
             "symbol": '"BTC"',
             "decimals": 8,
             "families": '["base58check"]',
+            "base58check_versions": "[0, 5]",
         }
         fields.update(overrides)
         written = "\n".join(f"{key} = {value}" for key, value in fields.items())

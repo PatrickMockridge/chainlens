@@ -58,6 +58,35 @@ second and third are the generated per-row theorems, and they are the reason the
 a hand-maintained list of every asset goes stale the first time one is added, and it goes stale
 *silently*, because the theorem stays proved and nothing gates the row.
 
+**And the column now has readers, which it did not have for two tranches.** `families` says which
+families a chain's addresses use, and *nothing acted on it*: the corpus layer hardcoded `[13]` and
+`bc1` — two chains' prefixes spelled into a shape — so a litecoin address, whose row existed and
+whose family the codec implements, was **not found at all**. Two readers now:
+
+| reader | what it takes from the table |
+|---|---|
+| `notes/identifiers.py::_family_patterns` | which address *shapes* to look for |
+| `notes/identifiers.py::chains_for` | which chain a decoded address is on |
+| `codec/btc_script.py::params_for` | the version bytes and human-readable part to validate against |
+
+**And the table needed two fields it did not have, because a family cannot identify a chain.**
+Bitcoin, testnet bitcoin, litecoin, dogecoin and bitcoin cash all use base58check; which one an
+address is on is decided by its **version byte**, and which bech32 chain it is by its
+**human-readable part**. `base58check_versions` and `bech32_hrp` are those, and the generator
+enforces the correspondence — a row claiming a family must state what identifies it within the
+family, or the claim is one no caller can act on.
+
+**`bitcoin` and `bitcoin_cash` share `[0, 5]`, and the lookup returns a *tuple* because of it.**
+The chains forked and kept the format, so a legacy address on `1…` is genuinely both chains' and no
+decoding separates them — the information is not in the string. `chain_for` answers the first row
+deterministically; `chains_for` reports both, and that is the honest answer to a question with two.
+
+The parameters are checked rather than trusted, in two strengths again: `btc_script.py::NETWORKS`
+has carried bitcoin's four networks' numbers since before the table existed and a test compares the
+two, and `pycoin` generates an address for each chain's own parameters and this library is asked
+which chain it is — an end-to-end check that exercises the codec, the table and the attribution at
+once.
+
 **The fourth is proved in two different strengths and the page says which is which**, because the
 two are not the same check and pretending otherwise is the failure this section is written against:
 
