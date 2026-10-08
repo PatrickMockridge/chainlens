@@ -1,0 +1,200 @@
+# Addresses for named events, DAOs and fundraisers.
+#
+# Two grounds per entry, and the second is the one that makes this chain analysis rather than a
+# literature review:
+#
+#   * `source`        — who asserts it, at a URL a reader can open.
+#   * `corroboration` — what the chain showed when the address was queried, on the date given.
+#
+# A citation alone is weak evidence. A document can assert an address that does not exist, and a
+# string copied out of one can be a character wrong in a way no reader would catch. The
+# corroboration is what a copied string cannot survive: an address that received 31,726 BTC over
+# 9,084 payments is the crowdsale address, whatever the document says.
+#
+# What corroboration is NOT: proof of attribution. The chain can show that an address holds what a
+# document says it holds. It cannot show that the document is right about whose it is. Every
+# `note` below says which of the two grounds is carrying the weight.
+#
+# Re-run every check with `make labels-verify`.
+
+provider: events
+source_kind: imported
+licence: >
+  This repository's own curation, CC0-1.0. Each entry is a fact published elsewhere and cited;
+  no third party's dataset is reproduced.
+description: >
+  Addresses for events, organisations and fundraisers, published by somebody with the standing to
+  say so — a standards document, the organisation running the sale, the organisation's own
+  documents — and each checked against the chain.
+
+labels:
+  - name: The DAO
+    kind: dao
+    addresses:
+      - "0xbb9bc244d798123fde783fcc1c72d3bb8c189413"
+      - "0x807640a13483f8ac783c557fcdf27be11ea4ac7a"
+      - "0xbf4ed7b27f1d666546e30d74d50d173d20bca754"
+    source: https://eip.tools/eip/779
+    corroboration:
+      "0xbb9bc244d798123fde783fcc1c72d3bb8c189413":
+        chain: ethereum
+        observed_at: 2026-10-07
+        balance: 0.0006
+        is_contract: true
+        note: dust, which is what EIP-779 says the fork left behind
+      "0x807640a13483f8ac783c557fcdf27be11ea4ac7a":
+        chain: ethereum
+        observed_at: 2026-10-07
+        balance: 0.0
+        is_contract: true
+        note: the extraBalance account, also swept
+      "0xbf4ed7b27f1d666546e30d74d50d173d20bca754":
+        chain: ethereum
+        observed_at: 2026-10-07
+        balance: 81399.17290946
+        is_contract: true
+        note: >-
+          the WithdrawDAO, and this is the corroboration that carries the entry: the fork swept
+          every balance in the EIP's reference list into this contract, holders withdrew, and the
+          residual is the unclaimed remainder. A 81,399 ETH balance in a contract EIP-779 names
+          is not a coincidence.
+    note: >-
+      Named in EIP-779, the DAO Fork meta-EIP. The same document lists a further 116 child-DAO
+      addresses and the DAO creator's address; they are omitted because they are the same fact
+      about the same organisation, and 116 near-identical entries would bury the ones that say
+      something new.
+
+  - name: Ethereum crowdsale
+    kind: fundraiser
+    addresses:
+      - "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2"
+    source: https://blog.ethereum.org/2014/07/22/launching-the-ether-sale
+    corroboration:
+      "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2":
+        chain: bitcoin
+        observed_at: 2026-10-07
+        received: 31725.91853911
+        funding_outputs: 9084
+        balance: 0.00011342
+        note: >-
+          a 42-day sale at 1337-2000 ETH per BTC selling roughly 60M ETH is a sale of the order of
+          31,600 BTC in of the order of 9,000 payments. The chain says 31,725.9 BTC over 9,084
+          funding outputs.
+    note: >-
+      The "exodus address" from the Foundation's own launch post. It is a **Bitcoin** address: the
+      2014 sale took BTC and issued ether at genesis, so there is no crowdsale contract. The same
+      post says "DO NOT send BTC to this address directly" — it received the sale proceeds, it is
+      not a donation address. The sale's 8,893 recipients are published in go-ethereum's
+      `core/genesis_alloc.go`; that is a set of buyers rather than an organisation, so it is not a
+      label and is not here.
+
+  - name: Silk Road (FBI escrow seizure)
+    kind: marketplace
+    addresses:
+      - "1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX"
+    source: https://techcrunch.com/2013/10/07/as-feds-fumble-with-bitcoin-the-internet-trolls-the-fbis-private-wallet/
+    corroboration:
+      "1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX":
+        chain: bitcoin
+        observed_at: 2026-10-07
+        received: 29679.6707
+        funding_outputs: 1838
+        balance: 0.33061616999839316
+        note: >-
+          the balance reported in 2013 was 0.33061617 BTC; the chain gives 0.33061616999839316
+          fifteen years later. A residual that has not moved in fifteen years is a strong check,
+          and it is the check a copied string could not survive.
+    note: >-
+      **The weaker of the two Silk Road entries, and the difference is worth stating.** The DOJ
+      never published this address: it was identified on-chain by observers when the FBI's wallet
+      began receiving protest transactions, and every source for it is secondary. What is solid is
+      the chain — ~29,680 BTC received into an address whose residual matches the reported figure
+      — and the fact that the seized coins were auctioned by the US Marshals. Cite it as
+      "widely reported and chain-corroborated", not as a filing.
+
+  - name: Silk Road (Ulbricht seizure)
+    kind: marketplace
+    addresses:
+      - "1FfmbHfnpaZjKFvyi1okTjJJusN455paPH"
+    source: https://bitcoin.stackexchange.com/questions/13557/how-many-btc-were-seized-in-relation-to-the-shutdown-of-silk-road
+    corroboration:
+      "1FfmbHfnpaZjKFvyi1okTjJJusN455paPH":
+        chain: bitcoin
+        observed_at: 2026-10-07
+        received: 144343.5629
+        funding_outputs: 1072
+        balance: 1.2507550900045317
+        note: >-
+          the reported figure for Ulbricht's seized holdings was ~144,336 BTC; the chain gives
+          144,343.56, a difference of eight coins in 144,000.
+    note: >-
+      Same standing as the entry above: widely reported and chain-corroborated, not named in a
+      filing. The ~144,336 BTC figure is the one consistently reported across sources, and the
+      chain agrees with it.
+
+  - name: Mt Gox (2011 theft)
+    kind: exchange
+    addresses:
+      - "1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF"
+    source: https://api.news.bitcoin.com/mark-karpeles-proposes-bitcoin-hard-fork-to-recover-79956-btc-stolen-from-mt-gox/
+    corroboration:
+      "1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF":
+        chain: bitcoin
+        observed_at: 2026-10-07
+        received: 79957.26869699
+        funding_outputs: 693
+        balance: 79957.26869699
+        note: >-
+          received 79,957.27 BTC and **spent none of it in fifteen years** — the received and
+          balance figures are identical to the satoshi. That unspent balance is the fact that
+          makes the address identifiable, and it is the strongest corroboration in this file.
+    note: >-
+      The source is Mark Karpeles' public statement, reported by Bitcoin.com — secondary, and this
+      entry does not pretend otherwise. What raises it is the chain: an address holding 79,957
+      untouched BTC since March 2011 matches the attributed amount exactly, and an unspent
+      balance of that size is precisely why the address is discussed at all. Attribution still
+      rests on Karpeles' statement; the amount does not rest on anything but the ledger.
+
+  - name: WikiLeaks
+    kind: service
+    addresses:
+      - "1HB5XMLmzFVj8ALj6mfBsbifRoD4miY36v"
+    source: https://web.archive.org/web/20110623172026/http://wikileaks.org/support.html
+    corroboration:
+      "1HB5XMLmzFVj8ALj6mfBsbifRoD4miY36v":
+        chain: bitcoin
+        observed_at: 2026-10-07
+        received: 4043.8349224
+        funding_outputs: 26416
+        balance: 0.20148071
+        note: >-
+          ~4,044 BTC received over 26,416 payments — a donation address, by its shape: many small
+          payments rather than a few large ones.
+    note: >-
+      Published on WikiLeaks' support page in June 2011, when it began accepting bitcoin. It is
+      **no longer** the donation address: WikiLeaks' current donate page carries a different one
+      and warns specifically against the old address beginning "1HB5X", which is also the
+      corroboration that it was theirs. The archived page could not be reopened while writing
+      this, so the citation is a snapshot — the chain check is what carries the entry.
+
+  - name: AssangeDAO
+    kind: dao
+    addresses:
+      - "0x7BE99ca4E6893ef57cf349ab56307628100feA00"
+    source: https://forum.assangedao.org/uploads/short-url/3syy1af3kQXQ9Y3NMVsxvMwnNQl.pdf
+    corroboration:
+      "0x7BE99ca4E6893ef57cf349ab56307628100feA00":
+        chain: ethereum
+        observed_at: 2026-10-07
+        balance: 198.83285486
+        is_contract: true
+        note: >-
+          contract code at the address, and the deployed code carries the Gnosis Safe proxy
+          selector `masterCopy()` — which is the claim the document makes, checked. The residual
+          balance is what is left after the treasury bid on the Clock NFT.
+    note: >-
+      Named in AssangeDAO's own forum document, which is the DAO's publication and therefore a
+      primary source for its own treasury address. The same document lists the temporary multisig
+      signers' individual addresses; those are **not** labelled here and must not be, since
+      labelling an address as belonging to a named person is identity inference and this library
+      does not do it.

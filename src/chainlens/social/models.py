@@ -124,6 +124,14 @@ class TextSource(StrEnum):
     NOTE_TWEET = "note_tweet"
     #: Supplied by hand rather than parsed from a payload.
     PASTED = "pasted"
+    #: Read out of an image by a model, because there was no text to read.
+    #:
+    #: Distinct from ``NONE``, which is the absence of a reading, and from ``PASTED``, which is a
+    #: person having typed what they saw. What a model saw is a reading, and a reading can be
+    #: fluent and wrong — see :data:`chainlens.notes.identifiers.TRANSCRIPTION_CAVEAT`. The
+    #: distinction matters because a quote checked against a transcription is checked against
+    #: something somebody else's model wrote down, not against the image.
+    TRANSCRIPTION = "transcription"
     #: Recovered from an image.
     OCR = "ocr"
 

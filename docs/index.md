@@ -5,8 +5,8 @@
 `chainlens` retrieves, normalizes and analyses on-chain data behind a single async
 API, with a plugin system so other chains and other data providers can be added.
 
-!!! warning "Alpha"
-    The architecture is settled; the public API is still moving.
+> **Alpha**
+> The architecture is settled; the public API is still moving.
 
 ## What it is for
 
@@ -21,7 +21,7 @@ came from — because a finding without provenance is not defensible.
 - **[UTXO vs account models](explanation/utxo-vs-account.md)** — the one design
   decision that shapes everything else.
 - **[Writing a provider](plugins/writing-a-provider.md)** — add a chain.
-- **[API reference](reference/chainlens/index.md)** — every public module.
+- **[API reference](reference/index.md)** — every public module.
 
 ## Honest limitations
 

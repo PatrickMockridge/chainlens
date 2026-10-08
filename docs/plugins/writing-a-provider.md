@@ -33,15 +33,15 @@ class LitecoinEsploraProvider(BaseProvider):
         return self._parse_transaction(payload)
 ```
 
-!!! note "The HTTP helper"
-    `self._transport.get_json` comes from
-    [`Transport`](../reference/chainlens/providers/transport.md), which owns
-    caching, retries, timeouts and rate limiting. Adapters call it and never touch
-    `httpx` directly, so those behaviours cannot be bypassed by accident.
-
-    Note the path is given **without** a leading slash: httpx resolves a
-    leading-slash path against the host, which would silently discard the path
-    component of the base URL (`/api` would vanish).
+> **The HTTP helper**
+> `self._transport.get_json` comes from
+> [`Transport`](../reference/providers/transport.md), which owns
+> caching, retries, timeouts and rate limiting. Adapters call it and never touch
+> `httpx` directly, so those behaviours cannot be bypassed by accident.
+>
+> Note the path is given **without** a leading slash: httpx resolves a
+> leading-slash path against the host, which would silently discard the path
+> component of the base URL (`/api` would vanish).
 
 The capability guard is automatic. A caller that asks for something you did not
 advertise gets a `CapabilityError` naming what you *do* support, rather than a

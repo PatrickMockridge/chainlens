@@ -51,6 +51,10 @@ _BUILTIN_PROVIDERS: tuple[tuple[str, str], ...] = (
     ("esplora-blockstream", "chainlens.adapters.blockstream:BlockstreamProvider"),
     ("jsonrpc-eth", "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"),
     ("etherscan", "chainlens.adapters.etherscan:EtherscanProvider"),
+    # Not an adapter: this one reads committed files rather than the network. It is registered by
+    # the same mechanism because to everything downstream it is the same thing — something that
+    # answers a capability — and the alternative would be a second way to find a provider.
+    ("local-labels", "chainlens.labels.provider:LocalLabelProvider"),
 )
 
 #: Preference order when choosing a default provider for a chain. Free providers

@@ -30,7 +30,14 @@ from chainlens.models.base import LensModel
 from chainlens.models.enums import Direction
 from chainlens.verify.claims import ActivityWindow
 
-__all__ = ["Claim", "ClaimType", "Extraction", "QuoteValidation", "validate_quotes"]
+__all__ = [
+    "Claim",
+    "ClaimType",
+    "Extraction",
+    "QuoteValidation",
+    "quote_appears",
+    "validate_quotes",
+]
 
 
 class ClaimType(StrEnum):
@@ -142,6 +149,22 @@ def _normalised(text: str) -> str:
     return " ".join(text.split())
 
 
+def quote_appears(quote: str, *sources: str) -> bool:
+    """Whether ``quote`` appears in one of ``sources``, whitespace aside.
+
+    Public and separate from :func:`validate_quotes` so that every place asking this question asks
+    it the same way. A second implementation would be a second answer to "is this quote in the
+    material?", and the two would eventually differ on some quirk of normalisation — at which point
+    one caller would be keeping a quote the other discarded, for no reason anybody could see.
+
+    An empty quote does not appear anywhere: nothing can be tied to a span that is not there.
+    """
+    needle = _normalised(quote)
+    if not needle:
+        return False
+    return any(needle in _normalised(source) for source in sources if source)
+
+
 def validate_quotes(extraction: Extraction, *sources: str) -> QuoteValidation:
     """Keep only the claims whose quote appears in one of ``sources``.
 
@@ -160,12 +183,10 @@ def validate_quotes(extraction: Extraction, *sources: str) -> QuoteValidation:
         sources: the text to check against — the post body, and any text read out
             of its images. A quote may legitimately come from either.
     """
-    haystacks = tuple(_normalised(source) for source in sources if source)
     kept: list[Claim] = []
     dropped: list[str] = []
     for claim in extraction.claims:
-        needle = _normalised(claim.quote)
-        if needle and any(needle in haystack for haystack in haystacks):
+        if quote_appears(claim.quote, *sources):
             kept.append(claim)
         else:
             dropped.append(claim.quote)

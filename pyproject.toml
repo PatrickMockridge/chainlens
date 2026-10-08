@@ -57,6 +57,12 @@ pandas = ["pandas>=2.2"]
 # carry an HTTP client for one.
 llm = ["anthropic>=1.11,<2"]
 social = ["pillow>=11"]       # image sniffing + downscaling before we send to vision
+# Reading a corpus of your own material. Optional because of what needs a library: pypdf for a
+# PDF's text layer, and Pillow for `--vision` -- a screenshot is usually a full-resolution capture
+# and has to be shrunk before a model is asked to read it. Everything else the corpus reader
+# accepts -- HTML, DOCX, ODT, RTF, email, plain text -- is read with the standard library, so a
+# corpus of notes alone needs neither.
+notes = ["pypdf>=5", "pillow>=10"]
 all = ["chainlens[eth,nx,pandas,social]"]
 
 # The library's first console script. It has to stay importable without triggering provider
@@ -78,6 +84,7 @@ esplora-mempool = "chainlens.adapters.mempool_space:MempoolSpaceProvider"
 esplora-blockstream = "chainlens.adapters.blockstream:BlockstreamProvider"
 jsonrpc-eth = "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"
 etherscan = "chainlens.adapters.etherscan:EtherscanProvider"
+local-labels = "chainlens.labels.provider:LocalLabelProvider"
 
 [project.entry-points."chainlens.heuristics"]
 common-input-ownership = "chainlens.analysis.heuristics.common_input:CommonInputOwnership"
@@ -104,15 +111,10 @@ dev = [
   "pypdf>=5",
   "anthropic>=1.11,<2",       # the [llm] extra, exercised by the extractor's tests
 ]
-docs = [
-  "mkdocs-material>=9.6",
-  "mkdocstrings[python]>=0.27",
-  "mkdocs-jupyter>=0.26",
-  "mkdocs-gen-files>=0.5",
-  "mkdocs-literate-nav>=0.6",
-  "mkdocs-section-index>=0.3",
-  "mike>=2.1",
-]
+# The API reference is rendered from the docstrings into markdown and committed, so griffe is the
+# whole Python side of the docs; the book itself is built by mdbook, which is not a Python
+# dependency. See `tests/docs/gen_reference.py` and `book.toml`.
+docs = ["griffelib>=2.3"]
 notebooks = ["jupyter>=1.1", "nbval>=0.11", "matplotlib>=3.9"]
 
 [tool.hatch.version]

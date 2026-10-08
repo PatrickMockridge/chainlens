@@ -101,6 +101,23 @@ jobs:
             printf '  %-28s %8s\n' "$(basename "$file")" "$(gzip -c "$file" | wc -c)"
           done
 
+  # The book has never been built in CI, so this is new coverage rather than a moved job. The
+  # *staleness* of the generated reference is gated in `make check` -- that test is Python-only and
+  # needs none of this. What this job adds is that the book builds and its links resolve.
+  #
+  # `cargo install` rather than a prebuilt-binary action, so the workflow stays on first-party
+  # actions at the cost of a few minutes. If this becomes the slowest job here, the fast path is
+  # `taiki-e/install-action` -- which is a third-party action, and therefore a supply-chain
+  # decision rather than a change to make on a whim.
+  docs:
+    name: the book builds and its links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo install mdbook mdbook-linkcheck2 --locked
+      # linkcheck runs as an output backend inside this, so a broken internal link fails it.
+      - run: make docs
+
   # One artifact, two descriptions: the pydantic models are the source, the JSON Schema and the
   # zod modules are generated from them. This is what makes "a field added in Python without a
   # TypeScript change fails CI" true rather than aspirational.

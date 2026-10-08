@@ -117,8 +117,20 @@ def test_flow_and_direction_vocabularies_are_distinct() -> None:
 
 
 def test_entity_and_label_vocabularies_cover_the_documented_kinds() -> None:
-    assert "exchange" in {k.value for k in EntityKind}
-    assert "sanctioned" in {k.value for k in EntityKind}
+    # Pinned exactly, so a member added without deciding what it means is a failing test rather
+    # than a value that reaches an artifact and renders as an unknown category.
+    assert {k.value for k in EntityKind} == {
+        "heuristic",
+        "service",
+        "exchange",
+        "mixer",
+        "sanctioned",
+        "individual",
+        "marketplace",
+        "fundraiser",
+        "dao",
+        "unknown",
+    }
     assert {s.value for s in LabelSource} == {"provider", "user", "heuristic", "imported"}
 
 

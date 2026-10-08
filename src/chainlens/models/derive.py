@@ -34,6 +34,7 @@ from enum import StrEnum
 from chainlens.models.base import LensModel
 from chainlens.models.calculation import Input, Operation
 from chainlens.models.enums import ClaimVerdict, VerbalScale
+from chainlens.models.selection import SelectionDisclosure
 from chainlens.models.wire import DetailEntry, GraphRef
 
 __all__ = ["DerivationDocument", "DerivationKind", "DerivationNode"]
@@ -155,6 +156,9 @@ class DerivationDocument(LensModel):
             the standard text says the library reports no posterior and a rendered posterior
             beside it would make the artifact contradict itself.
         prior_supplied_by: who supplied the prior, when one was.
+        selection: how the claim came to be one of the claims priced, when a chooser picked it.
+            On the document because the document is what a reader sees, and a ratio whose claim
+            was chosen would otherwise render exactly like one whose claim was fixed in advance.
     """
 
     schema_version: int = 1
@@ -166,6 +170,7 @@ class DerivationDocument(LensModel):
     root: DerivationNode
     limitations: str
     prior_supplied_by: str | None = None
+    selection: SelectionDisclosure | None = None
 
     @property
     def node_count(self) -> int:

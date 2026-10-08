@@ -400,7 +400,17 @@ class Address(LensModel):
 
 
 class Block(LensModel):
-    """A block header plus whatever summary the provider supplied."""
+    """A block header plus whatever summary the provider supplied.
+
+    Attributes:
+        transaction_ids: the hashes of the block's transactions, when the provider's payload
+            carried them. An EVM node returns these for free — ``eth_getBlockByNumber`` with
+            ``full=false`` yields hashes rather than transactions — so they are kept rather than
+            discarded for the count, and a block number is enough to reach the transactions in the
+            block without a full-node fetch or an index. Empty when the provider did not supply
+            them, which is not the same as a block with no transactions: ``tx_count`` distinguishes
+            the two.
+    """
 
     chain: Chain
     hash: str
@@ -408,6 +418,7 @@ class Block(LensModel):
 
     timestamp: AwareDatetime | None = None
     tx_count: int | None = None
+    transaction_ids: tuple[str, ...] = ()
     size: int | None = None
     weight: int | None = None
     prev_hash: str | None = None

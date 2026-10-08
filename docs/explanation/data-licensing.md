@@ -17,6 +17,15 @@ committing it would redistribute it.
 If you contribute a cassette for a commercial adapter, expect it to be rejected
 in review — not because the test is unwelcome, but because the fixture is.
 
+**A coincidence rate is drawn from a licensed provider the same way.** When a
+likelihood ratio is computed on Ethereum, the sample it is counted over comes from
+Etherscan's `txlist` and `tokentx` — so a derivation carrying those transfers is
+carrying Etherscan's data. `ui derive` refuses to write one without
+`--redistributable-ok`, exactly as it does for any other non-redistributable
+provider, and the refusal is the honest default rather than an inconvenience:
+`0x…` and an amount are a derived fact, but the set of an address's movements is
+their dataset.
+
 ## The rule for reports
 
 Every provider declares `redistributable`:

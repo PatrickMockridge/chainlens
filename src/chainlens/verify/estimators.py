@@ -23,6 +23,10 @@ Three further things are worth stating rather than discovering:
   where the asserted transfer should be; the movements *inside* it are the opportunities ``k``,
   which the checker counts. A rate drawn from those would be circular, so the sample is what falls
   outside.
+* **the sample is one asset's.** Base-unit amounts are only comparable within an asset, so the
+  movements counted are the claim's asset and no other. On Bitcoin this is invisible — there is one
+  asset — and on an account chain where an address moves ERC-20s it is the difference between a
+  rate about this asset and a rate about a mixture.
 * **nothing here decides anything.** The estimator returns a rate and the null it was drawn
   under. Whether a ratio is reported at all, and what it means, is the engine's and the
   likelihood module's business.
@@ -31,7 +35,7 @@ Three further things are worth stating rather than discovering:
 from __future__ import annotations
 
 from chainlens.models.calculation import UnboundKind
-from chainlens.models.primitives import Transfer
+from chainlens.models.primitives import AssetRef, Transfer
 from chainlens.providers.base import Provider
 from chainlens.providers.capabilities import Capability
 from chainlens.verify.claims import ClaimElements
@@ -103,15 +107,27 @@ class WindowCoincidenceEstimator:
         bounded = len(movements) > self._sample_limit
         movements = movements[: self._sample_limit]
 
+        # **The sample is filtered to the claim's asset.** On a single-asset chain this is a no-op,
+        # and on a chain where an address moves several kinds of value it is the difference between
+        # a rate about this asset and a rate about a mixture. `_coincides` compares base-unit
+        # amounts, and base units are only comparable within one asset: a token whose decimals
+        # differ from the claim's makes an amount that lands inside the band meaningless. Counting
+        # such a movement as a coincidence would invent a rate — and, because a coincidence rate
+        # only ever moves the ratio by its `p`, invent it in the direction of confidence.
+        same_asset = [
+            movement for movement in movements if _same_asset(movement.asset, elements.asset)
+        ]
+
         # The claim's window holds the opportunities, not the sample: counting the asserted
         # transfer among the transfers that would have to be coincidences is circular.
         sample = [
-            movement for movement in movements if not elements.window.contains(movement.timestamp)
+            movement for movement in same_asset if not elements.window.contains(movement.timestamp)
         ]
         if not sample:
             return Unpriced(
-                "the sender has no movements outside the window to draw a coincidence rate from, "
-                "so there is nothing to compare the asserted transfer against",
+                "the sender has no movements of this asset outside the window to draw a "
+                "coincidence rate from, so there is nothing to compare the asserted transfer "
+                "against",
                 samples=0,
                 kind=UnboundKind.NO_DATA,
             )
@@ -126,19 +142,42 @@ class WindowCoincidenceEstimator:
                 ci_lower=lower,
                 ci_upper=upper,
                 method=EstimatorMethod.EMPIRICAL_JOINT,
-                population=self._population(bounded=bounded),
+                population=self._population(bounded=bounded, asset=elements.asset),
             ),
             null_model=self._null_model,
         )
 
-    def _population(self, *, bounded: bool) -> str:
-        """What the rate was measured over, in the words a derivation renders."""
+    def _population(self, *, bounded: bool, asset: AssetRef) -> str:
+        """What the rate was measured over, in the words a derivation renders.
+
+        The asset is named because the rate is only about one: "the sender's movements" would
+        describe a sample that included every token they touched, which is not what was counted.
+        """
+        # Phrased so it reads as English whether or not the asset carries a symbol: "movements of
+        # BTC" and "movements of the native asset" both work, where "BTC movements" degenerates to
+        # "native movements" when nothing named the asset.
+        named = asset.symbol or f"the {asset.kind.value} asset"
         if bounded:
             return (
-                f"the sender's most recent {self._sample_limit} movements outside the window, "
-                "which is as far back as the scan reached and not the whole of their history"
+                f"the sender's most recent {self._sample_limit} movements of {named} outside the "
+                "window, which is as far back as the scan reached and not the whole of their "
+                "history"
             )
-        return "the sender's whole movement history outside the window"
+        return f"the sender's whole movement history in {named} outside the window"
+
+
+def _same_asset(left: AssetRef, right: AssetRef) -> bool:
+    """Whether two movements are of the same asset, on the same chain.
+
+    Compares the contract as well as the kind: on an account chain "token" is a category, and two
+    different ERC-20s are two different assets with their own decimals, so an amount of one says
+    nothing about an amount of the other.
+    """
+    if left.chain is not right.chain or left.kind is not right.kind:
+        return False
+    if left.contract is None or right.contract is None:
+        return left.contract is None and right.contract is None
+    return left.contract.lower() == right.contract.lower()
 
 
 def _coincides(movement: Transfer, elements: ClaimElements) -> bool:

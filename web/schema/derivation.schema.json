@@ -448,6 +448,88 @@
       "title": "OperationKind",
       "type": "string"
     },
+    "SelectionDisclosure": {
+      "additionalProperties": false,
+      "description": "How the claims in one run came to be the claims adjudicated.\n\nAttributes:\n    proposed_by: what did the choosing \u2014 a model identifier, or ``\"nobody\"`` when every\n        extracted claim was kept and no narrowing happened.\n    proposed_at: when the choice was made.\n    prompt_version: which selection prompt the chooser answered under. Two selections made\n        under different instructions are not comparable, the same rule every other prompt here\n        follows.\n    question: what the chooser was asked to select for, verbatim, or ``None`` when it was\n        simply asked what looked worth looking at.\n    basis: what the chooser was shown, in words.\n    corpus: which corpus the claims were read from.\n    corpus_read_by: which reader transcribed the corpus's images, when a model did.\n    corpus_read_at: when the corpus was read.\n    transcribed: whether any of the material the claims rest on is a model's reading of a\n        screenshot. A separate fact from the selection and worth stating separately: a claim\n        can be chosen by nobody and still rest on a transcription.\n    selected: whether a chooser narrowed the set. ``False`` means every claim the reading\n        produced was kept, which is the better standing and is recorded rather than assumed.",
+      "properties": {
+        "basis": {
+          "default": "",
+          "title": "Basis",
+          "type": "string"
+        },
+        "corpus": {
+          "default": "",
+          "title": "Corpus",
+          "type": "string"
+        },
+        "corpus_read_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Read At"
+        },
+        "corpus_read_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corpus Read By"
+        },
+        "prompt_version": {
+          "default": 1,
+          "title": "Prompt Version",
+          "type": "integer"
+        },
+        "proposed_at": {
+          "format": "date-time",
+          "title": "Proposed At",
+          "type": "string"
+        },
+        "proposed_by": {
+          "title": "Proposed By",
+          "type": "string"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Question"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "transcribed": {
+          "default": false,
+          "title": "Transcribed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "proposed_by"
+      ],
+      "title": "SelectionDisclosure",
+      "type": "object"
+    },
     "Source": {
       "additionalProperties": false,
       "description": "Where a bound value came from.\n\n``text`` is the sentence a reader needs \u2014 \"the sender's movements in the window\", \"the hedge\nword '~' licenses a 5% band\" \u2014 and ``kind`` is the part a machine can act on, so that a\nconvention can be told from a measurement without reading prose.",
@@ -505,7 +587,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "One finding's derivation, as a document a front end can render.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    claim_id: derived from the claim, so a graph overlay can group findings by claim.\n    claim_quote: the verbatim span the claim was read from, so a reader can see what is\n        being adjudicated without the graph.\n    verdict: the categorical finding, repeated at the root because it is the thing the\n        tree explains.\n    method: which checker produced the verdict.\n    has_ratio: whether a likelihood ratio was reported. The tree's shape differs, and a\n        renderer should not have to walk it to find out.\n    root: the tree.\n    limitations: the standing caveats. **Replaced when a prior was supplied**, because\n        the standard text says the library reports no posterior and a rendered posterior\n        beside it would make the artifact contradict itself.\n    prior_supplied_by: who supplied the prior, when one was.",
+  "description": "One finding's derivation, as a document a front end can render.\n\nAttributes:\n    schema_version: the contract version. Both ends refuse an unknown major.\n    claim_id: derived from the claim, so a graph overlay can group findings by claim.\n    claim_quote: the verbatim span the claim was read from, so a reader can see what is\n        being adjudicated without the graph.\n    verdict: the categorical finding, repeated at the root because it is the thing the\n        tree explains.\n    method: which checker produced the verdict.\n    has_ratio: whether a likelihood ratio was reported. The tree's shape differs, and a\n        renderer should not have to walk it to find out.\n    root: the tree.\n    limitations: the standing caveats. **Replaced when a prior was supplied**, because\n        the standard text says the library reports no posterior and a rendered posterior\n        beside it would make the artifact contradict itself.\n    prior_supplied_by: who supplied the prior, when one was.\n    selection: how the claim came to be one of the claims priced, when a chooser picked it.\n        On the document because the document is what a reader sees, and a ratio whose claim\n        was chosen would otherwise render exactly like one whose claim was fixed in advance.",
   "properties": {
     "claim_id": {
       "title": "Claim Id",
@@ -547,6 +629,17 @@
       "default": 1,
       "title": "Schema Version",
       "type": "integer"
+    },
+    "selection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectionDisclosure"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "verdict": {
       "$ref": "#/$defs/ClaimVerdict"

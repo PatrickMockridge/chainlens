@@ -36,16 +36,16 @@ async def main() -> None:
     print(balance.amount)  # 40
 ```
 
-!!! tip "Notebooks and scripts"
-    A synchronous facade is provided for contexts where `await` is awkward. It
-    runs the coroutines on a background event loop, so it works inside Jupyter —
-    where `asyncio.run()` would fail because a loop is already running.
-
-    ```python
-    with chainlens.SyncClient() as client:
-        for tx in client.btc.get_address_transactions("bc1q..."):
-            print(tx.txid)
-    ```
+> **Notebooks and scripts**
+> A synchronous facade is provided for contexts where `await` is awkward. It
+> runs the coroutines on a background event loop, so it works inside Jupyter —
+> where `asyncio.run()` would fail because a loop is already running.
+>
+> ```python
+> with chainlens.SyncClient() as client:
+>     for tx in client.btc.get_address_transactions("bc1q..."):
+>         print(tx.txid)
+> ```
 
 ## The shape of a transaction
 
@@ -106,10 +106,10 @@ The engine expands until the cluster stops growing, and reports honestly when a
 budget cut it short: a cluster that is small because the traversal stopped must
 not look like a cluster that is genuinely small.
 
-!!! warning "Read this before relying on a cluster"
-    Heuristics have false positives, and CoinJoin is the classic one.
-    [Forensic limits](../explanation/forensic-limits.md) explains what a cluster
-    does and does not license.
+> **Read this before relying on a cluster**
+> Heuristics have false positives, and CoinJoin is the classic one.
+> [Forensic limits](../explanation/forensic-limits.md) explains what a cluster
+> does and does not license.
 
 ## Looking at it
 

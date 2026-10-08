@@ -46,6 +46,14 @@ class Label(LensModel):
     ``source`` records whether this came from a provider, the user, a heuristic
     or an import -- the difference between an exchange confirming an address and
     a guess. ``address`` is set when the label applies to one address only.
+
+    Attributes:
+        provider: *which* source asserted this — ``"ofac-sdn"``, ``"events"``, an adapter's name.
+            ``source`` says a third party is responsible; once several are merged into one
+            answer, that is no longer enough to act on, and the difference between a sanctions
+            list and a curated file is not one a reader should have to infer from a URL.
+        url: where the assertion can be read. For a curated label this is the citation, and a
+            label with no URL is an assertion nobody can check.
     """
 
     name: str
@@ -54,6 +62,7 @@ class Label(LensModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     address: str | None = None
     url: str | None = None
+    provider: str | None = None
 
 
 class Merge(LensModel):

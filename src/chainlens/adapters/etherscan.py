@@ -19,7 +19,8 @@ function argument.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
+from datetime import datetime
 from typing import Any
 
 from chainlens.adapters._evm import (
@@ -405,6 +406,146 @@ class EtherscanProvider(BaseProvider):
             if len(result) < page_size:
                 return
             page += 1
+
+    @provides(Capability.WINDOW_TRANSFERS)
+    async def get_window_transfers(
+        self,
+        address: str,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> AsyncIterator[Transfer]:
+        """The movements involving one address, newest first.
+
+        **Both native and token movements, in one stream.** This is the sample a coincidence rate
+        is counted over, and the count it is contrasted with — the transfer checker's ``k`` —
+        counts a native value transfer *plus one movement per token log*. A rate drawn only from
+        native movements would price a different population from the ``k`` it is set against, which
+        would be a comparison between two numbers that are not about the same thing.
+
+        The two endpoints are walked in turn rather than interleaved: each is already newest-first,
+        and a caller is counting a rate over a sample, not reading a timeline. Merging them into one
+        order would cost a sort over pages that have not been fetched.
+
+        **The bound is by block, not by time.** Etherscan's ``txlist`` takes ``startblock`` and
+        ``endblock`` and has no time range, so a ``since`` stops the walk early — the order is
+        descending, so everything past the first movement older than the bound is older still — and
+        cannot be pushed down to the provider. That is why a caller sampling the *outside* of a
+        window pays for every page between now and the window's start, exactly as
+        :meth:`EsploraProvider.get_window_transfers` does.
+
+        **A heavy address is capped by Etherscan, silently.** The free tier returns at most the
+        10,000 most recent records for these endpoints and does not say so in the response; the walk
+        simply ends. That is the same gap Esplora documents — "the provider cannot know whether the
+        history was exhausted" — and it is worse here only because a plausible-looking answer comes
+        back rather than a short one. A caller that needs to know must count what it got.
+
+        Raises:
+            ConfigurationError: the API key is missing or rejected.
+            RateLimitError: the quota is exhausted.
+        """
+        yielded = 0
+        for action, parse in (
+            ("txlist", self._parse_native_transfer),
+            ("tokentx", self._parse_token_transfer),
+        ):
+            remaining = None if limit is None else limit - yielded
+            if remaining is not None and remaining <= 0:
+                return
+            async for movement in self._window_page(
+                action,
+                address,
+                parse,
+                since=since,
+                until=until,
+                limit=remaining,
+                cursor=cursor,
+            ):
+                yielded += 1
+                yield movement
+
+    async def _window_page(
+        self,
+        action: str,
+        address: str,
+        parse: Callable[[Mapping[str, Any]], Transfer],
+        *,
+        since: datetime | None,
+        until: datetime | None,
+        limit: int | None,
+        cursor: str | None,
+    ) -> AsyncIterator[Transfer]:
+        """One endpoint's movements for an address, newest first.
+
+        Kept apart from :meth:`get_window_transfers` so the two endpoints share one pagination rule
+        rather than one loop with two exits — the shape
+        :meth:`get_address_transactions` already uses, and the reason its bounds behave.
+        """
+        page = int(cursor) if cursor else 1
+        page_size = min(limit or _DEFAULT_PAGE_SIZE, _MAX_PAGE_SIZE)
+        yielded = 0
+
+        while True:
+            if limit is not None and yielded >= limit:
+                return
+            result = await self._account(
+                action,
+                address,
+                page=page,
+                offset=page_size,
+                sort="desc",
+                startblock=0,
+                endblock=99999999,
+            )
+            if not isinstance(result, list) or not result:
+                return
+            for raw in result:
+                if not isinstance(raw, Mapping):
+                    continue
+                movement = parse(raw)
+                if (
+                    since is not None
+                    and movement.timestamp is not None
+                    and movement.timestamp < since
+                ):
+                    # Descending order: everything after this is older.
+                    return
+                if (
+                    until is not None
+                    and movement.timestamp is not None
+                    and movement.timestamp > until
+                ):
+                    continue
+                if limit is not None and yielded >= limit:
+                    return
+                yielded += 1
+                yield movement
+            if len(result) < page_size:
+                return
+            page += 1
+
+    def _parse_native_transfer(self, raw: Mapping[str, Any]) -> Transfer:
+        """One entry from ``txlist``, as a movement.
+
+        The native value transfer only. A transaction's token logs are separate records on a
+        separate endpoint and arrive as their own movements, so counting the value here and the
+        logs there is what keeps the totals from doubling.
+        """
+        return Transfer(
+            chain=self.chain,
+            asset=self._native_asset(),
+            amount=parse_decimal_int(raw.get("value")) or 0,
+            txid=str(raw.get("hash", "")),
+            src=address_or_none(raw.get("from")),
+            dst=address_or_none(raw.get("to")),
+            index=parse_decimal_int(raw.get("transactionIndex")),
+            block_height=parse_decimal_int(raw.get("blockNumber")),
+            timestamp=from_unix_seconds(raw.get("timeStamp")),
+            via=FlowVia.NATIVE,
+            provenance=self._provenance("txlist"),
+        )
 
     async def aclose(self) -> None:
         await self._transport.aclose()

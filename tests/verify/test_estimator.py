@@ -24,8 +24,8 @@ import pytest
 from chainlens.ledger.derive import derive_finding
 from chainlens.models.base import utcnow
 from chainlens.models.calculation import OperationKind
-from chainlens.models.enums import Chain, ClaimVerdict
-from chainlens.models.primitives import AssetRef, Transaction
+from chainlens.models.enums import AssetKind, Chain, ClaimVerdict
+from chainlens.models.primitives import AssetRef, Transaction, Transfer
 from chainlens.providers.capabilities import Capability
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.testing.factories import btc_transaction, inp, out
@@ -96,7 +96,11 @@ class TestTheRateItMeasures:
         assert (component.successes, component.trials) == (1, 4)
         assert component.value == pytest.approx(0.25)
         assert priced.null_model is NullModel.WITHIN_SENDER
-        assert component.population == "the sender's whole movement history outside the window"
+        # The asset is named, because the rate is only about one: a sample drawn from every token
+        # an address touched would price a different question.
+        assert component.population == (
+            "the sender's whole movement history in the native asset outside the window"
+        )
 
     @pytest.mark.anyio
     async def test_the_asserted_transfer_is_not_in_its_own_sample(self) -> None:
@@ -121,7 +125,7 @@ class TestTheRateItMeasures:
         assert isinstance(priced, RateEstimate)
         assert priced.component.trials == 3
         # The ceiling is named, so a reader cannot take this for the whole history.
-        assert "most recent 3 movements" in priced.component.population
+        assert "most recent 3 movements of the native asset" in priced.component.population
         assert "not the whole of their history" in priced.component.population
 
     @pytest.mark.anyio
@@ -183,7 +187,7 @@ class TestTheRefusalsItCanExplain:
         priced = await WindowCoincidenceEstimator().estimate(_elements(), provider=provider)
         assert isinstance(priced, Unpriced)
         assert priced.samples == 0
-        assert "no movements outside the window" in priced.reason
+        assert "no movements of this asset outside the window" in priced.reason
 
     @pytest.mark.anyio
     async def test_a_provider_that_cannot_list_movements_is_refused_by_name(self) -> None:
@@ -221,7 +225,10 @@ class TestWhatTheEngineDoesWithIt:
         assert ratio.k == 1, "one movement in the window, which is the opportunity count"
         assert ratio.null_model is NullModel.WITHIN_SENDER
         assert ratio.components[0].trials == 3
-        assert ratio.components[0].population.startswith("the sender's whole movement history")
+        # The asset is named here, unlike the fixture above, so the wording is checked both ways.
+        assert ratio.components[0].population == (
+            "the sender's whole movement history in BTC outside the window"
+        )
 
     @pytest.mark.anyio
     async def test_the_derivation_carries_the_ratio_and_its_population(self) -> None:
@@ -309,3 +316,129 @@ def _claim() -> Claim:
         amount_text="~30,000 sats",
         window=WINDOW,
     )
+
+
+#: A USDC contract, so a token asset can be named the way a provider would name one.
+USDC = AssetRef(
+    chain=Chain.ETHEREUM,
+    kind=AssetKind.ERC20,
+    symbol="USDC",
+    decimals=6,
+    contract="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+)
+
+
+def _movement(asset: AssetRef, amount: int, txid: str, *, when: datetime = JUNE) -> Transfer:
+    return Transfer(
+        chain=asset.chain,
+        asset=asset,
+        amount=amount,
+        txid=txid,
+        src=ALICE,
+        dst=BOB,
+        timestamp=when,
+    )
+
+
+class _MultiAssetProvider:
+    """A provider whose address moves more than one kind of value.
+
+    Bitcoin cannot produce this — there is one asset — which is why the estimator was correct for
+    as long as it was, and why the asset filter needs a provider of its own to be tested against.
+
+    Deliberately not a full :class:`~chainlens.providers.base.Provider`: it implements the one
+    method the estimator calls, which is the whole reason it is small enough to read. The call
+    sites carry a targeted ignore rather than widening the protocol for a test.
+    """
+
+    name = "multi-asset"
+    chain = Chain.ETHEREUM
+    capabilities = frozenset({Capability.WINDOW_TRANSFERS})
+
+    def __init__(self, movements: list[Transfer]) -> None:
+        self._movements = movements
+
+    def supports(self, capability: Capability) -> bool:
+        return capability in self.capabilities
+
+    async def get_window_transfers(
+        self, address: str, *, since: object = None, until: object = None, limit: int | None = None
+    ) -> object:
+        for movement in self._movements:
+            yield movement
+
+
+class TestTheSampleIsOneAsset:
+    """Base-unit amounts are only comparable within an asset.
+
+    A token's decimals are its own, so an amount of one asset landing inside another's band is a
+    coincidence only in the arithmetic. Counting it would invent a rate — and `p` moves the ratio
+    in one direction, so the invention would always be toward confidence.
+    """
+
+    def _elements(self) -> ClaimElements:
+        return ClaimElements(
+            chain=Chain.ETHEREUM,
+            asset=USDC,
+            sender=ALICE,
+            recipient=BOB,
+            band=AmountBand(nominal=1_000_000, tolerance=0, asset=USDC),
+            window=WINDOW,
+        )
+
+    @pytest.mark.anyio
+    async def test_movements_of_another_asset_are_not_counted(self) -> None:
+        provider = _MultiAssetProvider(
+            [
+                # Two genuine coincidences: a USDC movement of exactly the asserted amount.
+                _movement(USDC, 1_000_000, "usdc-1"),
+                _movement(USDC, 1_000_000, "usdc-2"),
+                # One that is not.
+                _movement(USDC, 5_000_000, "usdc-3"),
+                # And an ETH movement whose base-unit amount lands inside the band by arithmetic
+                # alone: 1,000,000 wei is a millionth of nothing, and it is the same integer.
+                _movement(AssetRef.native(Chain.ETHEREUM, symbol="ETH"), 1_000_000, "eth-1"),
+            ]
+        )
+        priced = await WindowCoincidenceEstimator().estimate(
+            self._elements(),
+            provider=provider,  # type: ignore[arg-type]
+        )
+
+        assert isinstance(priced, RateEstimate)
+        component = priced.component
+        assert component.trials == 3, "the ETH movement is not a USDC movement"
+        assert component.successes == 2
+        assert "USDC" in component.population
+
+    @pytest.mark.anyio
+    async def test_a_different_token_is_a_different_asset(self) -> None:
+        """Two ERC-20s are two assets with their own decimals, so an amount of one says nothing
+        about an amount of the other even when the integers are equal."""
+        other = USDC.model_copy(
+            update={
+                "symbol": "DAI",
+                "contract": "0x6b175474e89094c44da98b954eedeac495271d0f",
+            }
+        )
+        provider = _MultiAssetProvider([_movement(other, 1_000_000, "dai-1")])
+        priced = await WindowCoincidenceEstimator().estimate(
+            self._elements(),
+            provider=provider,  # type: ignore[arg-type]
+        )
+
+        assert isinstance(priced, Unpriced)
+        assert "no movements of this asset" in priced.reason
+
+    @pytest.mark.anyio
+    async def test_the_engine_reports_a_bounded_sample_over_the_claims_asset(self) -> None:
+        """The named asset reaches the derivation, so a reader can see what was counted."""
+        provider = _MultiAssetProvider([_movement(USDC, 5_000_000, f"usdc-{n}") for n in range(4)])
+        priced = await WindowCoincidenceEstimator(sample_limit=2).estimate(
+            self._elements(),
+            provider=provider,  # type: ignore[arg-type]
+        )
+
+        assert isinstance(priced, RateEstimate)
+        assert "USDC" in priced.component.population
+        assert "not the whole of their history" in priced.component.population

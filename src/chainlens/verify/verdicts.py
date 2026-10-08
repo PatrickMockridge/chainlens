@@ -46,6 +46,7 @@ from chainlens.models.base import LensModel, Provenance
 from chainlens.models.calculation import Input, RatioAttempt, UnboundKind
 from chainlens.models.enums import ClaimVerdict
 from chainlens.models.primitives import Transfer
+from chainlens.models.selection import SelectionDisclosure
 from chainlens.providers.base import Provider
 from chainlens.social.models import ProvenanceStrength
 from chainlens.verify.claims import ClaimElements
@@ -244,6 +245,10 @@ class VerificationFinding(LensModel):
             an input was missing — the two are the same shape, which is the point.
         assumptions: what the result rests on, including every convention applied.
         caveats: what would change it.
+        selection: how this claim came to be one of the claims priced, when a chooser picked it.
+            Carried on the finding rather than only on the record it was written from, because a
+            consumer of a finding has to be able to see that a ratio prices a *chosen* claim — and
+            a reader who sees only the finding would otherwise read the number as pre-registered.
     """
 
     post_id: str
@@ -259,6 +264,7 @@ class VerificationFinding(LensModel):
     evidence: ClaimEvidence = Field(default_factory=lambda: ClaimEvidence())
     likelihood: LikelihoodRatio | None = None
     attempt: RatioAttempt | None = None
+    selection: SelectionDisclosure | None = None
 
     assumptions: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()

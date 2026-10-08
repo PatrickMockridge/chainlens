@@ -158,7 +158,7 @@ class TestTheDocument:
         _derive(claim_file, out)
         document = DerivationDocument.model_validate_json(out.read_text(encoding="utf-8"))
         assert document.has_ratio is False
-        assert "no movements outside the window" in _reason(document)
+        assert "no movements of this asset outside the window" in _reason(document)
 
     def test_no_estimate_is_reported_as_declined_rather_than_as_missing(
         self, claim_file: Path, tmp_path: Path, wired: None
