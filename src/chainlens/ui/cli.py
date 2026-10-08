@@ -68,6 +68,7 @@ from chainlens.verify.extract import (
     Extractor,
     StructuredLLM,
 )
+from chainlens.verify.ollama import DEFAULT_LOCAL_MODEL
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import (
     ClaimRecord,
@@ -213,6 +214,21 @@ async def _read_for_cli(root: Path, reader: VisionReader) -> Corpus:
         close = getattr(reader, "aclose", None)
         if callable(close):
             await close()
+
+
+def _llm(args: argparse.Namespace) -> StructuredLLM:
+    """The model to read and answer with: this machine's, or the configured endpoint's.
+
+    A local model is not a fallback for a failed endpoint — it is the other answer to the same
+    question, and the reason to pick it is that the material never leaves the machine. It is also
+    the one that kept working when the hosted path stalled on a real corpus and sat on a socket for
+    forty-four minutes, which is what prompted offering it at all.
+    """
+    if args.local:
+        from chainlens.verify.ollama import OllamaLLM
+
+        return OllamaLLM(model=args.local_model)
+    return AnthropicLLM(model=args.model)
 
 
 def _load_corpus(path: Path) -> Corpus:
@@ -519,7 +535,7 @@ def _command_notes(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        client = AnthropicLLM(model=args.model)
+        client = _llm(args)
     except ConfigurationError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -986,6 +1002,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="the category the source puts it in (default: service)",
     )
     notes.add_argument("--label-licence", default="", help="what the label file may be used under")
+    notes.add_argument(
+        "--local",
+        action="store_true",
+        help=(
+            "read and answer with a model on this machine (ollama at 127.0.0.1:11434) instead of "
+            "the configured endpoint — nothing leaves the machine, and no credential is used"
+        ),
+    )
+    notes.add_argument(
+        "--local-model",
+        default=DEFAULT_LOCAL_MODEL,
+        help=f"the ollama model to use with --local (default: {DEFAULT_LOCAL_MODEL})",
+    )
     notes.add_argument("--provider", help="a registered provider name, for a label lookup")
     notes.add_argument("--chain", help="a chain, so a provider can be chosen for you")
     notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")

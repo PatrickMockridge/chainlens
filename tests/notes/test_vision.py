@@ -459,13 +459,19 @@ class TestTheReaderItself:
         assert body["stream"] is False
         assert base64.b64decode(body["images"][0]) == PNG
         assert "transcribe this" in body["prompt"]
-        # The schema is in the *prompt*, and asking ollama to enforce it instead is the one thing
-        # this reader must never do: `format` turns on grammar-constrained decoding, which on the
-        # default model took a screenshot from 15.8 seconds to more than fifteen minutes.
+        # The schema goes both ways: in the prompt, where the model reads what is wanted, and as
+        # `format`, where the generation is constrained so that drifting is impossible.
+        #
+        # This assertion used to be the opposite, on a measurement that did not generalise — on
+        # ollama 0.5.7 with minicpm-v, grammar-constrained decoding took a read from 15.8 seconds to
+        # more than fifteen minutes. On ollama 0.40 with qwen2.5vl it is 43.7 seconds against 46.7
+        # unconstrained, and it prevents the failure this reader was documented to have: a model
+        # restructuring a table into `{"text": [...]}` and defeating the check by leaving it nothing
+        # to check.
         assert "text" in body["prompt"]
-        assert "format" not in body, (
-            "constraining the reply to the schema makes this reader unusable; the prompt asks and "
-            "the reply is checked here instead"
+        assert list(body["format"]["properties"]) == ["text"], (
+            "the reply is constrained to the schema so that a model cannot answer in a shape this "
+            "reader would have to refuse"
         )
 
     @pytest.mark.anyio

@@ -131,6 +131,7 @@
     - [estimators](reference/verify/estimators.md)
     - [extract](reference/verify/extract.md)
     - [likelihood](reference/verify/likelihood.md)
+    - [ollama](reference/verify/ollama.md)
     - [parsing](reference/verify/parsing.md)
     - [records](reference/verify/records.md)
     - [scale](reference/verify/scale.md)

@@ -18,11 +18,11 @@ so the reader has to be one that reads text rather than recognises glyphs.
 
 **The answer is validated locally, always.** The reply is unwrapped and then checked against
 :class:`~chainlens.notes.corpus.ImageText`, exactly as every other model answer in this library is
-checked: a reply that is not the shape asked for is a failure, not something to be salvaged.
-*That check is load-bearing rather than belt-and-braces*, because the schema cannot be sent: ollama
-can constrain a reply with ``format``, and on this model and version doing so is unusable — see
-:meth:`OllamaVision.read_image` for the measurement. The schema goes in the prompt and the check
-does the rest, which is how every other endpoint without schema enforcement is handled here.
+checked: a reply that is not the shape asked for is a failure, not something to be salvaged. The
+schema is *also* sent, as ollama's ``format``, so that drifting is impossible in the first place —
+see :meth:`OllamaVision.read_image`, which carries two measurements of that and the reason the
+earlier one did not generalise. Neither replaces the other: the schema constrains the generation,
+and the check is what makes a reply that drifts anyway cost a refusal rather than a fiction.
 
 **A transcription is not a record, and no model this library can run makes it one.** Read the same
 table of mining-pool addresses with two models and both are fluent and both are wrong: ``minicpm-v``
@@ -49,6 +49,7 @@ from typing import Any
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import LensModel
 from chainlens.providers.transport import Transport
+from chainlens.verify.ollama import OLLAMA_URL, OllamaError, unavailable
 
 __all__ = [
     "DEFAULT_VISION_MODEL",
@@ -57,9 +58,6 @@ __all__ = [
     "OllamaError",
     "OllamaVision",
 ]
-
-#: Where ollama listens by default. Loopback, because that is the point of using it.
-OLLAMA_URL = "http://127.0.0.1:11434"
 
 #: How long one image may take. **Not the transport's default**, and that is the whole reason this
 #: constant exists: the default is 30 seconds, which is right for fetching a JSON document and
@@ -89,10 +87,6 @@ READ_TIMEOUT_SECONDS = 300.0
 #: recorded (``Corpus.read_by``), because two transcriptions of the same screenshot made by
 #: different models are not the same material — the rule every other model call here follows.
 DEFAULT_VISION_MODEL = "qwen2.5vl:7b"
-
-
-class OllamaError(ChainlensError):
-    """Ollama is not answering, or does not have the model."""
 
 
 class OllamaVision:
@@ -141,29 +135,26 @@ class OllamaVision:
             "prompt": _prompt_for(instruction, shape),
             "images": [base64.b64encode(image).decode("ascii")],
             "stream": False,
-            # **No ``format``, and this is not an oversight.** Asking ollama to constrain the reply
-            # to the schema turns on grammar-constrained decoding, and on this model at this ollama
-            # version that is not slow, it is unusable: the same screenshot reads in 15.8 seconds
-            # freely and did not finish in **fifteen minutes** constrained. The schema is in the
-            # prompt instead and the reply is checked here, which is the arrangement the rest of
-            # this library already uses for endpoints that do not enforce a schema — and which is
-            # what makes the answer usable either way.
+            # The schema, so the model cannot answer in a shape this reader would have to refuse.
+            # **This was the opposite decision until it was re-measured.** On ollama 0.5.7 with
+            # `minicpm-v`, grammar-constrained decoding took one screenshot from 15.8 seconds to
+            # more than fifteen minutes, and the finding was written down here as a property of the
+            # approach. It is a property of that version and that model: on ollama 0.40 with
+            # `qwen2.5vl`, the same screenshot reads in **43.7 seconds constrained against 46.7
+            # unconstrained** — slightly faster — and the constrained run cannot produce the failure
+            # this reader was documented to have, where the model restructured a table into
+            # ``{"text": [...]}`` and defeated the check by having nothing to check.
+            "format": shape.model_json_schema(),
             "options": {"temperature": 0},
         }
         try:
             answer = await self._transport.post_json("api/generate", payload=payload)
         except ChainlensError as exc:
             # A model that has not been pulled is the likeliest failure by far, and its remedy is a
-            # one-line command. Naming it beats a transport error nobody can act on.
-            message = str(exc)
-            if "not found" in message.lower() or "404" in message:
-                raise OllamaError(
-                    f"ollama does not have {self.model!r}; pull it with "
-                    f"`ollama pull {self.model}`, or name one it does have with --vision-model"
-                ) from exc
-            raise OllamaError(
-                f"ollama at {self._base_url} could not read an image: {message}"
-            ) from exc
+            # one-line command. Named rather than reported as a transport error nobody can act on —
+            # and named by the same helper the text client uses, so the two do not drift into two
+            # sentences about the same daemon.
+            raise unavailable(exc, model=self.model, base_url=self._base_url) from exc
 
         response = answer.get("response")
         if not isinstance(response, str) or not response.strip():

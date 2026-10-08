@@ -103,6 +103,7 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.verify.estimators`](verify/estimators.md)
 - [`chainlens.verify.extract`](verify/extract.md)
 - [`chainlens.verify.likelihood`](verify/likelihood.md)
+- [`chainlens.verify.ollama`](verify/ollama.md)
 - [`chainlens.verify.parsing`](verify/parsing.md)
 - [`chainlens.verify.records`](verify/records.md)
 - [`chainlens.verify.scale`](verify/scale.md)
