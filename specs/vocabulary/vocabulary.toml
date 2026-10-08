@@ -1,0 +1,106 @@
+# The vocabulary table.
+#
+# One hand-written table, compiled into three artefacts by `tools/gen_vocabulary.py`:
+#
+#   specs/schema/asset.schema.json              the closed set a spec may name
+#   src/chainlens/vocabulary/_generated.py      the rows, and the decimals
+#   lean/Chainlens/Vocabulary.lean              the rows, and one theorem per row
+#
+# **No decimals is written down twice.** A `decimals` value belongs to the row below and is
+# read from there by the codec, the adapters, the asset reference and Lean — never restated.
+# A number written in a second place is a number that can disagree with the first; the
+# sibling project this follows has the scar, where a hand-typed `1.0e-3` for a millimetre
+# disagreed with everything around it by a factor of a thousand, squared by an orifice
+# diameter.
+#
+# **What `families` means.** The address families *this library* validates for the chain, not
+# every family the chain has ever used. The codecs in `src/chainlens/codec/` are
+# chain-agnostic — `b58check_decode_versioned` takes the version byte, `bech32_decode` takes
+# the human-readable part — so a family is listed when a codec can check it here.
+# `bitcoin_cash`'s cashaddr is *not* listed, because nothing in this tree implements it.
+#
+# **And a family is not enough to identify a chain.** Bitcoin, testnet bitcoin, litecoin,
+# dogecoin and bitcoin cash all use base58check; which one an address is on is decided by its
+# *version byte*, and which bech32 chain it is by its *human-readable part*. Those are the two
+# fields below, and they exist because without them the table named a family and nothing could
+# act on the name: `src/chainlens/notes/identifiers.py` hardcoded `[13]` and `bc1` instead, so a
+# litecoin address was not recognised at all.
+#
+# **bitcoin and bitcoin_cash share `[0, 5]`, and that is a fact rather than a mistake.** A legacy
+# bitcoin cash address is indistinguishable from a bitcoin one at the string level; the chains
+# forked and kept the format. The library resolves it to the first row that matches, and
+# `chain_for`'s companion `chains_for` reports *all* the matches so a caller can see the
+# ambiguity rather than being handed a confident answer.
+#
+# `src/chainlens/codec/btc_script.py::NETWORKS` carries the same numbers for bitcoin's four
+# networks, and a test compares the two rather than trusting either.
+#
+# Every row is a claim about a chain, and one of them is checkable against something outside
+# this repository: `tests/vocabulary/test_cross_check.py` holds the bitcoin row's decimals to
+# `pycoin`'s `SATOSHI_PER_COIN` — a library that already knows the number rather than a
+# restatement of this one. The ethereum row has no such oracle in this tree, and the page
+# says so rather than implying the check is symmetrical.
+schema_version = 1
+
+[[assets]]
+id = "btc"
+chain = "bitcoin"
+symbol = "BTC"
+decimals = 8
+families = ["base58check", "bech32"]
+note = "The native coin of Bitcoin, and the only asset this library can price from a post."
+base58check_versions = [0, 5]
+bech32_hrp = "bc"
+
+[[assets]]
+id = "tbtc"
+chain = "bitcoin_testnet"
+symbol = "BTC"
+decimals = 8
+families = ["base58check", "bech32"]
+note = """
+Testnet bitcoin, which shares the mainnet ticker: the symbol is a display convention and the
+chain is what tells them apart, so `(chain, asset)` is the identity and not `symbol`."""
+base58check_versions = [111, 196]
+bech32_hrp = "tb"
+
+[[assets]]
+id = "ltc"
+chain = "litecoin"
+symbol = "LTC"
+decimals = 8
+families = ["base58check", "bech32"]
+note = "No provider in this tree serves Litecoin yet; the row exists so its decimals are not written down elsewhere."
+base58check_versions = [48, 50]
+bech32_hrp = "ltc"
+
+[[assets]]
+id = "doge"
+chain = "dogecoin"
+symbol = "DOGE"
+decimals = 8
+families = ["base58check"]
+note = "No provider in this tree serves Dogecoin yet. Dogecoin has no bech32 address form."
+base58check_versions = [30, 22]
+
+[[assets]]
+id = "bch"
+chain = "bitcoin_cash"
+symbol = "BCH"
+decimals = 8
+families = ["base58check"]
+note = """
+No provider in this tree serves Bitcoin Cash yet. Its cashaddr form is deliberately not listed:
+`families` names what this library can validate, and nothing here implements it."""
+base58check_versions = [0, 5]
+
+[[assets]]
+id = "eth"
+chain = "ethereum"
+symbol = "ETH"
+decimals = 18
+families = ["eip55"]
+note = """
+The native coin of Ethereum. `families` is EIP-55 alone because a lowercase `0x` address carries
+no checksum to check; `codec/eth_address.py` accepts one and the notes identifier layer is where
+the absence of a checksum is recorded as a caveat rather than a failure."""

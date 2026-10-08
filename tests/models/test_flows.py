@@ -63,15 +63,49 @@ def test_split_of_nothing_raises_rather_than_returning_nonsense() -> None:
 
 
 @given(
-    total=st.integers(min_value=0, max_value=10_000_000),
-    weights=st.lists(st.integers(min_value=0, max_value=1_000), min_size=1, max_size=12),
+    total=st.integers(min_value=0, max_value=2**255),
+    weights=st.lists(st.integers(min_value=0, max_value=10**24), min_size=1, max_size=12),
 )
 def test_split_always_conserves_the_total(total: int, weights: list[int]) -> None:
-    """The invariant the whole apportionment rests on."""
+    """The invariant the whole apportionment rests on.
+
+    **The bounds are wei-scale and uint256-wide, and the bounds this test used to have are
+    why a real defect survived it.** While it drew ``total`` from at most ten million, every
+    value was a float's exact integer, and the implementation — which computed the shares as
+    ``total * weight / total_weight`` — conserved the total on every example the test could
+    generate. Above roughly nine quadrillion a float's mantissa runs out and the truncations
+    lose more than one unit each, and the function returned sums that were short by sixty-one
+    units or long by two hundred and fifty-six. See its docstring, where the three measured
+    cases are written down.
+    """
     shares = largest_remainder_split(total, weights)
     assert sum(shares) == total
     assert len(shares) == len(weights)
     assert all(share >= 0 for share in shares)
+
+
+@pytest.mark.parametrize(
+    ("total", "weights"),
+    [
+        (10**18 + 7, [1, 1, 1]),
+        (10**18, [10**18 - 1, 1]),
+        (10**19, [1] * 7),
+        (2**256 - 1, [1, 1, 1, 1, 1, 1, 1]),
+        (10**24, [3, 7, 11, 13]),
+    ],
+)
+def test_split_conserves_the_total_at_wei_scale(total: int, weights: list[int]) -> None:
+    """The measured cases, kept as cases rather than only as a hypothesis bound.
+
+    A property test's bounds are a claim about which inputs are interesting, and the failure
+    these came from was outside the ones the bounds named. Fixing the bounds fixes the
+    strategy; these pin the three values the defect actually produced, so that a regression
+    reports the number rather than a shrunk counterexample nobody can read.
+    """
+    shares = largest_remainder_split(total, weights)
+    assert sum(shares) == total, (
+        f"the split returned {sum(shares)} for a total of {total}: {sum(shares) - total:+d} units"
+    )
 
 
 @given(

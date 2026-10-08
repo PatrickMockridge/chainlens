@@ -24,6 +24,19 @@
 - [Is a likelihood ratio any good?](explanation/calibration.md)
 - [Using a model](explanation/extraction.md)
 
+# The calculus of chain dimensionality
+
+- [The calculus](calculus/index.md)
+- [Amount identity](calculus/dimensions.md)
+- [The vocabulary table](calculus/vocabulary.md)
+- [Exactness](calculus/exactness.md)
+- [Raw and canonical](calculus/canonical.md)
+- [The sensitivity of a ratio](calculus/sensitivity.md)
+- [Reflection](calculus/reflection.md)
+- [The keycard as a capability](calculus/capability.md)
+- [Barbs](calculus/barbs.md)
+- [Processes and channels](calculus/process.md)
+
 # Plugins
 
 - [Writing a provider](plugins/writing-a-provider.md)
@@ -33,6 +46,7 @@
 <!-- GENERATED:REFERENCE -->
 - [chainlens](reference/index.md)
   - [adapters](reference/adapters/index.md)
+    - [blockscout](reference/adapters/blockscout.md)
     - [blockstream](reference/adapters/blockstream.md)
     - [esplora](reference/adapters/esplora.md)
     - [etherscan](reference/adapters/etherscan.md)
@@ -59,6 +73,7 @@
     - [build](reference/graph/build.md)
     - [export](reference/graph/export.md)
     - [metrics](reference/graph/metrics.md)
+  - [keycard](reference/keycard.md)
   - [labels](reference/labels/index.md)
     - [ingest](reference/labels/ingest.md)
     - [provider](reference/labels/provider.md)
@@ -89,9 +104,13 @@
     - [claims](reference/notes/claims.md)
     - [corpus](reference/notes/corpus.md)
     - [identifiers](reference/notes/identifiers.md)
+    - [lookup](reference/notes/lookup.md)
     - [search](reference/notes/search.md)
     - [selection](reference/notes/selection.md)
     - [vision](reference/notes/vision.md)
+  - [presets](reference/presets/index.md)
+    - [crowdsale](reference/presets/crowdsale.md)
+    - [records](reference/presets/records.md)
   - [providers](reference/providers/index.md)
     - [base](reference/providers/base.md)
     - [capabilities](reference/providers/capabilities.md)
@@ -131,9 +150,11 @@
     - [estimators](reference/verify/estimators.md)
     - [extract](reference/verify/extract.md)
     - [likelihood](reference/verify/likelihood.md)
+    - [ollama](reference/verify/ollama.md)
     - [parsing](reference/verify/parsing.md)
     - [records](reference/verify/records.md)
     - [scale](reference/verify/scale.md)
     - [schema](reference/verify/schema.md)
     - [verdicts](reference/verify/verdicts.md)
+  - [vocabulary](reference/vocabulary/index.md)
 <!-- END GENERATED:REFERENCE -->

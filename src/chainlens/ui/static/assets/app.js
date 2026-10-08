@@ -173,13 +173,7 @@ Attributes:
     prior_supplied_by: who supplied the prior, when one was.
     selection: how the claim came to be one of the claims priced, when a chooser picked it.
         On the document because the document is what a reader sees, and a ratio whose claim
-        was chosen would otherwise render exactly like one whose claim was fixed in advance.`),Bx=Gb([`recorded`,`missing`]).describe(`Whether an edge's amount is a recorded value or an admission that it is unknown.
-
-There is deliberately no third member for "estimated". The flow view estimates, and
-says so with a confidence below 1.0; this view does not estimate, so an unknown
-amount is reported as unknown rather than filled in. \`\`missing\`\` is the honest
-answer for an unindexed prevout — Esplora's \`\`vin\`\` frequently omits input values —
-and inventing one would corrupt every total that touched it.`),Vx=Gb([`exchange`,`mixer`,`sanctioned`,`own_wallet`,`correction`,`note`]).describe(`What a person is asserting about a target.
+        was chosen would otherwise render exactly like one whose claim was fixed in advance.`),Bx=Gb([`recorded`,`missing`]).describe("Whether an edge's amount is a recorded value or an admission that it is unknown.\n\nThere is deliberately no third member for \"estimated\". The flow view estimates, and\nsays so with a confidence below 1.0; this view does not estimate, so an unknown\namount is reported as unknown rather than filled in. ``missing`` is the honest\nanswer for an unindexed prevout — Esplora's ``vin`` frequently omits input values —\nand inventing one would corrupt every total that touched it.\n\n**Two overlapping vocabularies, and neither is a subset of the other.** This one has\n``missing`` and cannot have ``apportioned``; :class:`~chainlens.models.enums.AmountTag` has\n``apportioned`` and cannot have ``missing``. ``recorded`` is the one word they share, and it\nis written once, in :data:`~chainlens.models.enums.AMOUNT_STATUS_SPELLINGS`.\n\n**An earlier version of this called the status a subset of the tag**, which was true only\nwhile the tag carried a ``MISSING`` member that nothing could set — an `Amount` always carries\na figure, so the flow view had no use for one. Removing that member is what made the real\nrelation visible, and `tests/models/test_amount.py` asserts the intersection rather than the\nsubset: a member added to one and not the other fails there rather than diverging silently\nbetween two documents."),Vx=Gb([`exchange`,`mixer`,`sanctioned`,`own_wallet`,`correction`,`note`]).describe(`What a person is asserting about a target.
 
 Deliberately a short vocabulary of *kinds of assertion* rather than free text. A kind
 can be checked against a computed label — and a disagreement between the two is worth

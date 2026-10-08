@@ -30,7 +30,7 @@ the guardrails, and a test that needed a key to exercise them would not be run.
 ## `AnthropicLLM`
 
 ```python
-AnthropicLLM(*, model: str = DEFAULT_MODEL, settings: Settings | None = None, client: Any | None = None, max_tokens: int = DEFAULT_MAX_TOKENS)
+AnthropicLLM(*, model: str = DEFAULT_MODEL, settings: Settings | None = None, client: Any | None = None, max_tokens: int = DEFAULT_MAX_TOKENS, deadline: float = DEFAULT_DEADLINE_SECONDS)
 ```
 
 The real client: Claude, answering in a declared shape.
@@ -235,6 +235,8 @@ an implementation is expected to hold the model to it rather than post-process p
 ```python
 complete(*, system: str, prompt: str, shape: type[LensModel]) -> Mapping[str, Any]
 ```
+
+## `DEFAULT_DEADLINE_SECONDS`
 
 ## `DEFAULT_MAX_TOKENS`
 

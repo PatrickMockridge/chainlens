@@ -50,6 +50,10 @@ _BUILTIN_PROVIDERS: tuple[tuple[str, str], ...] = (
     ("esplora-mempool", "chainlens.adapters.mempool_space:MempoolSpaceProvider"),
     ("esplora-blockstream", "chainlens.adapters.blockstream:BlockstreamProvider"),
     ("jsonrpc-eth", "chainlens.adapters.jsonrpc_eth:JsonRpcEthProvider"),
+    # Keyless and indexed. Declares the account half of the Etherscan surface and deliberately not
+    # the proxy half — see its module docstring. This is what makes Ethereum address history
+    # reachable without a credential.
+    ("blockscout", "chainlens.adapters.blockscout:BlockscoutProvider"),
     ("etherscan", "chainlens.adapters.etherscan:EtherscanProvider"),
     # Not an adapter: this one reads committed files rather than the network. It is registered by
     # the same mechanism because to everything downstream it is the same thing — something that
@@ -63,6 +67,9 @@ _DEFAULT_PREFERENCE: tuple[str, ...] = (
     "esplora-mempool",
     "esplora-blockstream",
     "jsonrpc-eth",
+    # A node is a direct source and a caller who set an RPC URL meant it; an indexer comes after
+    # one. Before `etherscan` because free beats keyed.
+    "blockscout",
     "etherscan",
 )
 

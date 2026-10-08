@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from chainlens.models.enums import AssetKind, Chain, ChainModel, ScriptType
@@ -240,3 +242,47 @@ def test_script_types_survive_round_trip() -> None:
     )
     restored = Transaction.model_validate_json(tx.model_dump_json())
     assert restored.outputs[0].script_type is ScriptType.P2WPKH
+
+
+# --------------------------------------------------------------------------- #
+# The canonical view, as a property rather than as examples
+#
+# `docs/calculus/canonical.md` characterises this layer and says the guard is the tests rather
+# than a theorem. These are the property form of its claim: the lift preserves value for *any*
+# value and fee, not for the three pairs somebody wrote down.
+# --------------------------------------------------------------------------- #
+@given(
+    value=st.integers(min_value=0, max_value=2**200),
+    fee=st.integers(min_value=0, max_value=2**64),
+)
+def test_the_lift_conserves_value_for_any_amount(value: int, fee: int) -> None:
+    """`sum(inputs) - sum(outputs) == fee`, which is the identity every fee calculation and
+    every balance downstream rests on.
+
+    Wei-scale bounds on purpose: one ether is 10**18 wei, so the interesting values are far
+    above the range a float is exact over, and an example-based test at small numbers would not
+    reach them. The apportionment split had exactly that blind spot and a live bug underneath it.
+    """
+    tx = eth_transaction("0xabc", "0xalice", "0xbob", value=value, fee=fee)
+    assert tx.total_input_value == value + fee
+    assert tx.total_output_value == value
+    assert tx.total_input_value - tx.total_output_value == tx.fee
+
+
+@given(value=st.integers(min_value=0, max_value=2**200))
+def test_the_lift_neither_invents_nor_drops_an_output(value: int) -> None:
+    """One recipient, one output — the lift adds a view and does not alter the movement."""
+    tx = eth_transaction("0xabc", "0xalice", "0xbob", value=value)
+    assert len(tx.outputs) == 1
+    assert tx.outputs[0].value == value
+    assert tx.outputs[0].address == "0xbob"
+
+
+@given(
+    value=st.integers(min_value=0, max_value=2**200), fee=st.integers(min_value=0, max_value=2**64)
+)
+def test_the_lift_survives_a_round_trip(value: int, fee: int) -> None:
+    """The canonical view is what is serialised, so a lift that did not survive a round trip
+    would be a view that changes on the wire."""
+    tx = eth_transaction("0xabc", "0xalice", "0xbob", value=value, fee=fee)
+    assert Transaction.model_validate_json(tx.model_dump_json()) == tx

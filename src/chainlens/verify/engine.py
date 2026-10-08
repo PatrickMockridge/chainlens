@@ -35,6 +35,7 @@ from __future__ import annotations
 import math
 
 from chainlens.exceptions import ChainlensError
+from chainlens.keycard import SHIPPED, Keycard
 from chainlens.models.calculation import (
     Binding,
     BoundDirection,
@@ -52,8 +53,6 @@ from chainlens.models.wire import detail_entries
 from chainlens.providers.base import Provider
 from chainlens.social.models import Post
 from chainlens.verify.checks import (
-    DEFAULT_SCAN_LIMIT,
-    DEFAULT_TRANSFER_LIMIT,
     CheckContext,
     CheckerRegistry,
     default_registry,
@@ -125,6 +124,40 @@ def _selection_caveats(selection: SelectionDisclosure | None) -> tuple[str, ...]
     return tuple(notes)
 
 
+def _card_caveats(card: Keycard) -> tuple[str, ...]:
+    """What a finding has to say about the card it was computed under.
+
+    **Silent for the shipped baseline, and that is the point rather than an optimisation.** The
+    library's own defaults are described once in
+    `chainlens.verify.verdicts::STANDARD_VERIFICATION_LIMITATIONS`, and repeating them on every
+    finding would be a sentence a reader learns to skip. What a reader cannot get anywhere else
+    is *which values a holder chose* — so this speaks only when a card says something the baseline
+    does not, and names the entries that took effect rather than the ones that were inherited.
+
+    The `scan_limit` and `transfer_limit` are always reached: they are the two the engine reads.
+    The other three are named when the card states them, because a hedge tolerance that widened
+    an amount's band is a fact about the number beside it.
+    """
+    # **Compared against the baseline, not tested for emptiness.** The shipped card states all
+    # five, so "the card said something" is true of the baseline itself and the first version of
+    # this spoke on every finding — which the test below caught. What a reader needs is the values
+    # a holder *chose*, and a card that restates a shipped value has chosen nothing.
+    stated = card.thresholds.model_dump(exclude_none=True)
+    baseline = SHIPPED.resolved_thresholds
+    # Every threshold the engine actually reads, not only those a card states: `hedge_tolerance`
+    # now shapes a band, so a card that sets it has changed a number in the finding even though
+    # `scan_limit` may still be the shipped one.
+    chosen = {name: value for name, value in stated.items() if getattr(baseline, name) != value}
+    if not chosen:
+        return ()
+    holder = card.keyholder or "an unnamed card"
+    entries = ", ".join(card.entries_used(*sorted(chosen)))
+    return (
+        f"computed under {holder}, which states {entries} rather than the library's defaults; the "
+        f"values not named here are the shipped ones",
+    )
+
+
 def _unbound_input(attempt: RatioAttempt | None) -> Input | None:
     """The first input an attempt could not obtain, if it could not obtain one.
 
@@ -187,6 +220,9 @@ class VerificationEngine:
         thresholds: the verbal-scale boundaries. ENFSI-aligned by default, and
             configurable because the guideline treats the scale as
             jurisdiction-dependent.
+        card: the data this run is entitled to rest an answer on. The two limits above default to
+            the card's entries; a card is a *value a caller holds* and never a global this reads,
+            so two engines in one process can be run under two different cards.
         estimate_requested: whether anybody wanted a coincidence priced. Says nothing about
             whether one *could* be: with no estimator, this field is the difference between a
             caller who decided against it and a setup that never had one, and the two read
@@ -199,8 +235,9 @@ class VerificationEngine:
         *,
         estimator: CoincidenceEstimator | None = None,
         registry: CheckerRegistry | None = None,
-        scan_limit: int = DEFAULT_SCAN_LIMIT,
-        transfer_limit: int = DEFAULT_TRANSFER_LIMIT,
+        scan_limit: int | None = None,
+        transfer_limit: int | None = None,
+        card: Keycard = SHIPPED,
         thresholds: VerbalThresholds = DEFAULT_THRESHOLDS,
         estimate_requested: bool = True,
         selection: SelectionDisclosure | None = None,
@@ -213,8 +250,21 @@ class VerificationEngine:
         #: gap in the setup. `ui derive --no-estimate` is the caller that says not to.
         self._estimate_requested = estimate_requested
         self._registry = registry if registry is not None else default_registry()
-        self._scan_limit = scan_limit
-        self._transfer_limit = transfer_limit
+        # **Precedence: an explicit argument wins over the card.** `None` means "the caller did
+        # not say", which is different from a caller who said a number equal to the shipped one —
+        # and it is the difference between a run under the library's defaults and a run under a
+        # holder's card, which a reader of a finding is entitled to tell apart. The card is a
+        # parameter rather than a module-level card read here, so that two engines in one process
+        # can run under two cards; `tests/keycard/test_absence.py` is what holds that.
+        self._card = card
+        self._scan_limit = (
+            scan_limit if scan_limit is not None else card.resolved_thresholds.scan_limit
+        )
+        self._transfer_limit = (
+            transfer_limit
+            if transfer_limit is not None
+            else card.resolved_thresholds.transfer_limit
+        )
         self._thresholds = thresholds
         #: How the claims reached this engine, when a chooser picked them. Stamped on every
         #: finding and added to its caveats, because the alternative — carrying it on the batch —
@@ -262,7 +312,12 @@ class VerificationEngine:
 
     async def verify_claim(self, claim: Claim, post: Post) -> VerificationFinding:
         """Adjudicate one claim, and attach a ratio only where one is justified."""
-        parsed = parse_claim(claim)
+        # The card reaches the parse here, which is the other half of what it is for: the hedge
+        # tolerance is the largest free parameter in the calculation, and a run under a holder's
+        # card must widen a band by the holder's value *and say so*. `parse_amount` takes one
+        # parameter rather than two for exactly that reason — two would let a run apply one number
+        # and report another.
+        parsed = parse_claim(claim, hedge_tolerance=self._card.resolved_thresholds.hedge_tolerance)
         outcome = await self._dispatch(claim, parsed)
 
         likelihood, attempt = await self._ratio_for(outcome, parsed.elements)
@@ -288,7 +343,9 @@ class VerificationEngine:
             attempt=attempt,
             gap=gap,
             assumptions=tuple(outcome.assumptions) + tuple(parsed.notes),
-            caveats=outcome.caveats + _selection_caveats(self._selection),
+            caveats=(
+                outcome.caveats + _selection_caveats(self._selection) + _card_caveats(self._card)
+            ),
             selection=self._selection,
         )
 

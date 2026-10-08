@@ -77,7 +77,7 @@ def btc_transaction(
         inputs=tuple(inputs),
         outputs=tuple(outputs),
         fee=fee,
-        fee_asset=AssetRef.native(chain, symbol="BTC"),
+        fee_asset=AssetRef.of_native(chain),
         is_coinbase=is_coinbase,
         provenance=provenance,
     )

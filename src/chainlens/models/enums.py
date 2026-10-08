@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import Self
 
 __all__ = [
+    "AmountTag",
     "AssetKind",
     "Chain",
     "ChainModel",
@@ -80,6 +81,53 @@ class AssetKind(StrEnum):
     ERC721 = "erc721"
     ERC1155 = "erc1155"
     OTHER = "other"
+
+
+class AmountTag(StrEnum):
+    """How an amount was arrived at, as distinct from what it is an amount *of*.
+
+    ``(chain, asset)`` says a number is a quantity of something; the tag says where the number
+    came from, and the two are independent. This library already draws the distinction and
+    spells it three ways — ``Transfer.ambiguous``, ``ValueFlow``'s ``APPORTIONED_CONFIDENCE``,
+    and the ``apportioned_shares`` mapping on a verdict — which is what a tag is for.
+
+    **A recorded figure and an apportioned one are different kinds even when their dimension
+    is the same**, and they are added together only by someone who has decided the inference is
+    good enough. Naming the difference is what lets that decision be made at the addition rather
+    than in a comment three functions away.
+
+    **Two members, and there is deliberately no third for "the provider did not carry it".** The
+    first version of this had one, and it was **unreachable**: ``primitives.py::Amount`` requires
+    ``base_units: int``, so an amount whose figure nobody recorded cannot be an ``Amount`` at all
+    — every construction site yields ``RECORDED`` or ``APPORTIONED`` and ``__add__`` can only
+    return those two. The absence of a number is expressed by the absence of an ``Amount``
+    (``TxOutput.value`` is ``None``; a caller that may not have one uses ``Amount | None``),
+    which is a stronger statement than a tag on a number that is not there. A member nothing can
+    set is the same defect as a field nothing reads.
+    """
+
+    #: A provider returned this figure, or it is arithmetic over figures a provider returned.
+    RECORDED = "recorded"
+
+    #: Split from a co-funded output — a *convention* of this library about which sender paid
+    #: which output, and not something any ledger states. ``Transfer.ambiguous`` is this case.
+    APPORTIONED = "apportioned"
+
+
+#: The strings the two amount vocabularies **share**, and the whole of what they share.
+#:
+#: `AmountTag` above and `models/ledger.py::AmountStatus` are two overlapping sets and neither is a
+#: subset of the other — the ledger view has `missing` and cannot have `apportioned` (it does not
+#: estimate), the flow view has `apportioned` and cannot have `missing` (an `Amount` always carries
+#: a figure). `recorded` is the one member they have in common, and it is written down once, here.
+#:
+#: **This table held two entries and called the status a subset of the tag**, which was true only
+#: while the tag carried an unreachable `MISSING`. Removing that member is what made the relation
+#: visible: the two vocabularies agree on one word and each add their own. `AmountStatus.MISSING`
+#: and `AmountTag.APPORTIONED` are each spelled in the enum that owns them, which is their one home.
+AMOUNT_STATUS_SPELLINGS = {
+    "recorded": AmountTag.RECORDED.value,
+}
 
 
 class ScriptType(StrEnum):

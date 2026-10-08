@@ -29,10 +29,13 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from chainlens.codec import address_to_script, is_valid_address, normalize_address
+from chainlens.codec.btc_script import params_for
+from chainlens.keycard import SHIPPED
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import AssetRef
 from chainlens.verify.claims import AmountBand, ClaimElements
 from chainlens.verify.schema import Claim, ClaimType
+from chainlens.vocabulary import row_for
 
 __all__ = [
     "HEDGE_TOLERANCE",
@@ -52,7 +55,10 @@ __all__ = [
 #: names it, and the sensitivity analysis sweeps it — because it is the largest
 #: free parameter in the calculation and hiding it would be the difference between
 #: a stated model and an invented number.
-HEDGE_TOLERANCE = 0.05
+#: Read from the shipped keycard rather than written here. The value is the same number; what
+#: changes is that it has one home, and that a caller holding a card can see which value produced
+#: the finding in front of them.
+HEDGE_TOLERANCE: float = SHIPPED.resolved_thresholds.hedge_tolerance
 
 _HEDGE_WORDS = (
     "about",
@@ -108,26 +114,32 @@ _AMOUNT = re.compile(
 #: refusing it would drop a claim on a formatting detail.
 _MAGNITUDES: dict[str, Decimal] = {"k": Decimal(1_000), "m": Decimal(1_000_000)}
 
-#: Unit token -> (chain, canonical symbol, decimals). Only the chains this library
-#: prices are here; anything else is a claim we cannot check rather than a guess.
-_UNITS: dict[str, tuple[Chain, str, int]] = {
-    "btc": (Chain.BITCOIN, "BTC", 8),
-    "bitcoin": (Chain.BITCOIN, "BTC", 8),
-    "bitcoins": (Chain.BITCOIN, "BTC", 8),
-    "xbt": (Chain.BITCOIN, "BTC", 8),
-    "eth": (Chain.ETHEREUM, "ETH", 18),
-    "ethereum": (Chain.ETHEREUM, "ETH", 18),
-    "ether": (Chain.ETHEREUM, "ETH", 18),
-    "ethers": (Chain.ETHEREUM, "ETH", 18),
+#: Unit token -> chain. **The symbol and the decimals are not here**, and they used to be: this
+#: table spelled out `"BTC", 8` four times and `"ETH", 18` five times, in the one module whose
+#: job is to *read* a number out of a post. What a unit token tells us is *which chain* the post
+#: is talking about; what a bitcoin's decimals are is the vocabulary table's row, and the symbol
+#: is the row's too, so the two are read from there rather than restated here.
+#:
+#: Only the chains this library prices are named; anything else is a claim we cannot check
+#: rather than a guess.
+_UNITS: dict[str, Chain] = {
+    "btc": Chain.BITCOIN,
+    "bitcoin": Chain.BITCOIN,
+    "bitcoins": Chain.BITCOIN,
+    "xbt": Chain.BITCOIN,
+    "eth": Chain.ETHEREUM,
+    "ethereum": Chain.ETHEREUM,
+    "ether": Chain.ETHEREUM,
+    "ethers": Chain.ETHEREUM,
 }
 
 #: Units that already count base units, so no scaling is applied.
-_BASE_UNITS: dict[str, tuple[Chain, str, int]] = {
-    "sat": (Chain.BITCOIN, "BTC", 8),
-    "sats": (Chain.BITCOIN, "BTC", 8),
-    "satoshi": (Chain.BITCOIN, "BTC", 8),
-    "satoshis": (Chain.BITCOIN, "BTC", 8),
-    "wei": (Chain.ETHEREUM, "ETH", 18),
+_BASE_UNITS: dict[str, Chain] = {
+    "sat": Chain.BITCOIN,
+    "sats": Chain.BITCOIN,
+    "satoshi": Chain.BITCOIN,
+    "satoshis": Chain.BITCOIN,
+    "wei": Chain.ETHEREUM,
 }
 
 
@@ -162,7 +174,15 @@ def normalise_address(address: str, chain: Chain) -> str | None:
     try:
         if chain.is_evm:
             return normalize_address(address) if is_valid_address(address) else None
-        address_to_script(address)
+        # **Against the chain's own parameters, not bitcoin mainnet's.** `address_to_script`
+        # defaults to mainnet, and this function did not override it — so a litecoin address
+        # failed a check that was validating it as a bitcoin one, and the corpus layer reported
+        # every non-bitcoin base58check address as unusable. The numbers come from the vocabulary
+        # table now; `params_for` is the reader.
+        params = params_for(chain)
+        if params is None:
+            return None
+        address_to_script(address, params)
     except (ValueError, TypeError):
         return None
     return address
@@ -190,7 +210,7 @@ def _quantise(value: Decimal, decimals: int) -> int | None:
     return int(scaled)
 
 
-def parse_amount(text: str) -> AmountReading | None:
+def parse_amount(text: str, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> AmountReading | None:
     """Read an amount, its asset and its tolerance out of the text a claim used.
 
     ``None`` when nothing priceable is there — an unstated asset, a chain this
@@ -198,20 +218,31 @@ def parse_amount(text: str) -> AmountReading | None:
 
     Args:
         text: the amount as written, e.g. ``"more than 40,000 BTC"``.
+        hedge_tolerance: how much wider a hedge word makes the band, as a fraction of the amount.
+            Defaults to the shipped keycard's value, which is where the number lives; a caller
+            holding a card passes the card's. **There is one parameter and not two**, because the
+            number is used twice — once to widen the band and once to say by how much — and two
+            parameters would let a run apply one value and report another.
     """
     match = _AMOUNT.search(text)
     if match is None:
         return None
 
     unit = match.group("unit").lower()
-    if unit in _BASE_UNITS:
-        chain, symbol, decimals = _BASE_UNITS[unit]
-        scale = 0
-    elif unit in _UNITS:
-        chain, symbol, decimals = _UNITS[unit]
-        scale = decimals
-    else:
+    # The unit token says *which chain* the post is talking about. The vocabulary table says
+    # everything else about the asset — its symbol, its decimals — so none of that is written
+    # in this module any more.
+    base = unit in _BASE_UNITS
+    on_chain = _BASE_UNITS[unit] if base else _UNITS.get(unit)
+    if on_chain is None:
         return None
+    row = row_for(on_chain)
+    chain = Chain(row.chain)
+    symbol = row.symbol
+    decimals = row.decimals
+    # "10 sats" already counts base units, so the number as written is scaled by nothing;
+    # "1.5 BTC" is scaled by the row's decimals.
+    scale = 0 if base else decimals
 
     try:
         written = Decimal(re.sub(r"[,_ ]", "", match.group("number")))
@@ -242,9 +273,9 @@ def parse_amount(text: str) -> AmountReading | None:
         tolerance = 0
         rule = "one-sided claim; the band is open above the stated bound"
     elif hedged:
-        tolerance = round(nominal * HEDGE_TOLERANCE)
+        tolerance = round(nominal * hedge_tolerance)
         rule = (
-            f"hedge word in the claim; band widened by {HEDGE_TOLERANCE:.0%} of the "
+            f"hedge word in the claim; band widened by {hedge_tolerance:.0%} of the "
             "amount, which is a convention of this library and not a stated precision"
         )
     else:
@@ -277,7 +308,7 @@ class ParsedClaim:
         return self.elements is not None
 
 
-def parse_claim(claim: Claim) -> ParsedClaim:
+def parse_claim(claim: Claim, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> ParsedClaim:
     """Reduce one extracted claim to priceable elements.
 
     The chain comes from the amount's unit when the claim states one, and from the
@@ -294,7 +325,11 @@ def parse_claim(claim: Claim) -> ParsedClaim:
         return ParsedClaim(elements=None, notes=("claim type is not checkable here",))
 
     notes: list[str] = []
-    reading = parse_amount(claim.amount_text) if claim.amount_text else None
+    reading = (
+        parse_amount(claim.amount_text, hedge_tolerance=hedge_tolerance)
+        if claim.amount_text
+        else None
+    )
     if claim.amount_text and reading is None:
         notes.append(
             f"the amount {claim.amount_text!r} could not be read as a supported asset "

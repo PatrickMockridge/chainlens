@@ -23,6 +23,8 @@ from pydantic import Field
 
 from chainlens.graph.build import IndexedGraph
 from chainlens.models.base import LensModel
+from chainlens.models.flows import ValueFlow
+from chainlens.models.primitives import Amount
 
 __all__ = [
     "Degree",
@@ -63,11 +65,16 @@ class Degree(LensModel):
 
 
 class NodeValue(LensModel):
-    """A node and an amount, in one asset's base units."""
+    """A node and what moved through it, in one asset's base units.
+
+    **The amount is tagged**, so a reader of "where does value concentrate" can tell a node whose
+    total is entirely recorded from one whose total includes a share this library inferred. See
+    :func:`value_by_node`.
+    """
 
     node_key: str
     label: str
-    amount: int
+    amount: Amount
 
 
 class GraphSummary(LensModel):
@@ -168,19 +175,37 @@ def betweenness(indexed: IndexedGraph) -> Mapping[str, float]:
     return {indexed.key_of(position): float(value) for position, value in centrality.items()}
 
 
-def value_by_node(indexed: IndexedGraph, *, incoming: bool = True) -> Mapping[str, int]:
-    """Total value per node over the edges arriving at it (or leaving it).
+def value_by_node(indexed: IndexedGraph, *, incoming: bool = True) -> Mapping[str, Amount]:
+    """Total value per node over the edges arriving at it (or leaving it), **as a tagged amount**.
 
-    Scoped to one graph, so it is only meaningful when the graph holds a single
-    asset; callers with a mixed graph should partition first.
+    **The total used to be a bare `int`, and it discarded a fact the edges were carrying.** Measured
+    before this changed: a node receiving 300 recorded plus 100 apportioned reported ``400``, with
+    no sign that a quarter of it was this library's inference from a co-funded input — while the
+    edges said ``apportioned = [False, True]`` all along. This module's own docstring makes exactly
+    that argument for *assets* ("summing edge amounts across a graph that mixes BTC and an ERC-20
+    ... produces a number that means nothing") and did not make it for tags.
+
+    So the total is an :class:`~chainlens.models.primitives.Amount`, and `Amount.__add__` carries
+    the **weakest** term's tag: a total whose components include an inference is an inference. That
+    is the type `chainlens.models.primitives.Amount` was added for, and this is the function it was
+    added for — it was otherwise a type with tests and no callers.
+
+    **A node with no edges is absent from the mapping rather than present as zero.** An amount is an
+    amount *of* something, and a node nothing moved through names no asset; a `0` would have to
+    pick one. Callers that want every node key can read ``indexed.keys()`` and default.
+
+    Scoped to one graph, so it is only meaningful when the graph holds a single asset — and now
+    that is enforced rather than asked for: a graph mixing assets raises a `TypeError` from the
+    addition instead of returning a sum of two different units. The docstring used to say callers
+    "should partition first", which is a rule nothing checked.
     """
-    totals: dict[str, int] = dict.fromkeys(indexed, 0)
+    totals: dict[str, Amount] = {}
     for edge in indexed.graph.edge_list():
         source_position, target_position = edge
-        payload = indexed.graph.get_edge_data(source_position, target_position)
-        amount = getattr(payload, "amount", 0)
+        flow: ValueFlow = indexed.graph.get_edge_data(source_position, target_position)
         key = indexed.key_of(target_position if incoming else source_position)
-        totals[key] = totals.get(key, 0) + int(amount)
+        carried = Amount.of_flow(flow)
+        totals[key] = totals[key] + carried if key in totals else carried
     return totals
 
 
@@ -189,7 +214,7 @@ def top_by_value(
 ) -> tuple[NodeValue, ...]:
     """The nodes moving the most value, highest first."""
     totals = value_by_node(indexed, incoming=incoming)
-    ranked = sorted(totals.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ranked = sorted(totals.items(), key=lambda item: (-item[1].base_units, item[0]))[:limit]
     return tuple(
         NodeValue(node_key=key, label=_node_label(indexed, key), amount=amount)
         for key, amount in ranked

@@ -33,12 +33,19 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from chainlens.models.annotate import Annotation
 from chainlens.models.base import LensModel
-from chainlens.models.enums import Chain, Direction, FlowVia, ScriptType, TxStatus
-from chainlens.models.primitives import AssetRef
+from chainlens.models.enums import (
+    AMOUNT_STATUS_SPELLINGS,
+    Chain,
+    Direction,
+    FlowVia,
+    ScriptType,
+    TxStatus,
+)
+from chainlens.models.primitives import AssetRef, require_asset_on_chain
 from chainlens.models.wire import BaseUnits
 
 __all__ = [
@@ -155,9 +162,24 @@ class AmountStatus(StrEnum):
     amount is reported as unknown rather than filled in. ``missing`` is the honest
     answer for an unindexed prevout — Esplora's ``vin`` frequently omits input values —
     and inventing one would corrupt every total that touched it.
+
+    **Two overlapping vocabularies, and neither is a subset of the other.** This one has
+    ``missing`` and cannot have ``apportioned``; :class:`~chainlens.models.enums.AmountTag` has
+    ``apportioned`` and cannot have ``missing``. ``recorded`` is the one word they share, and it
+    is written once, in :data:`~chainlens.models.enums.AMOUNT_STATUS_SPELLINGS`.
+
+    **An earlier version of this called the status a subset of the tag**, which was true only
+    while the tag carried a ``MISSING`` member that nothing could set — an `Amount` always carries
+    a figure, so the flow view had no use for one. Removing that member is what made the real
+    relation visible, and `tests/models/test_amount.py` asserts the intersection rather than the
+    subset: a member added to one and not the other fails there rather than diverging silently
+    between two documents.
     """
 
-    RECORDED = "recorded"
+    RECORDED = AMOUNT_STATUS_SPELLINGS["recorded"]
+    #: Spelled here and not shared, because it is this view's own: an `Amount` always carries a
+    #: figure, so the flow view has no member for a number nobody recorded — the absence of a
+    #: number is the absence of an `Amount`, which is a stronger statement than a tag on one.
     MISSING = "missing"
 
 
@@ -382,6 +404,18 @@ class LedgerEdge(LensModel):
     spent_by_txid: str | None = None
 
     annotation_ids: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> LedgerEdge:
+        """The same rule the flow view's models carry, for the same reason.
+
+        `asset` is optional here — a ledger edge may record a movement whose asset the provider
+        did not name — so the check is skipped when it is absent rather than treating absence as
+        a mismatch.
+        """
+        if self.asset is not None:
+            require_asset_on_chain(self.chain, self.asset)
+        return self
 
     @property
     def is_unknown_amount(self) -> bool:

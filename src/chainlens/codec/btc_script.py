@@ -15,13 +15,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from chainlens.codec import base58, bech32
-from chainlens.models.enums import ScriptType
+from chainlens.models.enums import Chain, ScriptType
+from chainlens.vocabulary import maybe_row_for
 
 __all__ = [
     "NETWORKS",
     "NetworkParams",
     "address_to_script",
     "classify_script",
+    "params_for",
     "script_to_address",
 ]
 
@@ -42,6 +44,34 @@ NETWORKS: dict[str, NetworkParams] = {
     "signet": NetworkParams("signet", 0x6F, 0xC4, "tb"),
     "regtest": NetworkParams("regtest", 0x6F, 0xC4, "bcrt"),
 }
+
+
+def params_for(chain: Chain | str) -> NetworkParams | None:
+    """The address parameters for a chain, from the vocabulary table, or ``None``.
+
+    **The table is where these numbers live, and this is one of the readers.** They were written
+    here for bitcoin's four *networks* — mainnet, testnet, signet, regtest — which is a different
+    axis from the `Chain` enum, and it left every other base58check chain addressing as if it were
+    bitcoin: a litecoin address failed an `address_to_script` call that defaulted to mainnet, so
+    the corpus layer found it and then reported it as unusable. Measured, before this existed:
+
+        chain_for("LKDxGDJq5fF4FohAB8zJH24mDDNHDNtqsE")  ->  None
+        plausible_addresses("paid to LKDx…")             ->  ()
+
+    `signet` and `regtest` have no `Chain` member and are therefore not in the table; they stay in
+    :data:`NETWORKS` for a caller that names a network rather than a chain. `mainnet` and `testnet`
+    are compared against the table's `btc` and `tbtc` rows by a test, so the two cannot drift.
+
+    A chain with no bech32 form gets an empty ``hrp``, which is what `address_to_script` reads as
+    "do not look for a segwit address here".
+    """
+    row = maybe_row_for(chain)
+    if row is None or "base58check" not in row.families:
+        return None
+    versions = row.base58check_versions
+    p2pkh, p2sh = (versions[0], versions[1] if len(versions) > 1 else versions[0])
+    return NetworkParams(row.chain, p2pkh, p2sh, row.bech32_hrp or "")
+
 
 # Opcodes we care about.
 _OP_0 = 0x00
@@ -167,8 +197,11 @@ def address_to_script(address: str, network: str | NetworkParams = "mainnet") ->
     """
     params = _network(network)
 
-    # Segwit (bech32/bech32m) addresses carry the HRP in the clear.
-    if address.lower().startswith(f"{params.hrp}1"):
+    # Segwit (bech32/bech32m) addresses carry the HRP in the clear. **Guarded on the hrp being
+    # non-empty**, because a chain with no bech32 form has none: without the guard, a dogecoin or
+    # bitcoin cash address beginning `1` would be read as a segwit address with an empty
+    # human-readable part and fail a check it should have passed.
+    if params.hrp and address.lower().startswith(f"{params.hrp}1"):
         version, program = bech32.decode_segwit_address(params.hrp, address)
         if version is None or program is None:
             raise ValueError(f"invalid segwit address for {params.name}: {address!r}")

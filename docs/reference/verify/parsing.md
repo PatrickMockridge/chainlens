@@ -85,7 +85,7 @@ looked up, which is a fact about our reach, not about the chain.
 ## `parse_amount`
 
 ```python
-parse_amount(text: str) -> AmountReading | None
+parse_amount(text: str, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> AmountReading | None
 ```
 
 Read an amount, its asset and its tolerance out of the text a claim used.
@@ -96,11 +96,12 @@ library does not price, or a sub-unit amount.
 **Parameters**
 
 - `text` `str` — the amount as written, e.g. ``"more than 40,000 BTC"``.
+- `hedge_tolerance` `float`, default `HEDGE_TOLERANCE` — how much wider a hedge word makes the band, as a fraction of the amount. Defaults to the shipped keycard's value, which is where the number lives; a caller holding a card passes the card's. **There is one parameter and not two**, because the number is used twice — once to widen the band and once to say by how much — and two parameters would let a run apply one value and report another.
 
 ## `parse_claim`
 
 ```python
-parse_claim(claim: Claim) -> ParsedClaim
+parse_claim(claim: Claim, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> ParsedClaim
 ```
 
 Reduce one extracted claim to priceable elements.

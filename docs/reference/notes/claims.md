@@ -24,7 +24,7 @@ prompt is built to forbid one.
 ## `CorpusExtraction`
 
 ```python
-CorpusExtraction(note: str, report: ExtractionReport)
+CorpusExtraction(note: str, report: ExtractionReport | None = None, failure: str | None = None)
 ```
 
 One note's reading: what was claimed, and what was thrown away getting there.
@@ -36,16 +36,18 @@ a value, and giving the pair a second serialised shape would be a second contrac
 **Attributes**
 
 - `note` `str` — the note's path, which is how a reader finds the original.
-- `report` `ExtractionReport` — what the extractor produced, including the claims its own quote check discarded. Carried whole because the drop count is the extraction's error rate, and a reading that fabricated nine claims out of ten has to be visible as such.
+- `report` `ExtractionReport | None` — what the extractor produced, including the claims its own quote check discarded. Carried whole because the drop count is the extraction's error rate, and a reading that fabricated nine claims out of ten has to be visible as such. ``None`` when the note could not be read at all.
+- `failure` `str | None` — why the note yielded no reading, in words, or ``None`` when it yielded one. Kept apart from an empty report for the same reason the corpus keeps an unreadable file apart from an empty one: "this note claimed nothing" and "this note could not be read" are different findings, and only the second is a defect to look at.
 
 **Members**
 
 - `note`
-- `report`
+- `report` = None
+- `failure` = None
 
 ### `claims`
 
-The claims that survived quote validation.
+The claims that survived quote validation. Empty when the note failed.
 
 ## `claims_from_corpus`
 
@@ -59,6 +61,12 @@ One call per note rather than one call over the corpus: a model shown forty scre
 has to hold all forty in view, and a quote cannot be checked against a note it was not read
 from. Per note, the quote check is against exactly the material the claim came from, which is
 the check the extraction layer is built around.
+
+**A note that fails is recorded, not raised.** One dense table can produce an answer longer than
+the extractor's token cap, and letting that end the run would mean the flakiest note in a corpus
+decides how much of the corpus gets read — the failure the corpus layer already refuses to have,
+where one unreadable screenshot must not cost the other four hundred. The reason travels on the
+reading, so a note that yielded nothing is visibly different from one that claimed nothing.
 
 Only notes that were read contribute. A note that could not be read has no text to read claims
 from, and its reason travels on the corpus rather than being restated as an empty extraction —

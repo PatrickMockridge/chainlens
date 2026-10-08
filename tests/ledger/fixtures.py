@@ -27,7 +27,12 @@ from chainlens.ledger.annotate import overlay, stamp
 from chainlens.ledger.derive import PRIOR_LIMITATIONS, claim_id, derive_finding
 from chainlens.ledger.schema import strict_dumps
 from chainlens.ledger.walk import walk_ledger
-from chainlens.models.annotate import Annotation, AnnotationKind, EvidenceOverlay
+from chainlens.models.annotate import (
+    Annotation,
+    AnnotationKind,
+    AnnotationRequest,
+    EvidenceOverlay,
+)
 from chainlens.models.base import LensModel
 from chainlens.models.derive import DerivationDocument
 from chainlens.models.entities import Entity, Label
@@ -454,6 +459,46 @@ def _narrative_documents() -> dict[str, Any]:
     }
 
 
+def _annotation_requests() -> dict[str, Any]:
+    """One, and it is the fifth document kind: the payload a client sends to record a
+    person's own assertion.
+
+    It had a schema and no example, which is the shape of gap this file exists to close —
+    a generated schema with nothing committed to validate against it will describe whatever
+    the models said the day it was generated, and nothing would notice if it stopped.
+
+    The target is deliberately a node the *ledger* fixtures hold, so a reader comparing the two
+    documents sees one that resolves; and ``exists`` is left `None` rather than `True` because
+    the request is built before anything has looked. That is what `None` is for, and a fixture
+    that claimed `True` would be a fixture asserting a resolution it never performed.
+    """
+    return {
+        "own_wallet": AnnotationRequest(
+            target=GraphRef(
+                kind=GraphRefKind.NODE,
+                key="address:bitcoin:1Nq1B3dMztBkfzWm2wJZ6XnQfMhK4K3aVx",
+            ),
+            kind=AnnotationKind.OWN_WALLET,
+            assertion="This address is one of ours; it received the July proceeds.",
+            author="fixture",
+            basis="the address is in our custody report for that month",
+            evidence_urls=("https://example.invalid/custody/2026-07",),
+        ),
+        "correction": AnnotationRequest(
+            target=GraphRef(
+                kind=GraphRefKind.EDGE,
+                key="t1:out:0",
+                exists=False,
+                note="the edge is not in the document this was recorded against",
+            ),
+            kind=AnnotationKind.CORRECTION,
+            assertion="The recipient's label was read from the wrong column.",
+            author="fixture",
+            basis="compared against the provider's own JSON for the transaction",
+        ),
+    }
+
+
 #: Anything that reads as an instant, wherever it appears in a document. Provenance
 #: timestamps are recorded at fetch time and so differ on every run, in the middle of
 #: otherwise stable evidence — which is why pinning only the document's own ``generated_at``
@@ -461,14 +506,25 @@ def _narrative_documents() -> dict[str, Any]:
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 
+#: The fixture instant, spelled the way the models spell an instant.
+#:
+#: **`Z` and not `+00:00`, and the difference was a real wart.** `_pin_timestamps` used to write
+#: `FIXTURE_INSTANT.isoformat()`, which is `+00:00`; pydantic serialises a UTC-aware datetime as
+#: `Z`. Both denote the same instant and both parse, so nothing failed — but it meant the
+#: committed fixture was not a document this library produces, and a fixture's whole claim is
+#: that it is one. `tests/ledger/test_contract.py` found it by round-tripping every committed
+#: document rather than three fields of one.
+FIXTURE_INSTANT_SPELLED = FIXTURE_INSTANT.isoformat().replace("+00:00", "Z")
+
+
 def _pin_timestamps(value: Any) -> Any:
-    """Replace every instant with the fixture instant, recursively."""
+    """Replace every instant with the fixture instant, recursively — value *and* spelling."""
     if isinstance(value, dict):
         return {key: _pin_timestamps(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_pin_timestamps(item) for item in value]
     if isinstance(value, str) and _TIMESTAMP.match(value):
-        return FIXTURE_INSTANT.isoformat()
+        return FIXTURE_INSTANT_SPELLED
     return value
 
 
@@ -511,6 +567,10 @@ def render_all() -> str:
         name: _stable(document) for name, document in _narrative_documents().items()
     }
 
+    annotation_requests: dict[str, Any] = {
+        name: _stable(document) for name, document in _annotation_requests().items()
+    }
+
     return (
         json.dumps(
             {
@@ -519,6 +579,7 @@ def render_all() -> str:
                 "derivations": derivations,
                 "narratives": narratives,
                 "overlays": overlays,
+                "annotation_requests": annotation_requests,
             },
             indent=2,
             sort_keys=True,

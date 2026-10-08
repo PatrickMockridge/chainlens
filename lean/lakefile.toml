@@ -1,0 +1,40 @@
+# The Lean development of the calculus in `docs/calculus/`.
+#
+# The toolchain is pinned by `lean-toolchain`, and the dependencies by `lake-manifest.json`;
+# both are committed, so a build here is the same build everywhere.
+#
+# **Mathlib is a dependency and only one module uses it.** Eight of the nine layers are stated
+# against Lean core alone, so `Chainlens.Dim`, `Chainlens.Vocabulary` and `Chainlens.Exactness`
+# build with nothing fetched; `Chainlens.Sensitivity` is the one that needs real analysis, and
+# it is the reason the requirement is here at all.
+#
+# **A first build needs the olean cache, and it is a minute rather than an afternoon:**
+#
+#     lake exe cache get      # ~2 minutes, 7,335 files, downloads prebuilt oleans
+#     lake build
+#
+# `lake exe cache get` needs the network once, and is ~2 minutes for 7,335 files. Without it, `lake build` would compile Mathlib
+# from source. An earlier version of this file said the development "depends on nothing" and
+# that layer 5 was droppable because of the cost — that was a blocker asserted rather than
+# measured, and the measurement is the two minutes above.
+name = "chainlens"
+version = "0.1.0"
+defaultTargets = ["Chainlens"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+# Pinned to the Mathlib release that matches `lean-toolchain`, not to `master`. An unpinned
+# Mathlib resolves to whatever is current, and `lake update` took the toolchain with it --
+# from `v4.24.0` to a release candidate, silently, in a file this repository commits for the
+# express purpose of a build being the same build everywhere. A dependency does not get to
+# choose this development's Lean version.
+rev = "v4.24.0"
+
+[[lean_lib]]
+name = "Chainlens"

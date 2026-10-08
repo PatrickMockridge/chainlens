@@ -10,6 +10,16 @@ is the only sanctioned bridge between the two representations.
 ``Decimal`` is used rather than ``float`` throughout, and sub-satoshi inputs are
 rejected loudly instead of silently rounded.
 
+**The number eight is not written down here.** It belongs to the vocabulary table's row
+for bitcoin and is read from there, because it used to appear in this module four times —
+as this module's ``SATS_PER_BTC``, as a ``scaleb(-8)``, as a ``Decimal("0.00000001")``
+and as ``format_btc``'s default and its bound — beside an ``18`` in the EVM adapter, an
+``_BTC_DECIMALS`` in the esplora adapter and a unit table in the verifier. Four spellings
+in one file and three more outside it is four and three chances for a rendering to be
+wrong by a power of ten, and the failure is silent.
+
+## `BTC_DECIMALS`
+
 ## `SATS_PER_BTC`
 
 ## `btc_to_sats`
@@ -27,7 +37,7 @@ Convert a BTC amount to integer satoshis, rejecting sub-satoshi precision.
 ## `format_btc`
 
 ```python
-format_btc(sats: int, *, places: int = 8, thousands: bool = False) -> str
+format_btc(sats: int, *, places: int = BTC_DECIMALS, thousands: bool = False) -> str
 ```
 
 Format a satoshi amount as a human-readable BTC string.

@@ -63,6 +63,11 @@ social = ["pillow>=11"]       # image sniffing + downscaling before we send to v
 # accepts -- HTML, DOCX, ODT, RTF, email, plain text -- is read with the standard library, so a
 # corpus of notes alone needs neither.
 notes = ["pypdf>=5", "pillow>=10"]
+# Reading a preset from a YAML file. Not core: the shipped presets are rendered into
+# the keycard by `tools/gen_shipped_data.py`, so nothing in the library needs a YAML
+# parser at run time — `presets/records.py::load_file` is the one caller, and it imports
+# it where it is used. See that function for the regression this prevents.
+presets = ["pyyaml>=6.0"]
 all = ["chainlens[eth,nx,pandas,social]"]
 
 # The library's first console script. It has to stay importable without triggering provider
@@ -106,7 +111,7 @@ dev = [
   "pre-commit>=4.0",
   "pycoin>=0.92",             # dev-only cross-validation oracle for the BTC codec
   "types-PyYAML>=6.0",        # stubs for parsing cassettes in tests
-  "pyyaml>=6.0",              # the case-study manifest; dev-side only
+  "pyyaml>=6.0",              # the case-study manifest and the preset generator
   "pillow>=11",               # the [social] extra, exercised by the media tests
   "pypdf>=5",
   "anthropic>=1.11,<2",       # the [llm] extra, exercised by the extractor's tests
@@ -168,12 +173,23 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "ARG", "S101", "SLF001"]
 "docs/**" = ["ANN", "E501"]
+# Generated from `specs/vocabulary/vocabulary.toml` by `tools/gen_vocabulary.py`. Its shape is
+# the generator's -- one row's note is a prose sentence and is not going to be wrapped to the
+# line length by hand, because the next `make vocabulary` would undo it. What holds it to the
+# table is `tests/vocabulary/test_the_table.py`, not the linter.
+"src/chainlens/vocabulary/_generated.py" = ["E501"]
+"src/chainlens/_shipped_card.py" = ["E501"]
 
 [tool.ruff.format]
 # Markdown code fences are hand-aligned for readability (comments line up with
 # the code they annotate). Reformatting them would break that alignment without
 # improving anything a reader sees.
-exclude = ["**/*.md"]
+#
+# The generated vocabulary module is here for the same reason in the other direction: it is
+# emitted, not written, so a formatter pass over it is a change the next `make vocabulary`
+# reverts -- and a `--check` failure that fixes itself on the following command is worse than
+# no check at all.
+exclude = ["**/*.md", "src/chainlens/vocabulary/_generated.py", "src/chainlens/_shipped_card.py"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chainlens"]
@@ -201,6 +217,14 @@ ignore_missing_imports = true
 # --------------------------------------------------------------------------- #
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `tools/` on the path so a test can import a repository tool rather than re-implementing it.
+# `gen_vocabulary.py` lives there rather than beside its test, because it is a tool with a
+# `--check` mode a person runs; the wire contract's generator lives in `tests/docs/` because
+# nothing but the docs build ever runs it. `tests/vocabulary/test_the_table.py` imports it.
+#
+# This is an ini option rather than a `conftest.py` in the test directory, because mypy refuses
+# two files named `conftest.py` in one run and `tests/conftest.py` already exists.
+pythonpath = ["tools"]
 # `--allowed-hosts` carves loopback out of `--block-network`. The property that flag protects
 # is "no test reaches the live internet", and a loopback socket is not the internet — which
 # matters because the local server is tested by starting it and calling it, and blocking every

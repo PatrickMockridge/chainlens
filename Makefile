@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -32,8 +32,8 @@ format:  ## Auto-fix lint and format in place
 	uv run ruff check --fix .
 	uv run ruff format .
 
-typecheck:  ## Typecheck src, tests, and the case-study tools
-	uv run mypy src tests case-study/tools
+typecheck:  ## Typecheck src, tests, the case-study tools and the repository tools
+	uv run mypy src tests tools case-study/tools
 
 test:  ## Run the test suite with the network blocked
 	uv run pytest --block-network
@@ -129,6 +129,49 @@ verify:  ## Re-run every case-study claim record and check the verdicts reproduc
 
 case-study-check:  ## The case study's static guardrails, no network needed
 	uv run pytest tests/case_study -q
+
+shipped-card:  ## Render the package's own presets into the shipped keycard
+	# The YAML under `presets/data/` is the hand-edited source; this renders it into
+	# `src/chainlens/_shipped_card.py` so that the library's data and a holder's are one object
+	# rather than two. The *guard* is `tests/keycard/test_shipped.py`, which fails on a diff and
+	# runs in `make check` -- same arrangement as `make vocabulary` and `make contract`.
+	uv run python tools/gen_shipped_data.py
+
+vocabulary:  ## Regenerate the vocabulary table's artefacts
+	# One hand-written table (`specs/vocabulary/vocabulary.toml`) and four generated files: the
+	# asset JSON Schema, the Python rows, the Lean rows, and the Lean gate that carries one
+	# `#print axioms` per row. The *guard* is `tests/vocabulary/test_the_table.py`, which fails
+	# on a diff and runs in `make check` -- same arrangement as `make contract` and
+	# `make docs-reference`, and for the same reason.
+	uv run python tools/gen_vocabulary.py
+
+vocabulary-check:  ## Report whether the table and its artefacts agree, writing nothing
+	uv run python tools/gen_vocabulary.py --check
+
+lean:  ## Build the Lean development of the calculus
+	# Not part of `check`: a Lean toolchain is not a Python dependency, and this is the one
+	# target in the file that needs a tool that `uv sync` will not install. The guard that
+	# does run everywhere is `tests/calculus/test_lean_claims.py`, and it reads the gate
+	# files and the sources rather than building anything.
+	#
+	# One module needs Mathlib, so a first run needs its olean cache -- a minute, not the
+	# hours a from-source build takes:
+	#     cd lean && lake exe cache get
+	cd lean && lake build
+
+lean-gate:  ## Refuse a proof in the calculus that rests on an axiom we did not agree to
+	# The tool builds first, and that is not a convenience: `lake env lean` resolves an
+	# `import` to the compiled olean rather than to the source, so a `sorry` added and not
+	# rebuilt is invisible to the gate, which then reports a clean result for a proof with a
+	# hole in it. See the tool's docstring, where that was measured rather than reasoned about.
+	uv run python tools/check_lean_axioms.py
+
+calculus:  ## The whole calculus: the build, the gate, the vocabulary, the correspondence
+	$(MAKE) lean
+	$(MAKE) vocabulary-check
+	uv run python tools/gen_shipped_data.py --check
+	$(MAKE) lean-gate
+	uv run pytest tests/calculus tests/vocabulary -q
 
 build:  ## Build wheel and sdist
 	uv build

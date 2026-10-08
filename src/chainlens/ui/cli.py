@@ -26,7 +26,7 @@ import webbrowser
 from collections.abc import Sequence
 from pathlib import Path
 
-from chainlens.exceptions import ConfigurationError, LLMError
+from chainlens.exceptions import ChainlensError, ConfigurationError, LLMError
 from chainlens.ledger.annotate import stamp
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.derive import derive_finding
@@ -68,6 +68,7 @@ from chainlens.verify.extract import (
     Extractor,
     StructuredLLM,
 )
+from chainlens.verify.ollama import DEFAULT_LOCAL_MODEL
 from chainlens.verify.parsing import parse_claim
 from chainlens.verify.records import (
     ClaimRecord,
@@ -215,6 +216,21 @@ async def _read_for_cli(root: Path, reader: VisionReader) -> Corpus:
             await close()
 
 
+def _llm(args: argparse.Namespace) -> StructuredLLM:
+    """The model to read and answer with: this machine's, or the configured endpoint's.
+
+    A local model is not a fallback for a failed endpoint — it is the other answer to the same
+    question, and the reason to pick it is that the material never leaves the machine. It is also
+    the one that kept working when the hosted path stalled on a real corpus and sat on a socket for
+    forty-four minutes, which is what prompted offering it at all.
+    """
+    if args.local:
+        from chainlens.verify.ollama import OllamaLLM
+
+        return OllamaLLM(model=args.local_model)
+    return AnthropicLLM(model=args.model)
+
+
 def _load_corpus(path: Path) -> Corpus:
     """A corpus that was saved, read back.
 
@@ -274,6 +290,54 @@ def _notes_with(corpus: Corpus, mentions: Sequence[AddressMention]) -> str:
     return f"{len({mention.note for mention in mentions})} note(s)"
 
 
+async def _lookup_for_cli(args: argparse.Namespace, corpus: Corpus) -> int:
+    """Ask the chain about every address the corpus holds, and report what it said.
+
+    No model and no credential on either chain: the addresses come from the material by pattern
+    rather than by reading it, and the answers come from a provider. This is the pass that turns
+    screenshots into facts about the chain, and everything a model might add is downstream of it.
+    """
+    from chainlens.models.enums import Chain
+    from chainlens.notes.lookup import LookupReport, lookup_addresses, summarise
+
+    mentions = address_mentions(corpus)
+    if not any(mention.usable for mention in mentions):
+        print("no address in this corpus can be looked up; run --addresses to see why")
+        return 0
+
+    registry = get_registry()
+    providers: dict[Chain, Provider] = {}
+    for chain in {mention.chain for mention in mentions if mention.usable and mention.chain}:
+        try:
+            providers[chain] = _address_provider(args.provider, args.chain or chain.value)
+        except (ChainlensError, SystemExit) as exc:
+            print(f"  no provider for {chain.value}: {exc}", file=sys.stderr)
+    if not providers:
+        raise SystemExit(
+            "no provider could be resolved for any chain in this corpus; "
+            f"available: {', '.join(sorted(registry.keys()))}"
+        )
+
+    lookups = await lookup_addresses(mentions, providers=providers)
+    print()
+    for item in lookups:
+        print(f"  {item.format()}")
+        if item.notes:
+            print(f"    in {', '.join(item.notes[:3])}{' …' if len(item.notes) > 3 else ''}")
+    print()
+    print(summarise(lookups))
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            strict_dumps(LookupReport(lookups=lookups, corpus=corpus.root)),
+            encoding="utf-8",
+        )
+        print(f"wrote {out}")
+    return 0
+
+
 async def _write_claims(args: argparse.Namespace, corpus: Corpus, client: StructuredLLM) -> int:
     """Read the corpus into claims, choose among them, and write them as records.
 
@@ -293,7 +357,12 @@ async def _write_claims(args: argparse.Namespace, corpus: Corpus, client: Struct
     print()
     readings = await claims_from_corpus(corpus, client)
     for reading in readings:
-        if reading.report.dropped:
+        if reading.failure is not None:
+            # Reported rather than swallowed. A note that produced no reading is not a note that
+            # claimed nothing, and a run that hid the difference would look complete when it was
+            # not — the failure this whole layer is arranged against.
+            print(f"  not read: {reading.note} — {reading.failure}")
+        elif reading.report is not None and reading.report.dropped:
             print(f"  {reading.note}: {reading.report.format()}")
 
     kept = claims_of(readings)
@@ -507,6 +576,9 @@ def _command_notes(args: argparse.Namespace) -> int:
         _report_addresses(corpus)
         return 0
 
+    if args.lookup:
+        return anyio.run(_lookup_for_cli, args, corpus)
+
     if args.labels_out:
         return _write_labels(args, corpus)
 
@@ -514,7 +586,7 @@ def _command_notes(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        client = AnthropicLLM(model=args.model)
+        client = _llm(args)
     except ConfigurationError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -948,6 +1020,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     notes.add_argument(
+        "--lookup",
+        action="store_true",
+        help=(
+            "ask the chain about every address the corpus holds — balance, whether it is a "
+            "contract, and its activity — and report what it said. No model, no credential"
+        ),
+    )
+    notes.add_argument(
         "--addresses",
         action="store_true",
         help=(
@@ -981,6 +1061,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="the category the source puts it in (default: service)",
     )
     notes.add_argument("--label-licence", default="", help="what the label file may be used under")
+    notes.add_argument(
+        "--local",
+        action="store_true",
+        help=(
+            "read and answer with a model on this machine (ollama at 127.0.0.1:11434) instead of "
+            "the configured endpoint — nothing leaves the machine, and no credential is used"
+        ),
+    )
+    notes.add_argument(
+        "--local-model",
+        default=DEFAULT_LOCAL_MODEL,
+        help=f"the ollama model to use with --local (default: {DEFAULT_LOCAL_MODEL})",
+    )
     notes.add_argument("--provider", help="a registered provider name, for a label lookup")
     notes.add_argument("--chain", help="a chain, so a provider can be chosen for you")
     notes.add_argument("--model", default=DEFAULT_MODEL, help=f"default {DEFAULT_MODEL}")

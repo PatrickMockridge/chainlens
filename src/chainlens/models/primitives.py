@@ -22,12 +22,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import AwareDatetime, Field, model_validator
 
 from chainlens.models.base import LensModel, Provenance
 from chainlens.models.enums import (
+    AmountTag,
     AssetKind,
     Chain,
     ChainModel,
@@ -35,9 +36,14 @@ from chainlens.models.enums import (
     ScriptType,
     TxStatus,
 )
+from chainlens.vocabulary import row_for
+
+if TYPE_CHECKING:  # the flow module imports *this* one, so the edge runs one way only
+    from chainlens.models.flows import ValueFlow
 
 __all__ = [
     "Address",
+    "Amount",
     "AssetRef",
     "Balance",
     "Block",
@@ -47,6 +53,7 @@ __all__ = [
     "Transfer",
     "TxInput",
     "TxOutput",
+    "require_asset_on_chain",
 ]
 
 
@@ -76,6 +83,24 @@ class AssetRef(LensModel):
         """The native coin of a chain (BTC, ETH, ...)."""
         return cls(chain=chain, kind=AssetKind.NATIVE, symbol=symbol, decimals=decimals)
 
+    @classmethod
+    def of_native(cls, chain: Chain) -> AssetRef:
+        """The native coin of ``chain``, with the symbol and decimals the vocabulary table states.
+
+        **This is the constructor adapters should use**, and the other one is the reason it
+        exists. ``native(chain, symbol="BTC", decimals=8)`` puts two of the table's facts in an
+        adapter's source, and there were three adapters doing exactly that — one of which said
+        ``"BTC"`` and ``8`` regardless of the chain it had been handed, so a Litecoin provider
+        described its amounts as bitcoin. Reading the row makes the adapter say nothing about
+        which coin it is serving.
+
+        Note what is *not* here: any fallback. A chain the table does not name raises rather
+        than getting a plausible-looking default, because a rendered amount in the wrong units
+        is a wrong answer with no symptom.
+        """
+        row = row_for(chain)
+        return cls(chain=chain, kind=AssetKind.NATIVE, symbol=row.symbol, decimals=row.decimals)
+
     @property
     def is_native(self) -> bool:
         return self.kind is AssetKind.NATIVE
@@ -83,6 +108,159 @@ class AssetRef(LensModel):
     @property
     def is_token(self) -> bool:
         return self.kind is not AssetKind.NATIVE
+
+
+class Amount(LensModel):
+    """A magnitude, and the three things that say what it is.
+
+    The **dimension** is ``(chain, asset)`` and the **tag** is how the number was arrived at.
+    Both are carried, so that ``eth_amount + btc_amount`` and ``recorded + apportioned`` are
+    refused by the value rather than by a reader noticing a comment. See
+    `docs/calculus/dimensions.md` for why the first is a group and
+    `docs/calculus/exactness.md` for why the second is not one.
+
+    **``chain`` is here as well as on ``asset``, and that is the point rather than a
+    redundancy.** ``AssetRef`` carries its own chain and nothing made the two agree, so a
+    transfer on Bitcoin holding an Ethereum asset was constructible — and one was constructed
+    while the coincidence estimator was being fixed. The validator below is what refuses it, and
+    every model that pairs a chain with an asset carries the same one.
+
+    **Why ``asset`` is an `AssetRef` and not the vocabulary table's row id.** The plan for this
+    layer had it as the row id, which is the right identity for a *native* asset and does not
+    exist for a token: this library reads ERC-20 transfers, and a token's identity is its
+    contract at an address on a chain. `AssetRef` already carries exactly ``(chain, kind,
+    contract)``, which is that identity, and it distinguishes mainnet from testnet where a
+    symbol would not — two chains, after all, both write ``BTC``.
+    """
+
+    chain: Chain
+    asset: AssetRef
+    base_units: int
+    tag: AmountTag = AmountTag.RECORDED
+
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> Amount:
+        require_asset_on_chain(self.chain, self.asset)
+        return self
+
+    @classmethod
+    def of(cls, transfer: Transfer, *, tag: AmountTag | None = None) -> Amount:
+        """The amount a :class:`Transfer` carries, as a value that knows what it is.
+
+        **The tag defaults to what the transfer already says and not to `RECORDED`.** A
+        transfer with ``ambiguous`` set is one whose sender attribution is a convention of this
+        library — a share of a co-funded output — and calling that recorded would be the exact
+        substitution the tag exists to prevent. Pass ``tag`` to override; the override is here
+        because a caller who has decided the apportionment is good enough should say so out
+        loud rather than have it inferred.
+        """
+        return cls(
+            chain=transfer.chain,
+            asset=transfer.asset,
+            base_units=transfer.amount,
+            tag=tag
+            if tag is not None
+            else (AmountTag.APPORTIONED if transfer.ambiguous else AmountTag.RECORDED),
+        )
+
+    @classmethod
+    def of_flow(cls, flow: ValueFlow, *, tag: AmountTag | None = None) -> Amount:
+        """The amount a :class:`~chainlens.models.flows.ValueFlow` carries.
+
+        The third of three adapters, and there are three because **the three models spell "how was
+        this arrived at" three different ways**: a transfer says ``ambiguous``, a flow says
+        ``apportioned``, and a balance says nothing because a provider read it. Reconciling three
+        spellings into one tag is what an adapter is for, and it is here rather than at each call
+        site so that the reconciliation happens once.
+        """
+        return cls(
+            chain=flow.chain,
+            asset=flow.asset,
+            base_units=flow.amount,
+            tag=tag
+            if tag is not None
+            else (AmountTag.APPORTIONED if flow.apportioned else AmountTag.RECORDED),
+        )
+
+    @classmethod
+    def of_balance(cls, balance: Balance, *, tag: AmountTag | None = None) -> Amount:
+        """The amount a :class:`Balance` carries. A balance is read from a provider, so it is
+        recorded unless a caller says otherwise."""
+        return cls(
+            chain=balance.chain,
+            asset=balance.asset,
+            base_units=balance.amount,
+            tag=tag if tag is not None else AmountTag.RECORDED,
+        )
+
+    def amount_to_decimal(self) -> Decimal:
+        """Render the amount in whole units, exactly.
+
+        Raises:
+            ValueError: if the asset's decimals are unknown.
+        """
+        return _to_decimal(self.base_units, self.asset)
+
+    def with_tag(self, tag: AmountTag) -> Amount:
+        """The same amount, tagged differently.
+
+        For the one case where a caller changes their mind about how a figure was arrived at —
+        accepting an apportioned share as good enough, say. Kept as a method rather than a
+        mutable field so that the change is visible at the call site.
+        """
+        return self.model_copy(update={"tag": tag})
+
+    def __add__(self, other: Amount) -> Amount:
+        """Sum two amounts of the same dimension.
+
+        Raises:
+            TypeError: the two are not the same dimension. This is the operation the layer
+                exists to refuse: adding a satoshi to a wei is not a large number, it is a
+                meaningless one, and it would carry no sign of having happened. The result is
+                tagged `APPORTIONED` unless both sides are recorded, because a sum inherits its
+                weakest term — a total whose components include an inference is an inference.
+        """
+        if self.chain is not other.chain or self.asset != other.asset:
+            raise TypeError(
+                f"cannot add {self.asset.symbol or self.asset.kind} on {self.chain.value} to "
+                f"{other.asset.symbol or other.asset.kind} on {other.chain.value}: different "
+                f"dimensions"
+            )
+        tag = (
+            AmountTag.RECORDED
+            if self.tag is AmountTag.RECORDED and other.tag is AmountTag.RECORDED
+            else AmountTag.APPORTIONED
+        )
+        return Amount(
+            chain=self.chain,
+            asset=self.asset,
+            base_units=self.base_units + other.base_units,
+            tag=tag,
+        )
+
+
+def require_asset_on_chain(chain: Chain, asset: AssetRef) -> None:
+    """Refuse an asset that does not belong to the chain it is paired with.
+
+    **One function rather than a shared base model, and the reason is the wire contract.** A
+    mixin carrying the `chain` and `asset` fields would put them first in every inheriting
+    model, which reorders the properties in the generated JSON Schema — a diff in a committed
+    artefact, for a rule that has nothing to do with field order. A function per model keeps the
+    contract byte-identical, which is what makes this tranche's "no wire change" checkable
+    rather than merely intended.
+
+    One function rather than a copy of the check per model, though, because the check is one
+    fact and four models need it: four copies is four places for the rule to drift, which is the
+    failure the vocabulary table exists to prevent one layer down.
+
+    Raises:
+        ValueError: the asset's chain is not the chain it is paired with.
+    """
+    if asset.chain != chain:
+        raise ValueError(
+            f"the asset is on {asset.chain.value} and the value is on {chain.value}: a transfer "
+            f"cannot move an asset that is not on its own chain"
+        )
 
 
 def _to_decimal(amount: int, asset: AssetRef) -> Decimal:
@@ -104,6 +282,11 @@ class Balance(LensModel):
     block_height: int | None = None
     provenance: Provenance | None = None
 
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> Balance:
+        require_asset_on_chain(self.chain, self.asset)
+        return self
+
     def amount_to_decimal(self) -> Decimal:
         """Render the amount in whole units, exactly.
 
@@ -111,6 +294,11 @@ class Balance(LensModel):
             ValueError: if ``asset.decimals`` is unknown.
         """
         return _to_decimal(self.amount, self.asset)
+
+    def to_amount(self) -> Amount:
+        """This balance as an :class:`Amount`. A balance is read from a provider, so it is
+        recorded; `Amount.of_balance` is the same thing with the tag made explicit."""
+        return Amount.of_balance(self)
 
 
 class TxInput(LensModel):
@@ -222,9 +410,22 @@ class Transfer(LensModel):
     is_change: bool = False
     provenance: Provenance | None = None
 
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> Transfer:
+        require_asset_on_chain(self.chain, self.asset)
+        return self
+
     def amount_to_decimal(self) -> Decimal:
         """Render the amount in whole units, exactly."""
         return _to_decimal(self.amount, self.asset)
+
+    def to_amount(self) -> Amount:
+        """This transfer as an :class:`Amount`, tagged by how the value was arrived at.
+
+        An ``ambiguous`` transfer is apportioned and not recorded — see
+        :meth:`Amount.of`, which is the same thing with the tag overridable.
+        """
+        return Amount.of(self)
 
 
 class Transaction(LensModel):

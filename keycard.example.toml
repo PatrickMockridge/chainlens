@@ -1,0 +1,54 @@
+# The template for your own keycard.
+#
+# Copy it to `keycard.toml`, state the values you are entitled to use, and check it:
+#
+#     python tools/check_keycard.py keycard.toml
+#
+# A card is *the data an answer rests on*: the thresholds a finding is computed under, and the
+# attributions you assert about an address. It is **not** where an API key goes — a credential is
+# a secret and a citation is not, and putting one here would mean a file you can share is a file
+# you must not.
+#
+# **Every value here is invented, and this file validates as it stands.** A test enforces that, so
+# a template that stopped being loadable fails the build rather than the person who copied it.
+#
+# Everything is optional. **A card states what it states and inherits the rest**, per item: this
+# one names two thresholds and keeps the library's values for the other three, and it names one
+# address and keeps the shipped assertions about every other. Stating a whole section to change
+# one value would make "I know about this address" mean "I know nothing about any other".
+
+schema_version = 1
+
+# Who is asserting the right to use these values. Nothing in chainlens reads it; it is here so a
+# card found in a directory says whose it is, which is the first question a reader of one asks.
+keyholder = "Example Analysis Ltd"
+
+[thresholds]
+
+# How much wider a hedge word makes an amount's band, as a fraction of the amount. This is the
+# largest free parameter in the whole calculation and it moves the likelihood ratio roughly
+# linearly, which is why it is stated here rather than assumed: 5% is the library's convention,
+# and a reader of a finding is entitled to know which value produced the number in front of them.
+hedge_tolerance = 0.10
+
+# How many of a sender's transactions to walk before declaring the scan truncated. A claim about
+# a busy exchange address is not one this machinery can price, and saying so is better than
+# walking a million transactions to find out that it could have.
+scan_limit = 500
+
+# The other three, shown for reference and left unstated so the library's values apply:
+#
+#     min_joint_successes = 10
+#     z_95 = 1.959963984540054
+#     transfer_limit = 50
+
+# An attribution you assert, and the citation for it. `source` is required and must be a URL: a
+# label with no source is an assertion nobody can check, which is a claim dressed as a finding.
+#
+# `kind` is a *category* and not an identity — "this is an exchange" is what a source says, where
+# `name` is the label itself. See `chainlens.models.enums.EntityKind`.
+[[labels]]
+address = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+name = "EXAMPLE - a stand-in for an address you know about"
+kind = "service"
+source = "https://example.invalid/our-custody-report"

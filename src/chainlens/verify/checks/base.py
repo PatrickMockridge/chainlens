@@ -21,6 +21,7 @@ from typing import TypeVar
 
 from pydantic import Field, model_validator
 
+from chainlens.keycard import SHIPPED
 from chainlens.models.base import LensModel
 from chainlens.models.calculation import Binding, Input, UnboundKind
 from chainlens.models.enums import ClaimVerdict
@@ -45,12 +46,14 @@ T = TypeVar("T")
 #: scan truncated. A claim about a busy exchange address is not one this machinery
 #: can price, and saying so is better than walking a million transactions to find
 #: out that it could have.
-DEFAULT_SCAN_LIMIT = 2_000
+#: Read from the shipped keycard; see the module that owns it.
+DEFAULT_SCAN_LIMIT: int = SHIPPED.resolved_thresholds.scan_limit
 
 #: How many transfers one finding will carry in its evidence. The cap is reported
 #: when it is hit: a partial list that looks complete is worse than a short one
 #: that says it is short.
-DEFAULT_TRANSFER_LIMIT = 50
+#: Read from the shipped keycard.
+DEFAULT_TRANSFER_LIMIT: int = SHIPPED.resolved_thresholds.transfer_limit
 
 
 @dataclass(frozen=True, slots=True)

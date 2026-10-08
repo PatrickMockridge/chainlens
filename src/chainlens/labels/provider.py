@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from chainlens.config import Settings
+from chainlens.keycard import Keycard
 from chainlens.labels.records import LabelFile, load_directory
 from chainlens.models.entities import Label
 from chainlens.models.enums import Chain
@@ -66,6 +67,7 @@ class LocalLabelProvider(BaseProvider):
         directory: Path | None = None,
         name: str | None = None,
         settings: Settings | None = None,
+        card: Keycard | None = None,
     ) -> None:
         super().__init__(settings=settings)
         if chain is not None:
@@ -74,6 +76,11 @@ class LocalLabelProvider(BaseProvider):
             self.name = name
         self._files: tuple[LabelFile, ...] = tuple(load_directory(directory))
         self._by_address: Mapping[str, tuple[Label, ...]] = self._merge()
+        #: The holder's own assertions, overlaid at the point of answering rather than merged in
+        #: here. A card is a value a caller passes, so a provider built without one answers exactly
+        #: as it did before this parameter existed -- and two providers in one process can answer
+        #: under two cards, which a merge at construction could not do.
+        self._card = card
 
     @property
     def files(self) -> tuple[LabelFile, ...]:
@@ -107,11 +114,22 @@ class LocalLabelProvider(BaseProvider):
 
     @provides(Capability.LABELS)
     async def get_labels(self, addresses: Sequence[str]) -> Mapping[str, tuple[Label, ...]]:
-        """What every committed source says about each address.
+        """What every committed source says about each address, and what a card adds.
 
         An address nobody has labelled gets an empty tuple rather than being left out. The
         distinction is the checker's: ``check_label`` reads a *missing* key as a source that was
         never asked, and an empty tuple as a source that was asked and holds nothing — which are
         different findings with different remedies.
+
+        **The card overlays per address and is concatenated rather than preferred.** A holder
+        saying an address is theirs does not withdraw what a sanctions list says about it, and the
+        provider's own rule for two files disagreeing applies unchanged: an address two sources
+        describe yields both descriptions, each carrying whoever asserted it. Preferring one would
+        make the provider an adjudicator, which it has no standing to be — and a card that could
+        *silence* a sanctions label by naming the address would be a capability nobody asked for.
         """
-        return {address: self._by_address.get(address, ()) for address in addresses}
+        from_disk = {address: self._by_address.get(address, ()) for address in addresses}
+        if self._card is None:
+            return from_disk
+        from_card = self._card.labels_for(addresses)
+        return {address: from_disk[address] + from_card.get(address, ()) for address in addresses}

@@ -35,6 +35,9 @@ CREDENTIAL_PATTERN = re.compile(
 FREE_PROVIDER_HOSTS = (
     "mempool.space",
     "blockstream.info",
+    # A free, keyless, open-source explorer serving public chain data — the first indexed Ethereum
+    # host whose responses this project may record.
+    "eth.blockscout.com",
     "127.0.0.1",
     "localhost",
 )

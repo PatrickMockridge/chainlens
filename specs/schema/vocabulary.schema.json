@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PatrickMockridge/chainlens/specs/schema/vocabulary.schema.json",
+  "title": "The vocabulary table",
+  "description": "One hand-written table describing every chain and asset this library may name. Compiled into `specs/schema/asset.schema.json`, `src/chainlens/vocabulary/_generated.py` and `lean/Chainlens/Vocabulary.lean` by `tools/gen_vocabulary.py`. Nothing reads this file at runtime: it is the declared shape, and the generator's refusals are what enforce it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assets"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bumped when the shape of a row changes. The generator refuses a version it does not know rather than guessing at a newer one."
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One row per (chain, asset) pair. The order is the order the dimension basis is written in, so reordering it permutes every exponent vector at once and is a change to the calculus rather than a tidy-up.",
+      "items": { "$ref": "#/$defs/asset" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "chain", "symbol", "decimals", "families"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "The row's identity, and what appears on the wire where a symbol would. Lowercase, because a symbol is a display convention and two chains may share one."
+        },
+        "chain": {
+          "type": "string",
+          "enum": [
+            "bitcoin",
+            "bitcoin_testnet",
+            "litecoin",
+            "dogecoin",
+            "bitcoin_cash",
+            "ethereum"
+          ],
+          "description": "A member of `chainlens.models.enums.Chain`. Closed, and checked by the generator against the enum rather than restated from it."
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The ticker a person writes. Not an identity: testnet bitcoin and mainnet bitcoin both render as BTC."
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 36,
+          "description": "How many decimal places one whole unit has. **This is the number the whole table exists to hold once.** The codec, the adapters, the asset reference and Lean read it from here; none restates it."
+        },
+        "families": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["base58check", "bech32", "eip55"] },
+          "description": "The address families *this library* can validate for the chain, not every family the chain has used. Empty is refused: a row with no family would claim an asset whose addresses cannot be checked at all, which is a provider rather than a coin."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional prose. Carried into the Python row and the Lean row, so a reader of either finds the same qualification."
+        }
+      }
+    }
+  }
+}

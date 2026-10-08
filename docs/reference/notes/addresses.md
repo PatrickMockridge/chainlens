@@ -40,6 +40,7 @@ One address-shaped string in one note, and what can be done with it.
 - `context` `str` — the words around it, collapsed and clipped — enough to see which row or sentence the mention belongs to.
 - `transcribed` `bool` — whether the note's text came from a model reading an image. This is the fact that decides how much the mention is worth, and it is per-note rather than per-corpus: a corpus of PDFs and screenshots read by the same command has some mentions a model touched and some it did not.
 - `warnings` `tuple[str, ...]` — the note's own warnings, carried verbatim, so a caution raised about the note is attached to the mentions read out of it rather than left behind at the note.
+- `position` `int` — where the token sits in the *raw* note text, as a character offset. Carried because the collapsed ``context`` has destroyed the line structure, and anything asking "were these two on the same row?" needs to know which line each one is on. This was computed and thrown away until a caller needed it.
 
 **Members**
 
@@ -51,6 +52,7 @@ One address-shaped string in one note, and what can be done with it.
 - `context` = ''
 - `transcribed` = False
 - `warnings` = ()
+- `position` = Field(default=0, ge=0)
 
 ### `usable`
 

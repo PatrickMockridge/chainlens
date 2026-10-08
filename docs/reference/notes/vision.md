@@ -20,11 +20,11 @@ so the reader has to be one that reads text rather than recognises glyphs.
 
 **The answer is validated locally, always.** The reply is unwrapped and then checked against
 `chainlens.notes.corpus.ImageText`, exactly as every other model answer in this library is
-checked: a reply that is not the shape asked for is a failure, not something to be salvaged.
-*That check is load-bearing rather than belt-and-braces*, because the schema cannot be sent: ollama
-can constrain a reply with ``format``, and on this model and version doing so is unusable — see
-`OllamaVision.read_image` for the measurement. The schema goes in the prompt and the check
-does the rest, which is how every other endpoint without schema enforcement is handled here.
+checked: a reply that is not the shape asked for is a failure, not something to be salvaged. The
+schema is *also* sent, as ollama's ``format``, so that drifting is impossible in the first place —
+see `OllamaVision.read_image`, which carries two measurements of that and the reason the
+earlier one did not generalise. Neither replaces the other: the schema constrains the generation,
+and the check is what makes a reply that drifts anyway cost a refusal rather than a fiction.
 
 **A transcription is not a record, and no model this library can run makes it one.** Read the same
 table of mining-pool addresses with two models and both are fluent and both are wrong: ``minicpm-v``
@@ -38,10 +38,6 @@ is checked for identifiers that could not be addresses (`chainlens.notes.identif
 corpus is allowed to rely on it, and what failed the check is reported beside the note. The default
 model is the one measured to make *fewer* errors, at sixty-five seconds a screenshot rather than
 sixteen — not one that makes none.
-
-## `OllamaError`
-
-Ollama is not answering, or does not have the model.
 
 ## `OllamaVision`
 
@@ -78,7 +74,5 @@ aclose() -> None
 ```
 
 ## `DEFAULT_VISION_MODEL`
-
-## `OLLAMA_URL`
 
 ## `READ_TIMEOUT_SECONDS`

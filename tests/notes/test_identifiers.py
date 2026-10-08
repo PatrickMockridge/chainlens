@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import pytest
 
+from chainlens.models.enums import Chain
 from chainlens.notes.identifiers import (
+    chain_for,
+    chains_for,
     implausible_addresses,
     plausible_addresses,
     truncated_addresses,
 )
+from chainlens.vocabulary import ASSETS
 
 #: Real, and each on a different address family, so a check that got one of the three wrong would
 #: fail here rather than in a corpus.
@@ -223,3 +227,73 @@ class TestTheThreeAgreeWithEachOther:
         # Which is why the corpus layer drops the first when the second explains it: reporting this
         # as a mangled address would send a reader looking for a character the image never showed.
         assert text.startswith(LONG_PREFIX)
+
+
+class TestTheChainsTheTableNames:
+    """**The layer reads the vocabulary table now, and these are the addresses that proves it.**
+
+    The pattern used to hardcode `[13]` and `bc1` — two chains' prefixes spelled into a *shape*,
+    in the module whose whole job is asking what an address is. The table named `base58check` for
+    litecoin, the codec could validate it, and a litecoin address was **not found at all**.
+    """
+
+    def test_a_litecoin_address_is_recognised(self) -> None:
+        address = "LKDyUEtTR1HXamkiEphisSiBJu6o3ZPE34"
+        assert chain_for(address) is Chain.LITECOIN
+        assert plausible_addresses(f"paid to {address}") == (address,)
+
+    def test_a_dogecoin_address_is_recognised(self) -> None:
+        """Dogecoin names `base58check` alone, and its P2SH byte is `0x16` — a *second* version
+        per chain, which the prefix test could not have expressed at all."""
+        assert chain_for("D597kHXGdkwkryF9oGhz9Bp1ypTpD1u99Z") is Chain.DOGECOIN
+        assert chain_for("9rSHsR8xxKEkKW8Tbv3SGBdiwnQGWZ4bdM") is Chain.DOGECOIN
+
+    def test_a_testnet_address_is_recognised(self) -> None:
+        assert chain_for("mfWyW5fc9NUj75YAnFgoRLrjxgLDn2MMth") is Chain.BITCOIN_TESTNET
+        assert chain_for("tb1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysnl25zw8") is Chain.BITCOIN_TESTNET
+
+    def test_a_bech32_chain_is_identified_by_its_human_readable_part(self) -> None:
+        """Three `…1` prefixes now, one per bech32 chain the table names."""
+        assert chain_for("bc1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysn4v0345") is Chain.BITCOIN
+        assert chain_for("ltc1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysn3s44dy") is Chain.LITECOIN
+
+    def test_an_address_two_chains_share_is_reported_as_both(self) -> None:
+        """**Bitcoin and Bitcoin Cash kept the same version bytes when they forked**, so a legacy
+        address on `1…` is genuinely both chains' and no amount of decoding separates them. The
+        information is not in the string.
+
+        `chain_for` answers the same way every run; `chains_for` is what a caller asks when it
+        needs to know the answer is not single.
+        """
+        address = "112D2adLM3UKy4Z4giRbReR6gjWuvHUqB"
+        assert chains_for(address) == (Chain.BITCOIN, Chain.BITCOIN_CASH)
+        assert chain_for(address) is Chain.BITCOIN, "the first row wins, deterministically"
+
+    def test_a_single_chain_address_is_reported_as_one(self) -> None:
+        assert chains_for("LKDyUEtTR1HXamkiEphisSiBJu6o3ZPE34") == (Chain.LITECOIN,)
+
+    def test_the_shape_is_not_so_loose_that_a_suffix_matches(self) -> None:
+        """The flaw the general shape introduced and the lookbehind fixed.
+
+        A transaction hash is sixty-four hex characters, every one of them valid base58 — so a
+        `{26,35}` shape with no *lookbehind* matched its last twenty-seven and reported the tail of
+        a txid as a mangled address. The prefix test this replaced anchored on `1` or `3`, which
+        happens to exclude a hex blob, so nothing saw the flaw until the shape became general.
+        """
+        assert implausible_addresses(f"tx 0x{'ab' * 32}") == ()
+        assert plausible_addresses(f"tx 0x{'ab' * 32}") == ()
+
+    def test_only_the_chains_the_table_names_can_be_attributed(self) -> None:
+        """The honest limit: a row is where a family's parameters come from, so a chain with no row
+        has no version byte to match and no human-readable part — and is not guessed at."""
+        named = {row.chain for row in ASSETS}
+        for token in (
+            "LKDyUEtTR1HXamkiEphisSiBJu6o3ZPE34",
+            "112D2adLM3UKy4Z4giRbReR6gjWuvHUqB",
+            "bc1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysn4v0345",
+            "0xea674fdde714fd979de3edf0f56aa9716b898ec8",
+        ):
+            assert {chain.value for chain in chains_for(token)} <= named
+        assert chain_for("SdrDNLpVvMZ1rQtHRkqa4nFbRvnRGKH3Ej") is None, (
+            "a solana-shaped address is on no chain this table names"
+        )

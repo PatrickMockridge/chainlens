@@ -23,6 +23,7 @@ from chainlens.exceptions import SchemaError
 from chainlens.models.base import Provenance
 from chainlens.models.enums import AssetKind, Chain, FlowVia, TxStatus
 from chainlens.models.primitives import AssetRef, Block, LogEntry, Transaction, Transfer
+from chainlens.vocabulary import decimals_for
 
 __all__ = [
     "TRANSFER_TOPIC",
@@ -43,7 +44,12 @@ __all__ = [
 #: ``keccak256("Transfer(address,address,uint256)")``.
 TRANSFER_TOPIC = "0x" + keccak256(b"Transfer(address,address,uint256)").hex()
 
-WEI_DECIMALS = 18
+#: How many decimal places one ether has, from the vocabulary table.
+#:
+#: Kept as a module-level name because adapters import it, but it is no longer a second place
+#: the number `18` is written down: it reads the table's row for ethereum, which is the row a
+#: change to the number would change.
+WEI_DECIMALS = decimals_for(Chain.ETHEREUM)
 
 _ADDRESS_TOPIC_BYTES = 40
 
@@ -248,7 +254,7 @@ def parse_rpc_transaction(
         method_id=input_hex[:10] if len(input_hex) >= 10 else None,
         logs=logs,
         fee=fee,
-        fee_asset=AssetRef.native(chain, symbol="ETH", decimals=WEI_DECIMALS),
+        fee_asset=AssetRef.of_native(chain),
         provenance=provenance,
     )
 

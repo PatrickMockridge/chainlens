@@ -41,6 +41,7 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
+from chainlens.keycard import SHIPPED
 from chainlens.models.base import LensModel, Provenance
 from chainlens.models.calculation import OperationKind
 from chainlens.models.enums import VerbalScale
@@ -64,11 +65,13 @@ __all__ = [
 
 #: The z for a 95% interval. Hard-coded rather than pulled from scipy: the whole
 #: module is standard-library only so it stays importable everywhere.
-_Z_95 = 1.959963984540054
+#: The normal quantile for a 95% interval, read from the shipped keycard.
+_Z_95: float = SHIPPED.resolved_thresholds.z_95
 
 #: Below this many joint successes the interval on `p` spans more than an order of
 #: magnitude and no verbal band is defensible.
-MIN_JOINT_SUCCESSES = 10
+#: Below this many joint successes the estimate is not reported, read from the shipped keycard.
+MIN_JOINT_SUCCESSES: int = SHIPPED.resolved_thresholds.min_joint_successes
 
 
 class NullModel(StrEnum):

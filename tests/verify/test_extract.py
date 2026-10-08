@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, cast
 
+import anyio
 import httpx
 import pytest
 from pydantic import SecretStr
@@ -331,6 +332,27 @@ class TestWhatTheExtractorDoes:
         assert "prompt v3" in report.format()
 
 
+class _NeverAnswers:
+    """A messages endpoint that accepts the call and then holds it open.
+
+    Standing in for the measured failure: a socket nobody closes, where the process accumulates no
+    CPU and the per-chunk HTTP timeout never trips because nothing is arriving to be timed. It is
+    the ``messages`` object itself rather than an outcome, because the point is that no outcome
+    ever arrives.
+    """
+
+    async def parse(self, **kwargs: object) -> object:
+        await anyio.sleep_forever()
+        raise AssertionError("unreachable")
+
+
+class _HangingClient:
+    """A client whose messages endpoint never answers."""
+
+    def __init__(self) -> None:
+        self.messages = _NeverAnswers()
+
+
 class TestTheRealClient:
     """With an injected stub client: the mapping, the refusals, and the missing key."""
 
@@ -363,6 +385,29 @@ class TestTheRealClient:
         llm = self._llm(self._Response(parsed))
         answer = await llm.complete(system="s", prompt="p", shape=DraftExtraction)
         assert answer["claims"][0]["quote"] == QUOTE
+
+    @pytest.mark.anyio
+    async def test_a_call_that_never_answers_is_abandoned_rather_than_waited_on(self) -> None:
+        """The only bound there is.
+
+        The HTTP client's timeout is per chunk, so a response that dribbles a token every few
+        seconds never trips it — measured, a run over forty notes sat on one connection for
+        forty-four minutes having used one second of CPU. Without a wall-clock deadline the call
+        is held open indefinitely, and a corpus makes that call once per note.
+        """
+        llm = AnthropicLLM(model="claude-opus-5", client=_HangingClient(), deadline=0.05)
+
+        with pytest.raises(LLMError, match="did not answer within"):
+            await llm.complete(system="s", prompt="p", shape=DraftExtraction)
+
+    @pytest.mark.anyio
+    async def test_the_deadline_says_what_to_do_about_it(self) -> None:
+        """A deadline that fires on a genuinely slow endpoint is a reading thrown away, so the
+        refusal has to name the knob rather than just report the wait."""
+        llm = AnthropicLLM(model="claude-opus-5", client=_HangingClient(), deadline=0.05)
+
+        with pytest.raises(LLMError, match="raise the deadline"):
+            await llm.complete(system="s", prompt="p", shape=DraftExtraction)
 
     @pytest.mark.anyio
     async def test_the_shape_is_what_the_sdk_is_asked_to_hold_the_model_to(self) -> None:

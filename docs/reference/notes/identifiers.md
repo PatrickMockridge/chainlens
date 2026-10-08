@@ -42,7 +42,32 @@ against.
 chain_for(token: str) -> Chain | None
 ```
 
-Which chain the token's prefix claims it is an address on, if either.
+Which chain the token is an address on, or ``None``.
+
+The first of `chains_for`'s answers, in the vocabulary table's row order — so a token
+that is genuinely two chains' resolves the same way every run. **A caller that needs to know
+the answer is ambiguous should ask `chains_for`**, and the note this module writes for an
+unusable token says which chains were considered, so a reader of a corpus is not handed a
+silent choice.
+
+## `chains_for`
+
+```python
+chains_for(token: str) -> tuple[Chain, ...]
+```
+
+Every chain the token could be an address on, by decoding it rather than by its prefix.
+
+**A tuple and not one chain, because the answer is genuinely plural for some tokens.**
+Bitcoin and Bitcoin Cash kept the same base58check version bytes when they forked, so a legacy
+address on `1…` is *both* chains' and no amount of decoding separates them — the information
+is not in the string. Returning one would be a confident answer to a question with two.
+
+What this buys over the prefix test it replaced is the other direction: an address is
+attributed by its **checksum and version byte**, which a rewrite cannot fake, rather than by
+the first character. A litecoin address decodes to version ``0x30`` and the table says that is
+litecoin's; a bech32 address names its human-readable part and the table says which chain that
+is.
 
 ## `implausible_addresses`
 

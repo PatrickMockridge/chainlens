@@ -24,8 +24,13 @@ import {
   LedgerTransactionNodeSchema,
   LedgerDocumentSchema,
 } from "./ledger.gen";
-import { DerivationDocumentSchema, DerivationNodeSchema } from "./derivation.gen";
+import {
+  DerivationDocumentSchema,
+  DerivationNodeSchema,
+} from "./derivation.gen";
 import { EvidenceItemSchema, OverlayDocumentSchema } from "./overlay.gen";
+import { AnnotationRequestDocumentSchema } from "./annotation_request.gen";
+import { NarrativeDocumentSchema } from "./narrative.gen";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..");
@@ -34,10 +39,14 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 
-const fixtures = readJson(join(repo, "tests", "ledger", "fixtures", "graph-document.json"));
+const fixtures = readJson(
+  join(repo, "tests", "ledger", "fixtures", "graph-document.json"),
+);
 const schemas = {
   ledger: readJson(join(here, "..", "..", "schema", "ledger.schema.json")),
-  derivation: readJson(join(here, "..", "..", "schema", "derivation.schema.json")),
+  derivation: readJson(
+    join(here, "..", "..", "schema", "derivation.schema.json"),
+  ),
   overlay: readJson(join(here, "..", "..", "schema", "overlay.schema.json")),
 } as const;
 
@@ -47,10 +56,25 @@ type Family = Record<string, unknown>;
 // The fixtures Python produced
 // --------------------------------------------------------------------------- #
 describe("the fixtures Python produced", () => {
+  // **Five families, and two of them were missing.** `narrative` was in the fixture and
+  // validated by nobody, and `annotation_request` had a generated schema and no committed
+  // example at all — so a schema describing a shape Python had stopped producing would have
+  // kept reporting green on this side. The Python half notices that now too; see
+  // `test_every_document_kind_has_a_committed_example`.
   const cases: [string, Family, { parse: (value: unknown) => unknown }][] = [
     ["ledgers", fixtures["ledgers"] as Family, LedgerDocumentSchema],
-    ["derivations", fixtures["derivations"] as Family, DerivationDocumentSchema],
+    [
+      "derivations",
+      fixtures["derivations"] as Family,
+      DerivationDocumentSchema,
+    ],
     ["overlays", fixtures["overlays"] as Family, OverlayDocumentSchema],
+    ["narratives", fixtures["narratives"] as Family, NarrativeDocumentSchema],
+    [
+      "annotation_requests",
+      fixtures["annotation_requests"] as Family,
+      AnnotationRequestDocumentSchema,
+    ],
   ];
 
   for (const [family, documents, schema] of cases) {
@@ -65,7 +89,8 @@ describe("the fixtures Python produced", () => {
   it("covers every node kind the graph can hold", () => {
     const kinds = new Set<string>();
     for (const document of Object.values(fixtures["ledgers"] as Family)) {
-      for (const node of (document as { nodes: { kind: string }[] }).nodes) kinds.add(node.kind);
+      for (const node of (document as { nodes: { kind: string }[] }).nodes)
+        kinds.add(node.kind);
     }
     expect(kinds).toEqual(new Set(["address", "transaction", "unparsed"]));
   });
@@ -81,7 +106,8 @@ describe("the fixtures Python produced", () => {
 
   it("carries evidence that did not resolve, because reporting it is the point", () => {
     for (const document of Object.values(fixtures["overlays"] as Family)) {
-      const unjoined = (document as { unjoined: { exists: boolean }[] }).unjoined;
+      const unjoined = (document as { unjoined: { exists: boolean }[] })
+        .unjoined;
       expect(unjoined.length).toBeGreaterThan(0);
       expect(unjoined.every((ref) => ref.exists === false)).toBe(true);
     }
@@ -92,23 +118,33 @@ describe("the fixtures Python produced", () => {
 // Strictness, which is the property fixtures cannot give
 // --------------------------------------------------------------------------- #
 describe("strictness", () => {
-  const document = Object.values(fixtures["ledgers"] as Family)[0] as Record<string, unknown>;
+  const document = Object.values(fixtures["ledgers"] as Family)[0] as Record<
+    string,
+    unknown
+  >;
 
   it("refuses a key the models do not have", () => {
-    expect(() => LedgerDocumentSchema.parse({ ...document, sneaked: 1 })).toThrow();
+    expect(() =>
+      LedgerDocumentSchema.parse({ ...document, sneaked: 1 }),
+    ).toThrow();
   });
 
   it("refuses a key inside a node, not only at the root", () => {
-    const nodes = structuredClone((document as { nodes: unknown[] }).nodes) as Record<
-      string,
-      unknown
-    >[];
+    const nodes = structuredClone(
+      (document as { nodes: unknown[] }).nodes,
+    ) as Record<string, unknown>[];
     nodes[0] = { ...nodes[0], sneaked: 1 };
     expect(() => LedgerDocumentSchema.parse({ ...document, nodes })).toThrow();
   });
 
   it("refuses a node whose kind is not one the contract names", () => {
-    expect(() => LedgerAddressNodeSchema.parse({ key: "k", chain: "bitcoin", kind: "widget" })).toThrow();
+    expect(() =>
+      LedgerAddressNodeSchema.parse({
+        key: "k",
+        chain: "bitcoin",
+        kind: "widget",
+      }),
+    ).toThrow();
   });
 });
 
@@ -144,7 +180,10 @@ function schemaFor(definition: string): ZodObjectish | undefined {
 }
 
 describe("every field the schema describes exists in the generated type", () => {
-  const definitions = (schemas.ledger["$defs"] ?? {}) as Record<string, { properties?: object }>;
+  const definitions = (schemas.ledger["$defs"] ?? {}) as Record<
+    string,
+    { properties?: object }
+  >;
 
   it("has a zod object for a representative definition", () => {
     // Guards the check itself: if the registry stopped resolving, the assertions below would
@@ -153,7 +192,11 @@ describe("every field the schema describes exists in the generated type", () => 
     expect(schemaFor("LedgerEdge")).toBeDefined();
   });
 
-  for (const definition of ["LedgerAddressNode", "LedgerTransactionNode", "LedgerEdge"]) {
+  for (const definition of [
+    "LedgerAddressNode",
+    "LedgerTransactionNode",
+    "LedgerEdge",
+  ]) {
     it(`${definition} has exactly the fields the schema names`, () => {
       const zod = schemaFor(definition);
       const declared = Object.keys(definitions[definition]?.properties ?? {});
@@ -167,21 +210,34 @@ describe("every field the schema describes exists in the generated type", () => 
       string,
       { properties?: object }
     >;
-    const declared = Object.keys(derivationDefs["DerivationNode"]?.properties ?? {});
+    const declared = Object.keys(
+      derivationDefs["DerivationNode"]?.properties ?? {},
+    );
     expect(declared.length).toBeGreaterThan(0);
-    expect(Object.keys(schemaFor("DerivationNode")?.shape ?? {}).sort()).toEqual(declared.sort());
+    expect(
+      Object.keys(schemaFor("DerivationNode")?.shape ?? {}).sort(),
+    ).toEqual(declared.sort());
   });
 
   it("EvidenceItem has exactly the fields the schema names", () => {
-    const overlayDefs = (schemas.overlay["$defs"] ?? {}) as Record<string, { properties?: object }>;
+    const overlayDefs = (schemas.overlay["$defs"] ?? {}) as Record<
+      string,
+      { properties?: object }
+    >;
     const declared = Object.keys(overlayDefs["EvidenceItem"]?.properties ?? {});
     expect(declared.length).toBeGreaterThan(0);
-    expect(Object.keys(schemaFor("EvidenceItem")?.shape ?? {}).sort()).toEqual(declared.sort());
+    expect(Object.keys(schemaFor("EvidenceItem")?.shape ?? {}).sort()).toEqual(
+      declared.sort(),
+    );
   });
 
   it("the root document has exactly the fields the schema names", () => {
-    const declared = Object.keys((schemas.ledger["properties"] ?? {}) as object);
-    expect(Object.keys(LedgerDocumentSchema.shape).sort()).toEqual(declared.sort());
+    const declared = Object.keys(
+      (schemas.ledger["properties"] ?? {}) as object,
+    );
+    expect(Object.keys(LedgerDocumentSchema.shape).sort()).toEqual(
+      declared.sort(),
+    );
   });
 });
 
@@ -191,15 +247,32 @@ describe("every field the schema describes exists in the generated type", () => 
 describe("the recursive derivation node", () => {
   it("validates a tree nested several levels deep", () => {
     const leaf = { id: "leaf", kind: "caveat", label: "a caveat" };
-    const branch = { id: "b", kind: "claim", label: "a claim", children: [leaf] };
-    const root = { id: "root", kind: "claim", label: "the root", children: [branch] };
+    const branch = {
+      id: "b",
+      kind: "claim",
+      label: "a claim",
+      children: [leaf],
+    };
+    const root = {
+      id: "root",
+      kind: "claim",
+      label: "the root",
+      children: [branch],
+    };
 
-    const parsed = DerivationNodeSchema.parse(root) as { children: { children: unknown[] }[] };
+    const parsed = DerivationNodeSchema.parse(root) as {
+      children: { children: unknown[] }[];
+    };
     expect(parsed.children[0]?.children).toHaveLength(1);
   });
 
   it("refuses a nested node the contract does not describe", () => {
-    const root = { id: "root", kind: "claim", label: "x", children: [{ id: "bad" }] };
+    const root = {
+      id: "root",
+      kind: "claim",
+      label: "x",
+      children: [{ id: "bad" }],
+    };
     expect(() => DerivationNodeSchema.parse(root)).toThrow();
   });
 });

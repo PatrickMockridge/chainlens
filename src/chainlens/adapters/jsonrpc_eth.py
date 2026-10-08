@@ -27,7 +27,6 @@ from typing import Any
 
 from chainlens.adapters._evm import (
     TRANSFER_TOPIC,
-    WEI_DECIMALS,
     address_to_topic,
     erc20_transfer_from_log,
     parse_hex_int,
@@ -99,7 +98,7 @@ class JsonRpcEthProvider(BaseProvider):
         return read_provenance(self.name, endpoint=f"{self.rpc_url}#{endpoint}")
 
     def _native_asset(self) -> AssetRef:
-        return AssetRef.native(self.chain, symbol="ETH", decimals=WEI_DECIMALS)
+        return AssetRef.of_native(self.chain)
 
     def _raise_on_error(self, error: Any, *, method: str) -> None:
         """Translate a node-reported error into the chainlens tree.

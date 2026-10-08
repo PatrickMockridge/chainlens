@@ -1,4 +1,34 @@
 {
+  "annotation_requests": {
+    "correction": {
+      "assertion": "The recipient's label was read from the wrong column.",
+      "author": "fixture",
+      "basis": "compared against the provider's own JSON for the transaction",
+      "evidence_urls": [],
+      "kind": "correction",
+      "target": {
+        "exists": false,
+        "key": "t1:out:0",
+        "kind": "edge",
+        "note": "the edge is not in the document this was recorded against"
+      }
+    },
+    "own_wallet": {
+      "assertion": "This address is one of ours; it received the July proceeds.",
+      "author": "fixture",
+      "basis": "the address is in our custody report for that month",
+      "evidence_urls": [
+        "https://example.invalid/custody/2026-07"
+      ],
+      "kind": "own_wallet",
+      "target": {
+        "exists": null,
+        "key": "address:bitcoin:1Nq1B3dMztBkfzWm2wJZ6XnQfMhK4K3aVx",
+        "kind": "node",
+        "note": null
+      }
+    }
+  },
   "derivations": {
     "no_ratio": {
       "claim_id": "claim:b6da67668bf55249",
@@ -101,7 +131,7 @@
                         "kind": "list",
                         "unit": null,
                         "value": [
-                          "2026-01-01T00:00:00+00:00"
+                          "2026-01-01T00:00:00Z"
                         ]
                       },
                       {
@@ -633,7 +663,7 @@
                             "kind": "list",
                             "unit": null,
                             "value": [
-                              "2026-01-01T00:00:00+00:00"
+                              "2026-01-01T00:00:00Z"
                             ]
                           },
                           {
@@ -1639,7 +1669,7 @@
                             "kind": "list",
                             "unit": null,
                             "value": [
-                              "2026-01-01T00:00:00+00:00"
+                              "2026-01-01T00:00:00Z"
                             ]
                           },
                           {
@@ -2567,7 +2597,7 @@
           "assertion": "a venue deposit address",
           "author": "fixture",
           "basis": "listed by the venue",
-          "created_at": "2026-01-01T00:00:00+00:00",
+          "created_at": "2026-01-01T00:00:00Z",
           "evidence_urls": [],
           "id": "annotation:e1b41de9b1788800",
           "kind": "exchange",
@@ -2584,7 +2614,7 @@
           "assertion": "the payment the claim is about",
           "author": "fixture",
           "basis": "matched by amount and recipient",
-          "created_at": "2026-01-01T00:00:00+00:00",
+          "created_at": "2026-01-01T00:00:00Z",
           "evidence_urls": [],
           "id": "annotation:3959b9c07ab76a2f",
           "kind": "note",
@@ -2601,7 +2631,7 @@
           "assertion": "seen in an earlier walk",
           "author": "fixture",
           "basis": "a previous export",
-          "created_at": "2026-01-01T00:00:00+00:00",
+          "created_at": "2026-01-01T00:00:00Z",
           "evidence_urls": [],
           "id": "annotation:4a938776956aab5f",
           "kind": "note",
@@ -3004,7 +3034,7 @@
       ],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
@@ -3614,7 +3644,7 @@
       ],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
@@ -3841,7 +3871,7 @@
       "edges": [],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "1NobodyAddr",
@@ -4020,7 +4050,7 @@
         "address:ethereum:0xccc",
         "address:ethereum:0xcontract"
       ],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "0xaaa",
@@ -4459,7 +4489,7 @@
         "address:bitcoin:3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
         "address:bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
       ],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
@@ -4750,7 +4780,7 @@
       ],
       "elapsed_seconds": null,
       "frontier": [],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "nodes": [
         {
           "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
@@ -4875,7 +4905,7 @@
       "claim_id": "claim:b6da67668bf55249",
       "claim_quote": "carol moved ~30,000 sats to alice",
       "dropped": [],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "limitations": "A posterior probability is shown, and it is **not** the library's. The likelihood ratio is\nthe weight of the evidence; the prior is an assumption supplied by the reader, and the\nposterior is those two combined. Change the prior and the posterior changes with it while\nthe ratio does not, which is why the ratio is the quantity a forensic report gives and the\nprior is the decision-maker's to choose.\n\nThe ratio itself is not robust to how the claim was selected: a forensic ratio is computed\nfor a proposition chosen without regard to the evidence; a claim harvested from a post was\nchosen before this tool saw it; and a claim chosen after a finding was seen was chosen with\nthe evidence in view. Nothing here identifies a person.\n",
       "model": "fixture",
       "paragraphs": [
@@ -4904,7 +4934,7 @@
       "dropped": [
         "a paragraph used figure(s) the derivation does not contain (1905.16): '...'"
       ],
-      "generated_at": "2026-01-01T00:00:00+00:00",
+      "generated_at": "2026-01-01T00:00:00Z",
       "limitations": "A posterior probability is shown, and it is **not** the library's. The likelihood ratio is\nthe weight of the evidence; the prior is an assumption supplied by the reader, and the\nposterior is those two combined. Change the prior and the posterior changes with it while\nthe ratio does not, which is why the ratio is the quantity a forensic report gives and the\nprior is the decision-maker's to choose.\n\nThe ratio itself is not robust to how the claim was selected: a forensic ratio is computed\nfor a proposition chosen without regard to the evidence; a claim harvested from a post was\nchosen before this tool saw it; and a claim chosen after a finding was seen was chosen with\nthe evidence in view. Nothing here identifies a person.\n",
       "model": "fixture",
       "paragraphs": [],
@@ -4996,7 +5026,7 @@
                 "cached": false,
                 "confidence": null,
                 "endpoint": "address",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "fetched_at": "2026-01-01T00:00:00Z",
                 "heuristic": null,
                 "provider": "in-memory",
                 "provider_version": null,
@@ -5038,7 +5068,7 @@
                 "key": "created_at",
                 "kind": "string",
                 "unit": null,
-                "value": "2026-01-01T00:00:00+00:00"
+                "value": "2026-01-01T00:00:00Z"
               },
               {
                 "key": "evidence_urls",
@@ -5153,7 +5183,7 @@
                 "cached": false,
                 "confidence": null,
                 "endpoint": "address",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "fetched_at": "2026-01-01T00:00:00Z",
                 "heuristic": null,
                 "provider": "in-memory",
                 "provider_version": null,
@@ -5285,7 +5315,7 @@
                 "cached": false,
                 "confidence": null,
                 "endpoint": "address",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "fetched_at": "2026-01-01T00:00:00Z",
                 "heuristic": null,
                 "provider": "in-memory",
                 "provider_version": null,
@@ -5464,7 +5494,7 @@
                 "key": "created_at",
                 "kind": "string",
                 "unit": null,
-                "value": "2026-01-01T00:00:00+00:00"
+                "value": "2026-01-01T00:00:00Z"
               },
               {
                 "key": "evidence_urls",
@@ -5577,7 +5607,7 @@
                 "cached": false,
                 "confidence": null,
                 "endpoint": "address",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
+                "fetched_at": "2026-01-01T00:00:00Z",
                 "heuristic": null,
                 "provider": "in-memory",
                 "provider_version": null,
