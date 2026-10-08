@@ -219,12 +219,12 @@ jobs:
           name: dist
           path: dist/
 
-  # Non-blocking early warning: httpx 1.0 is in flight and will be breaking.
-  # We pin <1.0 for users, but we want to hear about the breakage now.
+  # Early warning: httpx 1.0 is in flight and will be breaking. We pin <1.0 for users, so this
+  # job is how we hear about it before they do.
   #
-  # BLOCKED UPSTREAM (measured against httpx 1.0.dev6, 2026-10-08). **This job is red on
-  # purpose and this repository cannot make it green**, because three separate things break and
-  # only the third is ours:
+  # **This job is green while the breakage is somebody else's, and that is the whole design.**
+  # Measured against httpx 1.0.dev6 (2026-10-08), three separate things break and only the third
+  # is ours:
   #
   #   1. `hishel` 1.4.0 — a *core* dependency — fails at import:
   #        hishel/_async_httpx.py: from httpx import RequestNotRead
@@ -233,17 +233,17 @@ jobs:
   #        respx/handlers.py: def __init__(self, transport: httpx.BaseTransport)
   #        AttributeError: module 'httpx' has no attribute 'BaseTransport'
   #   3. `providers/transport.py` uses `httpx.AsyncBaseTransport`, which 1.0 renamed to
-  #      `Transport`. This is the one that is ours, and the <1.0 pin means it cannot be
-  #      migrated to an unreleased API while 0.28 must keep working.
+  #      `Transport`. This is the one that is ours.
   #
-  # **The failure this job reports is `respx`'s, not ours** — it dies during test collection,
-  # before any chainlens module is imported — and an earlier version of this comment said the
-  # breakage was `transport.py`'s. The traceback says otherwise, and the difference matters: it
-  # is the difference between a migration waiting to be done here and a job that will keep
-  # warning about the ecosystem rather than about this library.
+  # Its first version ran `pytest -x -q` and went red on every commit for reason 2 — dying during
+  # collection, before any chainlens module was imported — so a dependency's incompatibility and
+  # this library's own looked identical. **A check that is red on every commit is a check people
+  # stop reading**, which is worse than not having one. The tool now separates the two by looking
+  # at which frame of the traceback raised, and the job's log names whichever library is blocking.
   #
-  # So the signal to watch is `hishel` and `respx` releasing 1.0-compatible versions. When they
-  # do, this job starts reaching our code, and *then* it is worth migrating `transport.py`.
+  # It stays non-blocking even when red, and that is not the same cowardice: a red mark now means
+  # `transport.py` needs migrating, and that migration is impossible while 0.28 must keep working
+  # — so there is nothing to gate on. The job exists to say *when the work becomes possible*.
   httpx-prerelease:
     name: httpx pre-release (non-blocking)
     runs-on: ubuntu-latest
@@ -267,4 +267,7 @@ jobs:
           assert major >= 1, f'expected an httpx prerelease, got {httpx.__version__}'
           print('testing against httpx', httpx.__version__)
           "
-      - run: uv run --no-sync pytest -x -q
+      # The library, or a dependency of it — see the job's comment above. Green while the
+      # breakage is somebody else's; red and specific when it is `transport.py`'s.
+      - name: is the pre-release breaking this library, or something it depends on
+        run: uv run --no-sync python tools/check_httpx_prerelease.py
