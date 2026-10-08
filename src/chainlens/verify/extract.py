@@ -32,6 +32,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+import anyio
 from pydantic import AwareDatetime, ConfigDict, Field, ValidationError, field_validator
 
 from chainlens.config import Settings, get_settings
@@ -69,6 +70,20 @@ DEFAULT_MODEL = "claude-opus-5"
 #: budget problem — which is exactly how this number was found. The refusal path now distinguishes
 #: the two, and the cap is sized so that it does not have to.
 DEFAULT_MAX_TOKENS = 8_000
+
+#: How long one call may take before it is abandoned.
+#:
+#: **This is the only bound there is.** The HTTP client's timeout is *per chunk* — a response that
+#: dribbles a token every few seconds never trips it — so without a wall-clock deadline a stalled
+#: generation holds the call open indefinitely. Found by measurement rather than by reading: a run
+#: over forty notes sat on a single connection for forty-four minutes having used **one second of
+#: CPU**, which is not a model thinking, it is a socket nobody closed.
+#:
+#: It is generous on purpose. A model that thinks before it writes against an 8,000-token cap can
+#: legitimately take minutes, and a deadline that fires on a working call would discard real
+#: readings. Five minutes is far longer than a working call and far shorter than "forever". A
+#: corpus multiplies it by the number of notes, which is the reason it is bounded at all.
+DEFAULT_DEADLINE_SECONDS = 300.0
 
 #: The prompt a model is read with, and the reason it is a constant: it is part of the method, so a
 #: corpus that pins extractions has to pin the text that produced them. Bump
@@ -311,6 +326,7 @@ class AnthropicLLM:
         settings: Settings | None = None,
         client: Any | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        deadline: float = DEFAULT_DEADLINE_SECONDS,
     ) -> None:
         """Args:
         model: which model reads the posts.
@@ -321,6 +337,8 @@ class AnthropicLLM:
         max_tokens: the answer cap. An extraction is short, but the cap has to cover the model's
             thinking as well as its answer — see :data:`DEFAULT_MAX_TOKENS` — and it is here so a
             runaway answer is refused rather than billed.
+        deadline: how long one call may take before it is abandoned. See
+            :data:`DEFAULT_DEADLINE_SECONDS` for why this is not left to the HTTP client.
         """
         if anthropic is None:  # pragma: no cover - exercised by monkeypatching the module
             raise ConfigurationError(
@@ -328,6 +346,7 @@ class AnthropicLLM:
             )
         self._model = model
         self._max_tokens = max_tokens
+        self._deadline = deadline
         if client is not None:
             self._client = client
             return
@@ -360,13 +379,25 @@ class AnthropicLLM:
         happens anyway, and the extraction is a bounded reading task rather than an open one.
         """
         try:
-            response = await self._client.messages.parse(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-                output_format=shape,
-            )
+            # A wall-clock deadline, and it is the only bound there is. The HTTP client's timeout
+            # is *per chunk*: a response that dribbles a token every few seconds never trips it, so
+            # a stalled generation can hold a call open indefinitely. Measured: a run over forty
+            # notes sat on one connection for forty-four minutes having used one second of CPU.
+            with anyio.fail_after(self._deadline):
+                response = await self._client.messages.parse(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                    output_format=shape,
+                )
+        except TimeoutError as exc:
+            raise LLMError(
+                f"the model did not answer within {self._deadline:.0f}s, so the call was "
+                "abandoned. An extraction is a bounded reading and a call that runs longer is "
+                "stalled rather than thorough; raise the deadline if this endpoint is genuinely "
+                "slower than that, and note that a corpus makes the call once per note"
+            ) from exc
         except anthropic.RateLimitError as exc:
             raise LLMError(f"the model rate-limited the request: {_describe(exc)}") from exc
         except anthropic.APIConnectionError as exc:

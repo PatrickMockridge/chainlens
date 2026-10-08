@@ -85,3 +85,7 @@ case-study/corpus/
 # Where posts are dropped for `make ingest` to digest. Both the drops and where they
 # end up are local; only the manifest entry is committed.
 case-study/inbox/
+
+# Claims read out of the default notes corpus, when someone asks for them. Ignored for the same
+# reason `notes/` is: it is derived from material that is itself private.
+/notes-claims/
