@@ -155,4 +155,5 @@
     - [scale](reference/verify/scale.md)
     - [schema](reference/verify/schema.md)
     - [verdicts](reference/verify/verdicts.md)
+  - [vocabulary](reference/vocabulary/index.md)
 <!-- END GENERATED:REFERENCE -->

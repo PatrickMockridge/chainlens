@@ -64,6 +64,25 @@ native(chain: Chain, *, symbol: str | None = None, decimals: int | None = None) 
 
 The native coin of a chain (BTC, ETH, ...).
 
+### `of_native`
+
+```python
+of_native(chain: Chain) -> AssetRef
+```
+
+The native coin of ``chain``, with the symbol and decimals the vocabulary table states.
+
+**This is the constructor adapters should use**, and the other one is the reason it
+exists. ``native(chain, symbol="BTC", decimals=8)`` puts two of the table's facts in an
+adapter's source, and there were three adapters doing exactly that — one of which said
+``"BTC"`` and ``8`` regardless of the chain it had been handed, so a Litecoin provider
+described its amounts as bitcoin. Reading the row makes the adapter say nothing about
+which coin it is serving.
+
+Note what is *not* here: any fallback. A chain the table does not name raises rather
+than getting a plausible-looking default, because a rendered amount in the wrong units
+is a wrong answer with no symptom.
+
 ## `Balance`
 
 An address's holdings of a single asset at a point in time.

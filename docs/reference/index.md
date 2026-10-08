@@ -114,3 +114,4 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.verify.scale`](verify/scale.md)
 - [`chainlens.verify.schema`](verify/schema.md)
 - [`chainlens.verify.verdicts`](verify/verdicts.md)
+- [`chainlens.vocabulary`](vocabulary/index.md)

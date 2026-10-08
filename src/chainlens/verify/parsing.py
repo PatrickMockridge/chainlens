@@ -33,6 +33,7 @@ from chainlens.models.enums import Chain
 from chainlens.models.primitives import AssetRef
 from chainlens.verify.claims import AmountBand, ClaimElements
 from chainlens.verify.schema import Claim, ClaimType
+from chainlens.vocabulary import row_for
 
 __all__ = [
     "HEDGE_TOLERANCE",
@@ -108,26 +109,32 @@ _AMOUNT = re.compile(
 #: refusing it would drop a claim on a formatting detail.
 _MAGNITUDES: dict[str, Decimal] = {"k": Decimal(1_000), "m": Decimal(1_000_000)}
 
-#: Unit token -> (chain, canonical symbol, decimals). Only the chains this library
-#: prices are here; anything else is a claim we cannot check rather than a guess.
-_UNITS: dict[str, tuple[Chain, str, int]] = {
-    "btc": (Chain.BITCOIN, "BTC", 8),
-    "bitcoin": (Chain.BITCOIN, "BTC", 8),
-    "bitcoins": (Chain.BITCOIN, "BTC", 8),
-    "xbt": (Chain.BITCOIN, "BTC", 8),
-    "eth": (Chain.ETHEREUM, "ETH", 18),
-    "ethereum": (Chain.ETHEREUM, "ETH", 18),
-    "ether": (Chain.ETHEREUM, "ETH", 18),
-    "ethers": (Chain.ETHEREUM, "ETH", 18),
+#: Unit token -> chain. **The symbol and the decimals are not here**, and they used to be: this
+#: table spelled out `"BTC", 8` four times and `"ETH", 18` five times, in the one module whose
+#: job is to *read* a number out of a post. What a unit token tells us is *which chain* the post
+#: is talking about; what a bitcoin's decimals are is the vocabulary table's row, and the symbol
+#: is the row's too, so the two are read from there rather than restated here.
+#:
+#: Only the chains this library prices are named; anything else is a claim we cannot check
+#: rather than a guess.
+_UNITS: dict[str, Chain] = {
+    "btc": Chain.BITCOIN,
+    "bitcoin": Chain.BITCOIN,
+    "bitcoins": Chain.BITCOIN,
+    "xbt": Chain.BITCOIN,
+    "eth": Chain.ETHEREUM,
+    "ethereum": Chain.ETHEREUM,
+    "ether": Chain.ETHEREUM,
+    "ethers": Chain.ETHEREUM,
 }
 
 #: Units that already count base units, so no scaling is applied.
-_BASE_UNITS: dict[str, tuple[Chain, str, int]] = {
-    "sat": (Chain.BITCOIN, "BTC", 8),
-    "sats": (Chain.BITCOIN, "BTC", 8),
-    "satoshi": (Chain.BITCOIN, "BTC", 8),
-    "satoshis": (Chain.BITCOIN, "BTC", 8),
-    "wei": (Chain.ETHEREUM, "ETH", 18),
+_BASE_UNITS: dict[str, Chain] = {
+    "sat": Chain.BITCOIN,
+    "sats": Chain.BITCOIN,
+    "satoshi": Chain.BITCOIN,
+    "satoshis": Chain.BITCOIN,
+    "wei": Chain.ETHEREUM,
 }
 
 
@@ -204,14 +211,20 @@ def parse_amount(text: str) -> AmountReading | None:
         return None
 
     unit = match.group("unit").lower()
-    if unit in _BASE_UNITS:
-        chain, symbol, decimals = _BASE_UNITS[unit]
-        scale = 0
-    elif unit in _UNITS:
-        chain, symbol, decimals = _UNITS[unit]
-        scale = decimals
-    else:
+    # The unit token says *which chain* the post is talking about. The vocabulary table says
+    # everything else about the asset — its symbol, its decimals — so none of that is written
+    # in this module any more.
+    base = unit in _BASE_UNITS
+    on_chain = _BASE_UNITS[unit] if base else _UNITS.get(unit)
+    if on_chain is None:
         return None
+    row = row_for(on_chain)
+    chain = Chain(row.chain)
+    symbol = row.symbol
+    decimals = row.decimals
+    # "10 sats" already counts base units, so the number as written is scaled by nothing;
+    # "1.5 BTC" is scaled by the row's decimals.
+    scale = 0 if base else decimals
 
     try:
         written = Decimal(re.sub(r"[,_ ]", "", match.group("number")))

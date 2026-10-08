@@ -66,8 +66,6 @@ _SCRIPT_TYPE_MAP: dict[str, ScriptType] = {
     "unknown": ScriptType.UNKNOWN,
 }
 
-_BTC_DECIMALS = 8
-
 
 def mempool_space_rate_limit() -> RateLimit:
     """The default budget for a free, unpublished Esplora instance.
@@ -142,7 +140,7 @@ class EsploraProvider(BaseProvider):
         return read_provenance(self.name, endpoint=f"{self.base_url.rstrip('/')}/{endpoint}")
 
     def _native_asset(self) -> AssetRef:
-        return AssetRef.native(self.chain, symbol="BTC", decimals=_BTC_DECIMALS)
+        return AssetRef.of_native(self.chain)
 
     @staticmethod
     def _script_type(raw: Mapping[str, Any]) -> ScriptType | None:

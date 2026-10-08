@@ -49,9 +49,14 @@ _DECLARED = re.compile(
 #: list: what it catches is a gate file that silently stopped being scanned - a `GATES`
 #: tuple that lost an entry passes every other check here, because the names it no longer
 #: reads are simply absent from both sides of the comparison.
+#:
+#: It has already earned its place once. `Gate.lean` used to be hand-written and carried
+#: `Chainlens.Dim.rows_length`; when the table's generator took the file over, the table's
+#: row count moved to `Chainlens.Vocabulary.assets_length` and this failed by name rather
+#: than the gate quietly covering one fewer theorem.
 CANARIES = {
     "lean/Chainlens/Axioms.lean": "Chainlens.Dim.weight_dimensionless",
-    "lean/Chainlens/Gate.lean": "Chainlens.Dim.rows_length",
+    "lean/Chainlens/Gate.lean": "Chainlens.Vocabulary.assets_length",
 }
 
 

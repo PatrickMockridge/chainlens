@@ -35,6 +35,7 @@ from chainlens.models.enums import (
     ScriptType,
     TxStatus,
 )
+from chainlens.vocabulary import row_for
 
 __all__ = [
     "Address",
@@ -75,6 +76,24 @@ class AssetRef(LensModel):
     ) -> AssetRef:
         """The native coin of a chain (BTC, ETH, ...)."""
         return cls(chain=chain, kind=AssetKind.NATIVE, symbol=symbol, decimals=decimals)
+
+    @classmethod
+    def of_native(cls, chain: Chain) -> AssetRef:
+        """The native coin of ``chain``, with the symbol and decimals the vocabulary table states.
+
+        **This is the constructor adapters should use**, and the other one is the reason it
+        exists. ``native(chain, symbol="BTC", decimals=8)`` puts two of the table's facts in an
+        adapter's source, and there were three adapters doing exactly that — one of which said
+        ``"BTC"`` and ``8`` regardless of the chain it had been handed, so a Litecoin provider
+        described its amounts as bitcoin. Reading the row makes the adapter say nothing about
+        which coin it is serving.
+
+        Note what is *not* here: any fallback. A chain the table does not name raises rather
+        than getting a plausible-looking default, because a rendered amount in the wrong units
+        is a wrong answer with no symptom.
+        """
+        row = row_for(chain)
+        return cls(chain=chain, kind=AssetKind.NATIVE, symbol=row.symbol, decimals=row.decimals)
 
     @property
     def is_native(self) -> bool:

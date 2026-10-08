@@ -33,7 +33,6 @@ from datetime import datetime
 from typing import Any
 
 from chainlens.adapters._evm import (
-    WEI_DECIMALS,
     address_or_none,
     from_unix_seconds,
     parse_decimal_int,
@@ -155,7 +154,7 @@ class EtherscanCompatProvider(BaseProvider):
         return await self._call("account", action, address=normalize_address(address), **params)
 
     def _native_asset(self) -> AssetRef:
-        return AssetRef.native(self.chain, symbol="ETH", decimals=WEI_DECIMALS)
+        return AssetRef.of_native(self.chain)
 
     # -- parsing -------------------------------------------------------------
 

@@ -160,13 +160,35 @@ def largest_remainder_split(total: int, weights: Sequence[int]) -> list[int]:
     """Split ``total`` across ``weights`` proportionally, summing back to ``total``.
 
     Integer apportionment that neither loses nor invents a unit: take the floors,
-    then hand the remaining units to the largest fractional parts, breaking ties by
-    index so the result is deterministic.
+    then hand the remaining units to the largest remainders, breaking ties by index
+    so the result is deterministic.
 
     Plain rounding would not sum to the total, and a tracer that does not conserve
     value is worse than no tracer at all. Falls back to an equal split when the
     weights carry no information (all zero), and raises on an empty weight list
     rather than returning something meaningless.
+
+    **The shares are computed in integers, and the floats this replaced did not
+    conserve the total.** An earlier version wrote ``total * weight / total_weight``
+    and took ``int()`` of the result, and a float has fifty-three bits of mantissa —
+    so above roughly nine quadrillion the products stop being representable and the
+    truncations lose more than one unit each. Measured on the version before this
+    one:
+
+        largest_remainder_split(10**18 + 7, [1, 1, 1])   -> 999_999_999_999_999_939
+        largest_remainder_split(10**18, [10**18 - 1, 1]) -> 1_000_000_000_000_000_002
+        largest_remainder_split(10**19, [1] * 7)         -> 10_000_000_000_000_000_256
+
+    The first loses sixty-one units and the other two invent units, and all three are
+    wei-scale amounts, which is the scale this function is called at: it apportions a
+    co-funded output's value across its senders, and that value is a real balance.
+    The hypothesis test that was supposed to catch this was bounded at ``total <=
+    10_000_000``, where a float is exact — so the bound was the reason the defect
+    survived, and the bound is what moved.
+
+    ``//`` and ``%`` on two ints give the quotient and the remainder exactly, and the
+    shortfall is then in ``0..count-1`` by construction, so the correction loop is
+    taking what is owed rather than guessing at it.
     """
     count = len(weights)
     if count == 0:
@@ -177,10 +199,11 @@ def largest_remainder_split(total: int, weights: Sequence[int]) -> list[int]:
         weights = [1] * count
         total_weight = count
 
-    exact = [total * weight / total_weight for weight in weights]
-    shares = [int(value) for value in exact]
+    shares = [total * weight // total_weight for weight in weights]
     shortfall = total - sum(shares)
-    order = sorted(range(count), key=lambda index: (-(exact[index] - shares[index]), index))
+    order = sorted(
+        range(count), key=lambda index: (-(total * weights[index] % total_weight), index)
+    )
     for index in order[:shortfall]:
         shares[index] += 1
     return shares

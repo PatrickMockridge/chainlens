@@ -1,7 +1,7 @@
 # Amount identity
 
-**Status: Proved in part.** The module builds and two of its theorems are gated; the layer's
-group claim is the first thing T1 lands.
+**Status: Proved.** `lean/Chainlens/Dim.lean` builds, and every claim below is in `Axioms.lean`
+and rests on nothing outside the three axioms the gate permits.
 
 A dimension is an integer weight for each row of [the vocabulary table](./vocabulary.md). That
 is the whole of the definition, and everything else on this page is a consequence of it.
@@ -38,20 +38,39 @@ rather than implied, because the difference is the reason four of these nine lay
 
 ## The claims, and which are proved
 
-| Claim | Statement | Status |
+| Claim | Theorem | Status |
 |---|---|---|
-| `Chainlens.Dim.rows_length` | the vocabulary has as many rows as it says it has | **Proved** |
-| `Chainlens.Dim.weight_dimensionless` | the zero dimension gives every row the zero weight | **Proved** |
-| a dimension is determined by its weights | `exponents ∘ ofExponents = id` | Specified — T1 |
-| equality of dimensions is decidable | two dimensions are equal iff their weights agree at every row | Specified — T1 |
+| the zero dimension weights nothing | `Chainlens.Dim.weight_dimensionless`, `weight_zero` | Proved |
+| addition adds the weights | `Chainlens.Dim.weight_add` | Proved |
+| negation negates them | `Chainlens.Dim.weight_neg` | Proved |
+| the group laws | `Chainlens.Dim.weight_add_comm`, `weight_add_assoc`, `weight_add_zero`, `weight_add_neg` | Proved |
+| the rows are a basis | `Chainlens.Dim.weight_unit_self`, `weight_unit_other` | Proved |
+| a dimension is its own weights | `Chainlens.Dim.exponents_ofExponents`, `ofExponents_exponents` | Proved |
 
-The two proved ones are small and are here first deliberately: they are what makes the gate cover
-two files, so the tool that refuses a gap in a proof is exercised before anything depends on it.
+**The group laws are stated on the weights and not on `Dimension` itself, and that is the honest
+form rather than a shortcut.** `Dimension` is `List Int`, and `[5]` and `[5, 0]` have the same
+weight at every row and are different lists — so `d = e` is a statement about the *representation*
+and not about the dimension the representation names. The group the page describes is the one whose
+elements are these weights, and stating the laws there says what is meant without pretending the
+lists are already canonical. A later tranche can quotient by that relation and get the list
+equality back; until then this is the claim with less in it and none of it wrong.
 
-`weight_dimensionless` is stated with no bound on which row it is asked about, and that is not an
-oversight. A theorem that assumed `i < rows.length` would be a *weakened hypothesis*: it would
-prove the claim about the rows that happen to be in the table and say nothing about the ones a
-wider table would add.
+**`weight_dimensionless` is stated with no bound on which row it is asked about, and that is not
+an oversight.** A theorem that assumed `i < the row count` would be a *weakened hypothesis*: it
+would prove the claim about the rows that happen to be in the table and say nothing about the ones
+a wider table would add. `weight_zero` is the fact that makes the unbounded statement true — a
+dimension of `n` zeros and the empty list are indistinguishable by their weights, which is the
+only thing a dimension is.
+
+**And `weight_add` is not `List.zipWith`.** It was, and `zipWith` truncates: `[5] + []` would be
+`[]`, a dimension whose weight at row 0 is zero when `[5]`'s is five. Addition pads to the longer
+of the two with the zero weights each dimension already reads as out-of-range, which is what makes
+the weights add.
+
+**Two of the earlier claims on this page have moved to
+[the vocabulary table](./vocabulary.md)**, because they are about the rows and not about the
+algebra: that the table has as many rows as it says, and that each row is the asset it names. They
+live in the generated `Vocabulary.lean`, where a row cannot be added without them.
 
 ## What it is about in the tree
 

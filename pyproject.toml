@@ -168,12 +168,22 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "ARG", "S101", "SLF001"]
 "docs/**" = ["ANN", "E501"]
+# Generated from `specs/vocabulary/vocabulary.toml` by `tools/gen_vocabulary.py`. Its shape is
+# the generator's -- one row's note is a prose sentence and is not going to be wrapped to the
+# line length by hand, because the next `make vocabulary` would undo it. What holds it to the
+# table is `tests/vocabulary/test_the_table.py`, not the linter.
+"src/chainlens/vocabulary/_generated.py" = ["E501"]
 
 [tool.ruff.format]
 # Markdown code fences are hand-aligned for readability (comments line up with
 # the code they annotate). Reformatting them would break that alignment without
 # improving anything a reader sees.
-exclude = ["**/*.md"]
+#
+# The generated vocabulary module is here for the same reason in the other direction: it is
+# emitted, not written, so a formatter pass over it is a change the next `make vocabulary`
+# reverts -- and a `--check` failure that fixes itself on the following command is worse than
+# no check at all.
+exclude = ["**/*.md", "src/chainlens/vocabulary/_generated.py"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chainlens"]
@@ -201,6 +211,14 @@ ignore_missing_imports = true
 # --------------------------------------------------------------------------- #
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `tools/` on the path so a test can import a repository tool rather than re-implementing it.
+# `gen_vocabulary.py` lives there rather than beside its test, because it is a tool with a
+# `--check` mode a person runs; the wire contract's generator lives in `tests/docs/` because
+# nothing but the docs build ever runs it. `tests/vocabulary/test_the_table.py` imports it.
+#
+# This is an ini option rather than a `conftest.py` in the test directory, because mypy refuses
+# two files named `conftest.py` in one run and `tests/conftest.py` already exists.
+pythonpath = ["tools"]
 # `--allowed-hosts` carves loopback out of `--block-network`. The property that flag protects
 # is "no test reaches the live internet", and a loopback socket is not the internet — which
 # matters because the local server is tested by starting it and calling it, and blocking every

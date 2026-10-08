@@ -21,9 +21,21 @@ the actual defects, in the order they were fixed:
 | the preset read a mining table's block heights as amounts | kind → amount |
 | Ethereum address history had no provider at all | chain |
 | an address string could be truncated, garbled, or usable | the raw/canonical boundary |
+| **the apportionment computed a wei-scale split through binary floating point, and did not conserve the total** | precision, again, in the function that exists to conserve it |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
-what makes the sixth one fail at construction instead.
+what makes the next one fail at construction instead.
+
+**The sixth is the one this section found rather than inherited**, and it is worth reading as the
+worked example, because it is the shape the whole thing is for. [Exactness](./exactness.md) states
+that the split conserves the total. Writing the claim down meant asking what the implementation
+actually computes — and the answer was `total * weight / total_weight`, a float — so the claim was
+**false of the code**, at wei scale, by sixty-one units in one measured case and two hundred and
+fifty-six in another. The property test that was supposed to catch it drew its totals from below
+ten million, where a float's mantissa is exact, so the bound was the reason it survived. The
+implementation is integer arithmetic now, the bound is uint256-wide, and the three measured values
+are pinned as cases. See the page and
+`src/chainlens/models/flows.py::largest_remainder_split`.
 
 **And the honest size of this.** This development follows the one in a sibling project, `azoth`,
 whose calculus of thermodynamic dimensionality is larger and whose proofs carry more weight — because
@@ -48,9 +60,9 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 
 | Layer | What it fixes | Lean | Status |
 |---|---|---|---|
-| [Amount identity](./dimensions.md) | what an amount's dimension is, and when two are equal | `Dim.lean` | Proved in part |
-| [The vocabulary table](./vocabulary.md) | which chains, assets and address families may be named, and what each one is | `Vocabulary.lean` | Specified |
-| [Exactness](./exactness.md) | what conserves a unit and what invents one | `Exactness.lean` | Specified |
+| [Amount identity](./dimensions.md) | what an amount's dimension is, and when two are equal | `Dim.lean` | Proved |
+| [The vocabulary table](./vocabulary.md) | which chains, assets and address families may be named, and what each one is | `Vocabulary.lean` | Proved |
+| [Exactness](./exactness.md) | what conserves a unit and what invents one | `Exactness.lean` | Proved |
 | [Raw and canonical](./canonical.md) | the map from a provider's bytes to the canonical view | `Canonical.lean` | Characterised |
 | [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Specified |
 | [Reflection](./reflection.md) | the document round trip | `Contract.lean` | Characterised |

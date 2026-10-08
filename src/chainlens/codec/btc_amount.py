@@ -7,11 +7,22 @@ is the only sanctioned bridge between the two representations.
 
 ``Decimal`` is used rather than ``float`` throughout, and sub-satoshi inputs are
 rejected loudly instead of silently rounded.
+
+**The number eight is not written down here.** It belongs to the vocabulary table's row
+for bitcoin and is read from there, because it used to appear in this module four times —
+as this module's ``SATS_PER_BTC``, as a ``scaleb(-8)``, as a ``Decimal("0.00000001")``
+and as ``format_btc``'s default and its bound — beside an ``18`` in the EVM adapter, an
+``_BTC_DECIMALS`` in the esplora adapter and a unit table in the verifier. Four spellings
+in one file and three more outside it is four and three chances for a rendering to be
+wrong by a power of ten, and the failure is silent.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+
+from chainlens.models.enums import Chain
+from chainlens.vocabulary import decimals_for
 
 __all__ = [
     "SATS_PER_BTC",
@@ -20,9 +31,15 @@ __all__ = [
     "sats_to_btc",
 ]
 
-SATS_PER_BTC = 100_000_000
+#: How many decimal places a satoshi is, from the vocabulary table.
+BTC_DECIMALS = decimals_for(Chain.BITCOIN)
 
-_BTC_PLACES = Decimal("0.00000001")
+#: One bitcoin in satoshis. Derived rather than stated: `100_000_000` is `10 ** 8` and the
+#: `8` is the table's.
+SATS_PER_BTC = 10**BTC_DECIMALS
+
+#: One satoshi, as a `Decimal`.
+_BTC_PLACES = Decimal(1).scaleb(-BTC_DECIMALS)
 
 
 def sats_to_btc(sats: int) -> Decimal:
@@ -37,7 +54,7 @@ def sats_to_btc(sats: int) -> Decimal:
     """
     if not isinstance(sats, int) or isinstance(sats, bool):
         raise TypeError(f"satoshis must be an int, got {type(sats).__name__}")
-    return Decimal(sats).scaleb(-8)
+    return Decimal(sats).scaleb(-BTC_DECIMALS)
 
 
 def btc_to_sats(btc: Decimal | str | int) -> int:
@@ -72,7 +89,7 @@ def btc_to_sats(btc: Decimal | str | int) -> int:
     return total
 
 
-def format_btc(sats: int, *, places: int = 8, thousands: bool = False) -> str:
+def format_btc(sats: int, *, places: int = BTC_DECIMALS, thousands: bool = False) -> str:
     """Format a satoshi amount as a human-readable BTC string.
 
     >>> format_btc(123_456_789)
@@ -82,8 +99,8 @@ def format_btc(sats: int, *, places: int = 8, thousands: bool = False) -> str:
     >>> format_btc(250_000_000_000, thousands=True)
     '2,500.00000000'
     """
-    if not 0 <= places <= 8:
-        raise ValueError(f"places must be between 0 and 8, got {places}")
+    if not 0 <= places <= BTC_DECIMALS:
+        raise ValueError(f"places must be between 0 and {BTC_DECIMALS}, got {places}")
     quantized = sats_to_btc(sats).quantize(Decimal(1).scaleb(-places))
     text = f"{quantized:f}"
     if thousands:
