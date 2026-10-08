@@ -5,6 +5,7 @@ the docstrings in `src/chainlens/` are the single description, and editing a pag
 would be editing a copy. See `tests/docs/gen_reference.py`.
 
 - [`chainlens.adapters`](adapters/index.md)
+- [`chainlens.adapters.blockscout`](adapters/blockscout.md)
 - [`chainlens.adapters.blockstream`](adapters/blockstream.md)
 - [`chainlens.adapters.esplora`](adapters/esplora.md)
 - [`chainlens.adapters.etherscan`](adapters/etherscan.md)

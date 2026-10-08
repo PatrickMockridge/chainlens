@@ -33,6 +33,7 @@
 <!-- GENERATED:REFERENCE -->
 - [chainlens](reference/index.md)
   - [adapters](reference/adapters/index.md)
+    - [blockscout](reference/adapters/blockscout.md)
     - [blockstream](reference/adapters/blockstream.md)
     - [esplora](reference/adapters/esplora.md)
     - [etherscan](reference/adapters/etherscan.md)

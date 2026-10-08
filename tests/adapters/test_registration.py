@@ -18,7 +18,7 @@ from chainlens.models.enums import Chain
 from chainlens.providers.capabilities import Capability
 from chainlens.providers.registry import ProviderRegistry
 
-BUILTINS = {"esplora-mempool", "esplora-blockstream", "jsonrpc-eth", "etherscan"}
+BUILTINS = {"esplora-mempool", "esplora-blockstream", "jsonrpc-eth", "blockscout", "etherscan"}
 
 
 def test_all_builtins_are_registered() -> None:
@@ -62,21 +62,26 @@ def test_one_unconfigured_provider_does_not_break_the_listing() -> None:
     assert "etherscan" not in available
 
 
-def test_capability_filtering_excludes_a_node_that_cannot_enumerate() -> None:
-    """The routing question in its smallest form.
+def test_the_routing_question_has_an_answer_for_ethereum_without_a_key() -> None:
+    """**This used to assert the opposite, and the change is the point.**
 
-    Nothing available for Ethereum can list an address's transactions, because the
-    only providers are a node (no index) and an unconfigured Etherscan. The honest
-    answer is an empty set, not a provider that would return a partial list.
+    Nothing available for Ethereum could list an address's transactions: the only providers were a
+    node, which has no index, and an Etherscan that needs a credential. That made Ethereum address
+    history unreachable for anyone without a key, and made it impossible to commit a walk fixture,
+    since Etherscan's terms forbid recording its data.
     """
     available = ProviderRegistry().available(chain=Chain.ETHEREUM, require=[Capability.ADDRESS_TXS])
-    assert available == {}
+    assert set(available) == {"blockscout"}
 
 
 def test_a_node_is_offered_for_balances_but_not_for_address_histories() -> None:
+    """The node's omission is unchanged and deliberate: a node has no index, so the capability is
+    not claimed rather than half-served. What changed is that something *else* claims it."""
     registry = ProviderRegistry()
     assert registry.available(chain=Chain.ETHEREUM, require=[Capability.BALANCE])
-    assert not registry.available(chain=Chain.ETHEREUM, require=[Capability.ADDRESS_TXS])
+    indexed = registry.available(chain=Chain.ETHEREUM, require=[Capability.ADDRESS_TXS])
+    assert "jsonrpc-eth" not in indexed
+    assert indexed, "and an indexer answers it, so the set is no longer empty"
 
 
 def test_no_available_provider_raises_with_a_useful_message() -> None:
@@ -91,15 +96,15 @@ def test_no_available_provider_raises_with_a_useful_message() -> None:
 
 
 def test_etherscan_is_reachable_when_a_key_is_configured() -> None:
-    """The same registry, with a key present, exposes the indexed provider."""
+    """The same registry, with a key present, exposes both indexed providers."""
     settings = Settings.model_validate({"ETHERSCAN_API_KEY": "test-key"})
     registry = ProviderRegistry(settings=settings)
     available = registry.available(chain=Chain.ETHEREUM)
     assert {"jsonrpc-eth", "etherscan"} <= set(available)
 
-    # And now the address-history question has an answer.
+    # And the address-history question has two answers: the keyless indexer, and this one.
     indexed = registry.available(chain=Chain.ETHEREUM, require=[Capability.ADDRESS_TXS])
-    assert set(indexed) == {"etherscan"}
+    assert set(indexed) == {"blockscout", "etherscan"}
 
 
 def test_etherscan_class_requires_a_key_to_construct() -> None:
