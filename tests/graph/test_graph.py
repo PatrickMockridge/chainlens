@@ -23,7 +23,7 @@ from chainlens.graph import (
     top_by_value,
     value_by_node,
 )
-from chainlens.models.enums import AssetKind, Chain
+from chainlens.models.enums import AmountTag, AssetKind, Chain
 from chainlens.models.flows import AddressRef, EntityRef, FlowGraph, ValueFlow
 from chainlens.models.primitives import AssetRef
 
@@ -34,13 +34,14 @@ def _ref(address: str) -> AddressRef:
     return AddressRef(chain=Chain.BITCOIN, address=address)
 
 
-def _edge(src: str, dst: str, amount: int) -> ValueFlow:
+def _edge(src: str, dst: str, amount: int, *, apportioned: bool = False) -> ValueFlow:
     return ValueFlow(
         chain=Chain.BITCOIN,
         src=_ref(src),
         dst=_ref(dst),
         asset=AssetRef.native(Chain.BITCOIN, symbol="BTC", decimals=8),
         amount=amount,
+        apportioned=apportioned,
         txids=(f"tx-{src}-{dst}",),
         path=(f"address:{Chain.BITCOIN}:{src}", f"address:{Chain.BITCOIN}:{dst}"),
     )
@@ -53,6 +54,57 @@ def _chain_graph() -> FlowGraph:
         seed=_ref(ALICE),
         nodes=(_ref(ALICE), _ref(BOB), _ref(CAROL)),
         edges=(_edge(ALICE, BOB, 100), _edge(BOB, CAROL, 60), _edge(ALICE, CAROL, 40)),
+    )
+
+
+def _mixed_graph() -> FlowGraph:
+    """alice -> carol recorded, bob -> carol apportioned. The total into carol is 100, of which
+    40 is this library's inference from a co-funded input."""
+    return FlowGraph(
+        chain=Chain.BITCOIN,
+        seed=_ref(ALICE),
+        nodes=(_ref(ALICE), _ref(BOB), _ref(CAROL)),
+        edges=(_edge(ALICE, CAROL, 60), _edge(BOB, CAROL, 40, apportioned=True)),
+    )
+
+
+def _mixed_asset_graph() -> FlowGraph:
+    """One node receiving a chain's coin **and a token on that same chain**.
+
+    The same node key is what makes this a category error rather than two separate totals: an
+    address on Ethereum holding both ether and USDC is one node with two units arriving, and adding
+    them produces a number that means nothing. Two chains would have been two node keys and no
+    addition at all — which is what the first version of this fixture got wrong.
+    """
+
+    def node(address: str) -> AddressRef:
+        return AddressRef(chain=Chain.ETHEREUM, address=address)
+
+    usdc = AssetRef(
+        chain=Chain.ETHEREUM, kind=AssetKind.ERC20, symbol="USDC", decimals=6, contract="0xusdc"
+    )
+    return FlowGraph(
+        chain=Chain.ETHEREUM,
+        seed=node(ALICE),
+        nodes=(node(ALICE), node(BOB), node(CAROL)),
+        edges=(
+            ValueFlow(
+                chain=Chain.ETHEREUM,
+                src=node(ALICE),
+                dst=node(CAROL),
+                asset=AssetRef.of_native(Chain.ETHEREUM),
+                amount=60,
+                txids=("tx-eth",),
+            ),
+            ValueFlow(
+                chain=Chain.ETHEREUM,
+                src=node(BOB),
+                dst=node(CAROL),
+                asset=usdc,
+                amount=40,
+                txids=("tx-usdc",),
+            ),
+        ),
     )
 
 
@@ -218,16 +270,48 @@ def test_betweenness_identifies_the_node_paths_pass_through() -> None:
 def test_value_by_node_sums_incoming_and_outgoing() -> None:
     indexed = to_rustworkx(_chain_graph())
     incoming = value_by_node(indexed)
-    assert incoming[_key(CAROL)] == 100  # 60 + 40
+    assert incoming[_key(CAROL)].base_units == 100  # 60 + 40
     outgoing = value_by_node(indexed, incoming=False)
-    assert outgoing[_key(ALICE)] == 140  # 100 + 40
+    assert outgoing[_key(ALICE)].base_units == 140  # 100 + 40
+
+
+def test_a_total_that_includes_an_inference_says_so() -> None:
+    """**The fact the bare `int` discarded.** Measured before this was tagged: a node receiving
+    300 recorded plus 100 apportioned reported `400` with no sign that a quarter of it was this
+    library's inference from a co-funded input — while the edges said `apportioned` all along.
+    """
+    indexed = to_rustworkx(_mixed_graph())
+    total = value_by_node(indexed)[_key(CAROL)]
+    assert total.base_units == 100
+    assert total.tag is AmountTag.APPORTIONED
+
+    recorded_only = value_by_node(to_rustworkx(_chain_graph()))[_key(CAROL)]
+    assert recorded_only.tag is AmountTag.RECORDED, (
+        "a total of recorded edges is recorded, so the tag is not always apportioned"
+    )
+
+
+def test_a_node_no_edge_touches_has_no_amount() -> None:
+    """Absent rather than zero: an amount is an amount *of* something, and a node nothing moved
+    through names no asset — a `0` would have to pick one."""
+    indexed = to_rustworkx(_chain_graph())
+    assert _key(DAVE) not in value_by_node(indexed)
+
+
+def test_a_graph_mixing_assets_raises_instead_of_summing_them() -> None:
+    """The docstring used to say callers "should partition first", which is a rule nothing
+    checked. `Amount.__add__` checks it now: two units is not a large number, it is a meaningless
+    one."""
+    indexed = to_rustworkx(_mixed_asset_graph())
+    with pytest.raises(TypeError, match="different dimensions"):
+        value_by_node(indexed)
 
 
 def test_top_by_value_is_ranked() -> None:
     indexed = to_rustworkx(_chain_graph())
     top = top_by_value(indexed, incoming=True, limit=2)
     # bob and carol both receive 100; ties break on key, so the order is stable.
-    assert [entry.amount for entry in top] == [100, 100]
+    assert [entry.amount.base_units for entry in top] == [100, 100]
     assert {entry.node_key for entry in top} == {_key(BOB), _key(CAROL)}
     assert top_by_value(indexed, incoming=True, limit=1)[0].node_key == _key(BOB)
 

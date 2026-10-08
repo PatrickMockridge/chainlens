@@ -93,6 +93,30 @@ repository was constructing a bad pair, so the hole had never been stepped in. I
 reading the pairing in the type and not by a failure, which is the only way this class of defect
 is ever found.
 
+**And `Amount` has a consumer now, which it did not for three tranches.** It was added, tested, and
+called from nowhere: `Amount.of`, `Transfer.to_amount()`, `__add__` — all unreachable from any
+library path, which by this section's own rule is *a value nothing reads is data that looks in use
+and is not*. `graph/metrics.py::value_by_node` is the function it was built for, and the measurement
+that showed it:
+
+```
+a node receiving 300 recorded + 100 apportioned edges   ->  400
+```
+
+The edges said `apportioned = [False, True]` all along; the answer was a bare `int`, so a reader of
+"where does value concentrate" could not tell that a quarter of that node's total was this
+library's inference from a co-funded input. `value_by_node` returns amounts now, `Amount.__add__`
+carries the **weakest** term's tag — a total whose components include an inference is an inference —
+and that module's own docstring had been making exactly this argument for *assets* while not making
+it for tags.
+
+Three consequences worth stating: a node no edge touches is **absent** rather than zero, because an
+amount is an amount *of* something and a node nothing moved through names no asset; a graph mixing
+assets now **raises** rather than returning a sum of two units, where the docstring had said callers
+"should partition first" — a rule nothing checked; and the three models' three spellings of "how was
+this arrived at" (`ambiguous`, `apportioned`, nothing) are reconciled in three named adapters rather
+than at each call site.
+
 **The check is one function and not a validator written five times**, because the rule is one
 fact — `chainlens/models/primitives.py::require_asset_on_chain` — and five copies is five places
 for it to drift. It is deliberately not a shared *base model*: a mixin carrying `chain` and

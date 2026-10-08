@@ -82,6 +82,20 @@ substitution the tag exists to prevent. Pass ``tag`` to override; the override i
 because a caller who has decided the apportionment is good enough should say so out
 loud rather than have it inferred.
 
+### `of_flow`
+
+```python
+of_flow(flow: ValueFlow, *, tag: AmountTag | None = None) -> Amount
+```
+
+The amount a `chainlens.models.flows.ValueFlow` carries.
+
+The third of three adapters, and there are three because **the three models spell "how was
+this arrived at" three different ways**: a transfer says ``ambiguous``, a flow says
+``apportioned``, and a balance says nothing because a provider read it. Reconciling three
+spellings into one tag is what an adapter is for, and it is here rather than at each call
+site so that the reconciliation happens once.
+
 ### `of_balance`
 
 ```python

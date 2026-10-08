@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import AwareDatetime, Field, model_validator
 
@@ -37,6 +37,9 @@ from chainlens.models.enums import (
     TxStatus,
 )
 from chainlens.vocabulary import row_for
+
+if TYPE_CHECKING:  # the flow module imports *this* one, so the edge runs one way only
+    from chainlens.models.flows import ValueFlow
 
 __all__ = [
     "Address",
@@ -158,6 +161,25 @@ class Amount(LensModel):
             tag=tag
             if tag is not None
             else (AmountTag.APPORTIONED if transfer.ambiguous else AmountTag.RECORDED),
+        )
+
+    @classmethod
+    def of_flow(cls, flow: ValueFlow, *, tag: AmountTag | None = None) -> Amount:
+        """The amount a :class:`~chainlens.models.flows.ValueFlow` carries.
+
+        The third of three adapters, and there are three because **the three models spell "how was
+        this arrived at" three different ways**: a transfer says ``ambiguous``, a flow says
+        ``apportioned``, and a balance says nothing because a provider read it. Reconciling three
+        spellings into one tag is what an adapter is for, and it is here rather than at each call
+        site so that the reconciliation happens once.
+        """
+        return cls(
+            chain=flow.chain,
+            asset=flow.asset,
+            base_units=flow.amount,
+            tag=tag
+            if tag is not None
+            else (AmountTag.APPORTIONED if flow.apportioned else AmountTag.RECORDED),
         )
 
     @classmethod
