@@ -4,12 +4,14 @@
 this section says what its data *is*, and where the two meet the types decide, because a type is
 not a policy and the two are not two answers to one question.
 
-**And it has already paid for itself three times.** Layer 3 found that the apportionment computed
-a wei-scale split through binary floating point and did not conserve the total. Layer 5 found that
-this section's own statement of its claim had *both monotonicity signs backwards* — the ratio
-falls as `k` and `p` rise, which is the whole point of it, and the page said the opposite. Layer 2
-found a dependency declared in `pyproject.toml` as a cross-check oracle that no file imported.
-Those are in the defect table below, at the position they were found.
+**And it has already paid for itself.** The table below is what it cost and what it caught, and it
+is longer than a development this size has any right to have produced: a live arithmetic bug in
+the apportionment, a dependency declared as a cross-check oracle that no file imported, a page
+claiming a guard it did not have, and two of this section's own tranches committing the exact
+duplication the section exists to prevent. **Every one was found by writing a claim down somewhere
+it could fail** — in a type, in a theorem, or in a test that compares rather than trusts — and the
+rows that are corrections to *claims* rather than to code are the ones no amount of running the
+suite would have turned up.
 
 ## What it is, and what it is for
 
@@ -36,55 +38,66 @@ the actual defects, in the order they were fixed:
 | **the committed fixture spelled an instant `+00:00` where the models spell it `Z`** | the fixture was not the document it claimed to be |
 | **the page stated the extraction invariant as a discipline; it is a one-field type, and the claim with teeth — the quote filter — was not the one the page named** | a claim weaker than the truth, which is the same defect as one stronger |
 | **the keycard's schema listed an enum's members by hand, and the list was already wrong — one member missing, the rest out of order** | a value written in a second place, again, and again with nothing comparing the two |
+| **the card disclosure spoke on every finding, because "did this card state anything" is true of the shipped card** | a condition that is true of the case it was written to exclude |
+| **the plan for the last tranche was to put a tag on the wire that the wire already carries, and to add a member the enum's own docstring refuses** | a change performed because a plan said so, caught by measuring first |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
 what makes the next one fail at construction instead.
 
-**The sixth is the one this section found rather than inherited**, and it is worth reading as the
-worked example, because it is the shape the whole thing is for. [Exactness](./exactness.md) states
-that the split conserves the total. Writing the claim down meant asking what the implementation
-actually computes — and the answer was `total * weight / total_weight`, a float — so the claim was
-**false of the code**, at wei scale, by sixty-one units in one measured case and two hundred and
-fifty-six in another. The property test that was supposed to catch it drew its totals from below
-ten million, where a float's mantissa is exact, so the bound was the reason it survived. The
-implementation is integer arithmetic now, the bound is uint256-wide, and the three measured values
-are pinned as cases. See the page and
+**The table is not in the order the layers were built, and the bottom half of it is the part worth
+reading.** Four of the entries are *claims* rather than code, and each was corrected by writing the
+claim somewhere it could fail — which is the whole method, and the reason the count matters more
+than any one row.
+
+**The apportionment is the worked example**, because it is the shape the whole thing is for.
+[Exactness](./exactness.md) states that the split conserves the total. Writing the claim down meant
+asking what the implementation actually computes — and the answer was
+`total * weight / total_weight`, a float — so the claim was **false of the code**, at wei scale, by
+sixty-one units in one measured case and two hundred and fifty-six in another. The property test
+that was supposed to catch it drew its totals from below ten million, where a float's mantissa is
+exact, so the bound was the reason it survived. The implementation is integer arithmetic now, the
+bound is uint256-wide, and the three measured values are pinned as cases. See the page and
 `src/chainlens/models/flows.py::largest_remainder_split`.
 
-**The seventh and eighth were found the same way and are the same kind of thing**, which is why
-the count in this table matters more than any one row of it. Layer 5's page asserted that the
-ratio is *non-decreasing* in `k` and in `p`. It is antitone in both — a likelier coincidence and
-more opportunities each make a match less surprising, so the ratio falls toward 1 — and the page
-had the direction of its own central claim wrong, in prose, where no test could see it. Layer 2
-found `pycoin` described in `pyproject.toml` as a "dev-only cross-validation oracle for the BTC
-codec" with nothing in the tree importing it: a check that was written down as existing. Both are
-corrections to *claims*, not to code, and neither would have been made by running the suite.
+**And its Lean statement was wrong twice, one step to the left.** After the page was corrected, the
+corrected direction was carried into the Lean statement — where the *coincidence probability* was
+then named antitone in `k`. It is monotone; the ratio is the antitone one. The two functions move in
+opposite directions, so fixing the sign on one and moving the other with it reproduces the same
+mistake. What caught that one was not a reader but the compiler: `coincidence_step`'s increment is
+`p·(1-p)^k`, non-negative, and it contradicts the antitone statement outright. That is the
+difference between a claim written in prose and a claim written where it can fail.
 
-**The ninth and the tenth are this section's own tranches making the mistake the section is about**, which is why
-it is in the table rather than quietly fixed. Adding `Amount` for layer 4 meant adding a tag for how
-the number was arrived at — and `models/ledger.py::AmountStatus` already carried `RECORDED` and
-`MISSING` with the same two strings, and `Transfer.ambiguous` and `ValueFlow.apportioned` were
-already two more spellings of the same distinction. The new enum was a third. It was caught by
-reading what `LedgerEdge` carries while adding the chain/asset check to it, and not by any test:
-the values agreed, so nothing failed. A duplicated *value* has no symptom until one of the copies
-changes, and that is exactly the argument the vocabulary table makes one layer down.
+**Three more are claims that had drifted from their guards**, which is the failure this section is
+best at finding. Layer 5's page asserted a direction it had backwards; `pyproject.toml` declared
+`pycoin` as a cross-validation oracle that no file imported; [Reflection](./reflection.md) claimed
+its round trip held for five document kinds when the test covered one of them and two kinds had no
+committed example at all. None of the three would have been found by running the suite, and the
+middle one was a check *written down as existing*.
 
-The tenth is the same mistake in a schema rather than in code. `specs/schema/keycard.schema.json`
-declares the card's shape for a reader and an editor, and its `kind` enum was typed out from
-`EntityKind` by hand — **missing `heuristic` and in the wrong order on the first attempt**, with
-nothing comparing the two. A schema is a useful thing and it is also a second description of a
-shape Python owns, so it is now held to the models by three tests: an enum, a field list, and a
-required-fields list, each compared rather than trusted.
+**Two are this section's own tranches making the mistake the section is about**, which is why they
+are in the table rather than quietly fixed. Adding `Amount` for [layer 4](./dimensions.md) meant
+adding a tag for how a number was arrived at — and `models/ledger.py::AmountStatus` already carried
+`RECORDED` and `MISSING` with the same two strings, `Transfer.ambiguous` and
+`ValueFlow.apportioned` were two more spellings of the same distinction, and the new enum was a
+third. Then [the keycard's schema](./capability.md) typed out `EntityKind`'s members by hand and
+**got them wrong on the first attempt** — one member missing, the rest out of order — with nothing
+comparing the two. Values agreed, so nothing failed. A duplicated *value* has no symptom until one
+of the copies changes, which is exactly the argument the vocabulary table makes one layer down.
 
-**And the seventh was wrong twice, which is the most useful entry here.** After the page was
-corrected, the corrected direction was carried into the Lean statement — where the *coincidence
-probability* was then named antitone in `k`. It is monotone; the ratio is the antitone one. The
-two functions move in opposite directions, so fixing the sign on one and moving the other with it
-reproduces the same mistake one step to the left. What caught it the second time was not a reader
-but the compiler: a statement a machine has to accept does not let a direction slide, and
-`coincidence_step` — whose increment is `p·(1-p)^k`, non-negative — contradicts the antitone
-statement outright. That is the difference between a claim written in prose and a claim written
-where it can fail.
+**One is a condition that was true of the case it was written to exclude.** The card's disclosure
+asked whether a card *stated anything*, and the shipped card states all five — so it fired on
+every finding. The fix is the distinction the layer is about: a holder who restates a shipped value
+has chosen nothing.
+
+**And the last is the one worth reading twice: a change performed because a plan said so.**
+[Barbs](./barbs.md) was to put an amount's provenance on the wire and bump `schema_version` — the
+only contract change in the development. Measured first: the wire *already* carries the distinction
+(`LedgerEdge.amount_status` is `recorded | missing`), the only model with an apportioned amount is
+`ValueFlow`, whose document is not one of the five, and `ledger/walk.py` says in its own docstring
+that *nothing is apportioned* there. Adding the member would have put a value on the wire that
+nothing sets, in an enum whose docstring gives the absence of that member as its reason for having
+two. **A plan is a hypothesis about what a repository needs; this is the tranche where the
+measurement disagreed with it and won.**
 
 **And the honest size of this.** This development follows the one in a sibling project, `azoth`,
 whose calculus of thermodynamic dimensionality is larger and whose proofs carry more weight — because
@@ -121,7 +134,7 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 | [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Proved |
 | [Reflection](./reflection.md) | the document round trip | — none, deliberately | Characterised |
 | [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Proved |
-| [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Specified |
+| [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Proved (general), Specified (the chain barb) |
 | [Processes and channels](./process.md) | a verification as a process on typed channels | `Process.lean` | Proved |
 
 **A reader is entitled to the bookkeeping before reading nine pages.** The statuses above say what

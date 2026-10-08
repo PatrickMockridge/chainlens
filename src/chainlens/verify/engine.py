@@ -124,6 +124,37 @@ def _selection_caveats(selection: SelectionDisclosure | None) -> tuple[str, ...]
     return tuple(notes)
 
 
+def _card_caveats(card: Keycard) -> tuple[str, ...]:
+    """What a finding has to say about the card it was computed under.
+
+    **Silent for the shipped baseline, and that is the point rather than an optimisation.** The
+    library's own defaults are described once in
+    `chainlens.verify.verdicts::STANDARD_VERIFICATION_LIMITATIONS`, and repeating them on every
+    finding would be a sentence a reader learns to skip. What a reader cannot get anywhere else
+    is *which values a holder chose* — so this speaks only when a card says something the baseline
+    does not, and names the entries that took effect rather than the ones that were inherited.
+
+    The `scan_limit` and `transfer_limit` are always reached: they are the two the engine reads.
+    The other three are named when the card states them, because a hedge tolerance that widened
+    an amount's band is a fact about the number beside it.
+    """
+    # **Compared against the baseline, not tested for emptiness.** The shipped card states all
+    # five, so "the card said something" is true of the baseline itself and the first version of
+    # this spoke on every finding — which the test below caught. What a reader needs is the values
+    # a holder *chose*, and a card that restates a shipped value has chosen nothing.
+    stated = card.thresholds.model_dump(exclude_none=True)
+    baseline = SHIPPED.resolved_thresholds
+    chosen = {name: value for name, value in stated.items() if getattr(baseline, name) != value}
+    if not chosen:
+        return ()
+    holder = card.keyholder or "an unnamed card"
+    entries = ", ".join(card.entries_used(*sorted(chosen)))
+    return (
+        f"computed under {holder}, which states {entries} rather than the library's defaults; the "
+        f"values not named here are the shipped ones",
+    )
+
+
 def _unbound_input(attempt: RatioAttempt | None) -> Input | None:
     """The first input an attempt could not obtain, if it could not obtain one.
 
@@ -304,7 +335,9 @@ class VerificationEngine:
             attempt=attempt,
             gap=gap,
             assumptions=tuple(outcome.assumptions) + tuple(parsed.notes),
-            caveats=outcome.caveats + _selection_caveats(self._selection),
+            caveats=(
+                outcome.caveats + _selection_caveats(self._selection) + _card_caveats(self._card)
+            ),
             selection=self._selection,
         )
 

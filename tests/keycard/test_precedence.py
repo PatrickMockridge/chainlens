@@ -128,3 +128,37 @@ async def test_a_card_supplied_by_a_caller_is_the_one_that_runs(tmp_path: Path) 
     assert await _scan_complete(card=load(path)) is False
     path.write_text("schema_version = 1\n[thresholds]\nscan_limit = 500\n", encoding="utf-8")
     assert await _scan_complete(card=load(path)) is True
+
+
+@pytest.mark.anyio
+async def test_a_card_that_states_something_is_disclosed_on_every_finding() -> None:
+    """The disclosure half of the card, and it needs no contract change.
+
+    A finding's caveats already carry what a reader needs to weigh it — `_selection_caveats` is
+    the shape this follows — so naming the card's entries rides on a field that is already on the
+    wire. What the card adds over the library's defaults is *which values a holder chose*, and
+    that is exactly what a reader cannot get anywhere else.
+    """
+    narrow = loads(
+        'schema_version = 1\nkeyholder = "Example Analysis Ltd"\n'
+        "[thresholds]\nscan_limit = 2\nhedge_tolerance = 0.2\n"
+    )
+    engine = VerificationEngine(_provider(), card=narrow)
+    report = await engine.verify_post(_post(), Extraction(claims=(_claim(),)))
+    caveats = " ".join(report.findings[0].caveats)
+    assert "Example Analysis Ltd" in caveats
+    assert "threshold:hedge_tolerance" in caveats
+    assert "threshold:scan_limit" in caveats
+
+
+@pytest.mark.anyio
+async def test_the_shipped_baseline_is_not_disclosed_because_it_is_already_stated() -> None:
+    """Silent for the baseline, and that is the point rather than an omission.
+
+    The library's own defaults are described once in `STANDARD_VERIFICATION_LIMITATIONS`.
+    Repeating them on every finding would be a sentence a reader learns to skip, and a disclosure
+    nobody reads is not a disclosure. What a reader cannot get elsewhere is what a *holder* chose.
+    """
+    engine = VerificationEngine(_provider(), card=SHIPPED)
+    report = await engine.verify_post(_post(), Extraction(claims=(_claim(),)))
+    assert not any("card" in caveat for caveat in report.findings[0].caveats)

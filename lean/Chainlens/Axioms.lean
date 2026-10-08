@@ -26,6 +26,7 @@ import Chainlens.Exactness
 import Chainlens.Sensitivity
 import Chainlens.Process
 import Chainlens.Capability
+import Chainlens.Barb
 
 /-! ## Layer 1 — amount identity
 
@@ -206,3 +207,43 @@ Lean core alone. It is a verbatim unfolding and not a weakened form.
 #print axioms Chainlens.Capability.witness_datum_is_outside
 #print axioms Chainlens.Capability.the_gate_refuses
 #print axioms Chainlens.Capability.the_gate_can_succeed
+
+/-! ## Layer 8 — barbs
+
+`docs/calculus/barbs.md`. What two ledgers are indistinguishable by — and this layer is the one
+where the division between what is proved and what is specified matters most, because the page
+calls it *the most forced of the nine* and says so in its first paragraph.
+
+**The general machinery is what is proved here**: that a barbed bisimulation is a relation
+preserving the observable set and simulating steps in both directions, that the union of two of
+them is one, that the union of all of them is one, and that bisimilarity is therefore an
+equivalence. That holds whatever the barbs are, and it is not a restatement of the definitions.
+
+**The chain barb is not modelled, and the page says why.** A `Ledger` carries strings and
+integers, and a barb set built from them would have to say which of those a reader can observe
+*without already knowing what they mean* — at which point the barb is a restatement of the schema
+and the theorem is about the restatement. `azoth` reached the same place from the other side: its
+barb records a **channel** and not a magnitude, so the claim that matters is invisible to its
+layer. Naming the division is the honest move rather than inventing a barb so there is something
+to prove.
+
+**And the non-vacuity witness is load-bearing here more than anywhere else.** *Bisimilarity is an
+equivalence* holds trivially of the universal relation. `observably_different_processes_are_not_bisimilar`
+is the witness in the other direction, without which the equivalence would be a statement about
+the empty relation or the universal one and neither is what a reader would take it for.
+-/
+
+-- The closure conditions, and the union that makes bisimilarity definable.
+#print axioms Chainlens.Barb.barbed_bisim_refl
+#print axioms Chainlens.Barb.barbed_bisim_symm
+#print axioms Chainlens.Barb.barbed_bisim_trans
+#print axioms Chainlens.Barb.bisim_union
+
+-- Bisimilarity is itself a bisimulation, and therefore an equivalence.
+#print axioms Chainlens.Barb.bisimilar_is_a_bisimulation
+#print axioms Chainlens.Barb.bisimilar_refl
+#print axioms Chainlens.Barb.bisimilar_symm
+#print axioms Chainlens.Barb.bisimilar_trans
+
+-- The witness without which the equivalence holds of the universal relation and says nothing.
+#print axioms Chainlens.Barb.observably_different_processes_are_not_bisimilar

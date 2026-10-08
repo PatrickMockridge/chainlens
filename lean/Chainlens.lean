@@ -11,5 +11,6 @@ import Chainlens.Exactness
 import Chainlens.Sensitivity
 import Chainlens.Process
 import Chainlens.Capability
+import Chainlens.Barb
 import Chainlens.Axioms
 import Chainlens.Gate
