@@ -20,14 +20,19 @@ is the same**, and they are added together only by someone who has decided the i
 good enough. Naming the difference is what lets that decision be made at the addition rather
 than in a comment three functions away.
 
-Reaches the wire in the tranche that bumps ``schema_version`` and not before, so that a
-reader can tell the two apart in a document rather than in a docstring.
+**Two members, and there is deliberately no third for "the provider did not carry it".** The
+first version of this had one, and it was **unreachable**: ``primitives.py::Amount`` requires
+``base_units: int``, so an amount whose figure nobody recorded cannot be an ``Amount`` at all
+— every construction site yields ``RECORDED`` or ``APPORTIONED`` and ``__add__`` can only
+return those two. The absence of a number is expressed by the absence of an ``Amount``
+(``TxOutput.value`` is ``None``; a caller that may not have one uses ``Amount | None``),
+which is a stronger statement than a tag on a number that is not there. A member nothing can
+set is the same defect as a field nothing reads.
 
 **Members**
 
 - `RECORDED` = 'recorded'
 - `APPORTIONED` = 'apportioned'
-- `MISSING` = 'missing'
 
 ## `AssetKind`
 

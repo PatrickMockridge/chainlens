@@ -96,8 +96,14 @@ class AmountTag(StrEnum):
     good enough. Naming the difference is what lets that decision be made at the addition rather
     than in a comment three functions away.
 
-    Reaches the wire in the tranche that bumps ``schema_version`` and not before, so that a
-    reader can tell the two apart in a document rather than in a docstring.
+    **Two members, and there is deliberately no third for "the provider did not carry it".** The
+    first version of this had one, and it was **unreachable**: ``primitives.py::Amount`` requires
+    ``base_units: int``, so an amount whose figure nobody recorded cannot be an ``Amount`` at all
+    — every construction site yields ``RECORDED`` or ``APPORTIONED`` and ``__add__`` can only
+    return those two. The absence of a number is expressed by the absence of an ``Amount``
+    (``TxOutput.value`` is ``None``; a caller that may not have one uses ``Amount | None``),
+    which is a stronger statement than a tag on a number that is not there. A member nothing can
+    set is the same defect as a field nothing reads.
     """
 
     #: A provider returned this figure, or it is arithmetic over figures a provider returned.
@@ -107,24 +113,20 @@ class AmountTag(StrEnum):
     #: which output, and not something any ledger states. ``Transfer.ambiguous`` is this case.
     APPORTIONED = "apportioned"
 
-    #: The provider did not carry it. ``TxOutput.value`` is ``None`` on Esplora's ``vin``, and
-    #: inventing a number there corrupts every fee downstream — so the absence is carried
-    #: rather than filled.
-    MISSING = "missing"
 
-
-#: The ledger view's status is a **narrower** vocabulary than the tag above, and the ledger edge
-#: two files over spells its two shared members out. This is the string table that keeps the two
-#: in step: ``models/ledger.py::AmountStatus`` reads its values from here rather than restating
-#: them, because two enums that happen to agree on ``"recorded"`` are two places that string
-#: lives and one of them is going to change.
+#: The strings the two amount vocabularies **share**, and the whole of what they share.
 #:
-#: It exists as a separate enum at all because the ledger view deliberately has no
-#: ``APPORTIONED``: it does not estimate, so it has nothing to apportion. The flow view does
-#: estimate, which is why :class:`AmountTag` is the wider set and the ledger's is the subset.
+#: `AmountTag` above and `models/ledger.py::AmountStatus` are two overlapping sets and neither is a
+#: subset of the other — the ledger view has `missing` and cannot have `apportioned` (it does not
+#: estimate), the flow view has `apportioned` and cannot have `missing` (an `Amount` always carries
+#: a figure). `recorded` is the one member they have in common, and it is written down once, here.
+#:
+#: **This table held two entries and called the status a subset of the tag**, which was true only
+#: while the tag carried an unreachable `MISSING`. Removing that member is what made the relation
+#: visible: the two vocabularies agree on one word and each add their own. `AmountStatus.MISSING`
+#: and `AmountTag.APPORTIONED` are each spelled in the enum that owns them, which is their one home.
 AMOUNT_STATUS_SPELLINGS = {
     "recorded": AmountTag.RECORDED.value,
-    "missing": AmountTag.MISSING.value,
 }
 
 

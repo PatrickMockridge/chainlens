@@ -16,6 +16,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 
 from chainlens.models.enums import (
     AMOUNT_STATUS_SPELLINGS,
@@ -180,29 +181,50 @@ class TestRendering:
 
 
 class TestTheLedgerViewsStatus:
-    """`AmountStatus` is the tag's *subset*, and the strings it shares are stated once.
+    """**Two overlapping vocabularies, and neither is a subset of the other.**
 
-    The two enums are not the same set and should not be merged: the ledger view deliberately
-    has no `APPORTIONED`, because it does not estimate, so it has nothing to apportion. But the
-    two members they share are the same two facts, and an enum that happened to agree with
-    another on `"recorded"` would be a second place that string lived.
+    The ledger view has `missing` and cannot have `apportioned` — it does not estimate, so it has
+    nothing to apportion. The flow view has `apportioned` and cannot have `missing` — an `Amount`
+    always carries a figure. `recorded` is the one word they share.
+
+    **This class used to assert a subset**, which was true only while `AmountTag` carried a
+    `MISSING` member that nothing could set. Removing that member is what made the real relation
+    visible, and the assertion here is the corrected one rather than a weakened one: what is
+    asserted now is *more* than a subset — it is exactly the intersection.
     """
 
-    def test_the_status_is_a_subset_of_the_tag(self) -> None:
-        assert {status.value for status in AmountStatus} < {tag.value for tag in AmountTag}
+    def test_the_two_vocabularies_meet_in_one_word(self) -> None:
+        tags = {member.value for member in AmountTag}
+        statuses = {member.value for member in AmountStatus}
+        assert tags & statuses == {"recorded"}
+        assert tags - statuses == {"apportioned"}
+        assert statuses - tags == {"missing"}
 
-    def test_the_shared_values_come_from_one_table(self) -> None:
-        assert AmountStatus.RECORDED.value == AmountTag.RECORDED.value
-        assert AmountStatus.MISSING.value == AmountTag.MISSING.value
-        assert {
-            "recorded": AmountTag.RECORDED.value,
-            "missing": AmountTag.MISSING.value,
-        } == AMOUNT_STATUS_SPELLINGS
+    def test_the_shared_word_is_written_down_once(self) -> None:
+        """An enum that happened to agree with another on `"recorded"` would be a second place that
+        string lived, and one of the two would change first."""
+        assert {"recorded": AmountTag.RECORDED.value} == AMOUNT_STATUS_SPELLINGS
+        assert AmountStatus.RECORDED.value == AMOUNT_STATUS_SPELLINGS["recorded"]
 
     def test_the_ledger_view_has_no_apportioned_member(self) -> None:
         """Not an omission. This view does not estimate, so a member for it would invite a
         value nothing sets — the failure the vocabulary table exists to prevent one layer up."""
         assert "APPORTIONED" not in AmountStatus.__members__
+
+    def test_the_tag_has_no_missing_member_because_none_could_be_set(self) -> None:
+        """The member that was there and was unreachable.
+
+        `Amount.base_units` is required, so an amount whose figure nobody recorded cannot be an
+        `Amount` at all — every construction site yields `RECORDED` or `APPORTIONED`. The absence
+        of a number is the absence of an `Amount`, which is a stronger statement than a tag on one.
+        """
+        assert "MISSING" not in AmountTag.__members__
+        with pytest.raises(ValidationError):
+            Amount(
+                chain=Chain.BITCOIN,
+                asset=AssetRef.of_native(Chain.BITCOIN),
+                base_units=None,  # type: ignore[arg-type]
+            )
 
     def test_a_ledger_edge_refuses_a_mismatched_asset(self) -> None:
         """The fifth model pairing a chain with an asset, and the validator is the same one."""
