@@ -24,6 +24,7 @@ table, so that a new row cannot be added without its `#print axioms` line.
 import Chainlens.Dim
 import Chainlens.Exactness
 import Chainlens.Sensitivity
+import Chainlens.Process
 
 /-! ## Layer 1 — amount identity
 
@@ -139,3 +140,31 @@ asserting through the point, and `tests/verify/test_likelihood.py` guards the sa
 #print axioms Chainlens.Sensitivity.wilsonSpread_nonneg
 #print axioms Chainlens.Sensitivity.wilson_ordered
 #print axioms Chainlens.Sensitivity.wilson_contains_estimate
+
+/-! ## Layer 9 — processes and channels
+
+`docs/calculus/process.md`. The library's central invariant: a verdict is a function of the
+claims and of the chain, and of nothing the extractor believes about its own output.
+
+**It is structural, and the page now says so.** `chainlens/verify/schema.py::Extraction` carries
+`claims` and nothing else — no model name, no self-confidence, no raw response — so the verdict
+cannot read the extractor's opinion of its own output, because the type does not hold one. The
+model below is that one-field record, which is what keeps the theorem about the extraction the
+library has rather than about a stand-in with the interesting parts left out.
+
+**And the claim with teeth is the quote filter**, which the type cannot enforce: whether a quote
+is in a post is a fact about two strings. `every_finding_is_about_a_claim_the_source_contains` is
+the two halves meeting.
+-/
+
+-- The central invariant, and the witness that keeps it from being a statement about the
+-- constant function.
+#print axioms Chainlens.Process.the_verdict_does_not_read_the_extraction
+#print axioms Chainlens.Process.the_verdict_is_not_constant
+
+-- The filter: it keeps only what the source vouches for, and it drops rather than invents.
+#print axioms Chainlens.Process.kept_only_what_the_source_vouches_for
+#print axioms Chainlens.Process.kept_is_a_sublist_of_the_extraction
+
+-- The assembled invariant.
+#print axioms Chainlens.Process.every_finding_is_about_a_claim_the_source_contains

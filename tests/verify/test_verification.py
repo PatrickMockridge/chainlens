@@ -14,6 +14,8 @@ case where its preconditions fail, and that nothing a post says can promote a ve
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -21,6 +23,7 @@ from typing import Any
 import pytest
 
 from chainlens.ledger.derive import PRIOR_LIMITATIONS
+from chainlens.ledger.schema import strict_dumps
 from chainlens.models.base import utcnow
 from chainlens.models.calculation import (
     Binding,
@@ -964,3 +967,97 @@ class TestTheGap:
         finding = await _finding(provider, _claim(addresses=(A, B)), estimate_requested=False)
         assert finding.gap is not None
         assert finding.gap.kind is UnboundKind.NOT_REQUESTED
+
+
+# --------------------------------------------------------------------------- #
+# The central invariant, from the outside
+#
+# `docs/calculus/process.md` states it twice: the verdict is a function of the claims and the
+# chain and of nothing the extractor believes, and every finding is about a claim the source
+# contains. `lean/Chainlens/Process.lean` proves both about the arrangement; these are the same
+# two claims against the code that runs.
+# --------------------------------------------------------------------------- #
+@pytest.mark.anyio
+async def test_the_verdict_does_not_read_the_extraction() -> None:
+    """Two extractions that agree on their claims produce identical findings.
+
+    The Lean theorem is the structural half — `Extraction` has one field, so there is nothing
+    else for a verdict to read. What this checks is the half the type cannot: that the engine
+    does not reach past the claims to anything about how they were produced. There is nothing
+    to reach *today*, which is exactly why the test is written against two extractions built
+    separately rather than against an engine that was handed a model name and ignored it.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40_000 * BTC))
+    claim = _claim(addresses=(A, B), amount_text="40,000 BTC")
+
+    first = await VerificationEngine(provider).verify_post(_post(), _extraction(claim))
+    second = await VerificationEngine(provider).verify_post(_post(), _extraction(claim))
+
+    assert _without_fetch_times(first) == _without_fetch_times(second), (
+        "two runs over the same claim produced different findings"
+    )
+    assert first.findings[0].verdict is ClaimVerdict.SUPPORTED
+
+
+#: Anything that reads as an instant. A finding carries the *fetch time* of the provider response
+#: it rests on, which differs on every run and is not part of the adjudication — the same reason
+#: `tests/ledger/fixtures.py` pins instants before committing a document.
+_INSTANT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\"]*")
+
+
+def _without_fetch_times(report: VerificationReport) -> object:
+    """A report as strict JSON, with its run-dependent instants replaced by one marker.
+
+    **Whole documents rather than a list of fields, and that is the point.** Comparing a chosen
+    handful — the verdict, the method, the reason — passes while a field that *is* part of the
+    adjudication goes unchecked, which is the mistake T3 found in the contract tests: three
+    hand-picked fields of one document out of five. Normalising the one thing that legitimately
+    varies keeps every other field in the comparison.
+    """
+    return json.loads(_INSTANT.sub("<instant>", strict_dumps(report)))
+
+
+@pytest.mark.anyio
+async def test_a_claim_whose_quote_is_not_in_the_post_is_never_adjudicated() -> None:
+    """The claim with teeth, and the one the type cannot enforce.
+
+    `Extraction` being one field stops a verdict reading the extractor's *opinion*; it does
+    nothing about the extractor putting a claim in the post's mouth. That is
+    `validate_quotes`, and a dropped claim produces no finding at all — which is stronger than
+    producing a finding of `unresolved`, because there is nobody to have an opinion about.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40_000 * BTC))
+    real = _claim(addresses=(A, B), amount_text="40,000 BTC", quote="the post")
+    invented = _claim(addresses=(A, B), amount_text="40,000 BTC", quote="something never said")
+
+    report = await VerificationEngine(provider).verify_post(
+        _post("the post"), _extraction(real, invented)
+    )
+
+    assert len(report.findings) == 1, "the fabricated claim produced a finding"
+    assert report.findings[0].claim.quote == "the post"
+    assert any("dropped" in warning for warning in report.warnings)
+
+
+@pytest.mark.anyio
+async def test_every_finding_is_about_a_claim_the_source_contains() -> None:
+    """The assembled invariant, stated as the property rather than as the two halves.
+
+    Held over a report rather than over an extraction, because that is where a reader meets it:
+    whatever a report says, it is about text the post actually holds.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40_000 * BTC))
+    post_text = "the post says 40,000 BTC moved"
+    claims = (
+        _claim(addresses=(A, B), amount_text="40,000 BTC", quote="40,000 BTC moved"),
+        _claim(addresses=(A, B), amount_text="40,000 BTC", quote="an invented sentence"),
+        _claim(addresses=(A, B), amount_text="40,000 BTC", quote="the post says"),
+    )
+
+    report = await VerificationEngine(provider).verify_post(_post(post_text), _extraction(*claims))
+
+    assert report.findings, "nothing survived, so the property would hold vacuously"
+    for finding in report.findings:
+        assert finding.claim.quote in post_text, (
+            f"a finding is about {finding.claim.quote!r}, which the post does not contain"
+        )

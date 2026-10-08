@@ -9,5 +9,6 @@ import Chainlens.Dim
 import Chainlens.Vocabulary
 import Chainlens.Exactness
 import Chainlens.Sensitivity
+import Chainlens.Process
 import Chainlens.Axioms
 import Chainlens.Gate
