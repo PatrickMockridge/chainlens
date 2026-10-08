@@ -514,3 +514,59 @@ def test_a_wire_document_round_trips_exactly() -> None:
     assert revived.nodes == original.nodes
     assert revived.edges == original.edges
     assert revived.policy == original.policy
+
+
+# --------------------------------------------------------------------------- #
+# Reflection: a committed document, read back, is the document
+#
+# `docs/calculus/reflection.md` makes this claim for all five document kinds and names this
+# file as the guard. It was true of one kind out of five before these tests existed, and of
+# three fields of that one — the page said "each of the five" and nothing held it to that.
+# --------------------------------------------------------------------------- #
+#: Every document kind the contract covers, and the fixture section holding its examples.
+#: Five of five, so a kind with no committed example is a failure rather than an omission
+#: nobody sees — which is how `annotation_request` went without one.
+REFLECTIONS: dict[str, str] = {
+    "ledger": "ledgers",
+    "derivation": "derivations",
+    "overlay": "overlays",
+    "narrative": "narratives",
+    "annotation_request": "annotation_requests",
+}
+
+
+def test_every_document_kind_has_a_committed_example() -> None:
+    """A schema with nothing committed against it describes whatever the models said the day it
+    was generated, and nothing notices when that stops being true."""
+    sections = json.loads(fixture_module.render_all())
+    missing = [
+        f"{kind} ({section})" for kind, section in REFLECTIONS.items() if not sections.get(section)
+    ]
+    assert not missing, (
+        f"these document kinds have a schema but no committed example: {missing}. A fixture is "
+        f"what the generated schema is checked against, so a kind without one is unchecked."
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(REFLECTIONS))
+def test_every_committed_document_reads_back_as_the_document_it_came_from(kind: str) -> None:
+    """The page's claim, for every document of every kind rather than for one of one.
+
+    *Read back* means the whole document: the committed bytes parse into the model, and the
+    model writes the same bytes back. Comparing three hand-picked fields — which is what the
+    single ledger round-trip test did — passes while a field that is dropped on read, or
+    silently defaulted, or re-ordered on write, goes unnoticed. The comparison is on the
+    serialised form rather than on `==`, because the fixture is what a consumer holds: a
+    model that equals itself after a round trip but writes different JSON has not survived
+    the thing the fixture exists for.
+    """
+    model = DOCUMENTS[kind]
+    committed = json.loads(_committed(fixture_module.FIXTURE_PATH))[REFLECTIONS[kind]]
+
+    assert committed, f"{REFLECTIONS[kind]} holds no document"
+    for name, payload in committed.items():
+        revived = model.model_validate(payload)
+        assert json.loads(strict_dumps(revived)) == payload, (
+            f"{REFLECTIONS[kind]}.{name} does not survive a round trip: it reads into "
+            f"{model.__name__} and writes back something else"
+        )

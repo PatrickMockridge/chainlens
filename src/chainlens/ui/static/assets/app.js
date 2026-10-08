@@ -173,13 +173,7 @@ Attributes:
     prior_supplied_by: who supplied the prior, when one was.
     selection: how the claim came to be one of the claims priced, when a chooser picked it.
         On the document because the document is what a reader sees, and a ratio whose claim
-        was chosen would otherwise render exactly like one whose claim was fixed in advance.`),Bx=Gb([`recorded`,`missing`]).describe(`Whether an edge's amount is a recorded value or an admission that it is unknown.
-
-There is deliberately no third member for "estimated". The flow view estimates, and
-says so with a confidence below 1.0; this view does not estimate, so an unknown
-amount is reported as unknown rather than filled in. \`\`missing\`\` is the honest
-answer for an unindexed prevout — Esplora's \`\`vin\`\` frequently omits input values —
-and inventing one would corrupt every total that touched it.`),Vx=Gb([`exchange`,`mixer`,`sanctioned`,`own_wallet`,`correction`,`note`]).describe(`What a person is asserting about a target.
+        was chosen would otherwise render exactly like one whose claim was fixed in advance.`),Bx=Gb([`recorded`,`missing`]).describe('Whether an edge\'s amount is a recorded value or an admission that it is unknown.\n\nThere is deliberately no third member for "estimated". The flow view estimates, and\nsays so with a confidence below 1.0; this view does not estimate, so an unknown\namount is reported as unknown rather than filled in. ``missing`` is the honest\nanswer for an unindexed prevout — Esplora\'s ``vin`` frequently omits input values —\nand inventing one would corrupt every total that touched it.\n\n**Its two values are read from :data:`~chainlens.models.enums.AmountTag` and not restated.**\nThe tag is the wider vocabulary — it also has ``APPORTIONED``, which the flow view needs and\nthis one must not have — so this is its subset, and the strings the two share are stated\nonce. Two enums that happen to agree on ``"recorded"`` are two places that string lives, and\none of them is going to change; `tests/models/test_amount.py` holds the subset relation as\nwell, so a member added to one and not the other is a failing test rather than a silent\ndivergence between two documents.'),Vx=Gb([`exchange`,`mixer`,`sanctioned`,`own_wallet`,`correction`,`note`]).describe(`What a person is asserting about a target.
 
 Deliberately a short vocabulary of *kinds of assertion* rather than free text. A kind
 can be checked against a computed label — and a disagreement between the two is worth

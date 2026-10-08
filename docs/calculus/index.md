@@ -32,6 +32,8 @@ the actual defects, in the order they were fixed:
 | **this section's own statement of the ratio's sensitivity had both monotonicity signs backwards** | a claim about a sign, written from memory instead of from the code |
 | **a dependency was declared in `pyproject.toml` as a cross-check oracle that no file imported** | a check that was described and did not exist |
 | **a new tag enum was added beside two existing spellings of the same fact** | a value written in a second place, by the tranche about not doing that |
+| **a page claimed its round trip held for five document kinds; the test covered one, and two kinds had no committed example at all** | a claim asserting a guard it did not have |
+| **the committed fixture spelled an instant `+00:00` where the models spell it `Z`** | the fixture was not the document it claimed to be |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
 what makes the next one fail at construction instead.
@@ -108,7 +110,7 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 | [Exactness](./exactness.md) | what conserves a unit and what invents one | `Exactness.lean` | Proved |
 | [Raw and canonical](./canonical.md) | the map from a provider's bytes to the canonical view | `Canonical.lean` | Characterised |
 | [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Proved |
-| [Reflection](./reflection.md) | the document round trip | `Contract.lean` | Characterised |
+| [Reflection](./reflection.md) | the document round trip | — none, deliberately | Characterised |
 | [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Specified |
 | [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Specified |
 | [Processes and channels](./process.md) | a verification as a process on typed channels | `Process.lean` | Specified |
