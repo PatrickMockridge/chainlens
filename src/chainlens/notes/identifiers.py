@@ -95,8 +95,57 @@ _BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _BECH32 = "023456789acdefghjklmnpqrstuvwxyz"
 
 
-def _family_patterns() -> list[str]:
-    """One shape per address family **the vocabulary table names**, in the table's row order.
+def _shapes() -> dict[str, tuple[str, str]]:
+    """Each family's shape, in two forms: full-length, and cut short.
+
+    **One table for both patterns, and that is the point.** The two matchers answer different
+    questions — `_CANDIDATE` asks "could this be an address that lost a character", `_TRUNCATED`
+    asks "is this an address at all" — but they range over the *same* families, and the first
+    version of this built one from the vocabulary table and left the other hand-written ten lines
+    below. That is worse than both being hand-written: adding a chain would make the candidate
+    matcher find its addresses and the truncated matcher ignore them, which nothing would report.
+
+    Each shape ends its run with a negative lookahead, which is what makes a bound mean "this
+    length" rather than "at most this length". The full-length base58 shape additionally *begins*
+    with a lookbehind, and that is the one that was missing: without it the pattern matched the
+    tail of a sixty-four-character transaction hash, every character of which is valid base58.
+
+    **The two forms do overlap on one kind of token, and that is deliberate.** `0x1be716…0df5…` is
+    hex of full length *and* a token carrying an ellipsis, so both matchers report it — and both
+    are right: it is not a usable address, and it is one the note abbreviated. Closing the overlap
+    here was tried and reverted: it made `implausible_addresses` drop a true finding, and it moved
+    a decision down into a regular expression that belongs where it can be explained. The
+    resolution is one level up, in `notes/addresses.py`, which drops the mangled reading when a
+    truncation explains it — *"reporting this as a mangled address would send a reader looking for
+    a character the image never showed."*
+
+    What is *not* in a shape is which chain a token is on, and that is deliberate: a shape asks
+    "could this be an address of some chain this library knows", and `chain_for` answers the other
+    question by decoding. A token whose shape matches and whose checksum fails is reported as
+    found-but-unusable, which is the distinction this module already draws.
+    """
+    # Every human-readable part the table names, in both cases: bech32 is defined lowercase and
+    # the upper-case form is the same string, which a QR code uses.
+    hrps = "|".join(sorted(BY_BECH32_HRP))
+
+    return {
+        "eip55": (
+            r"0x[0-9a-fA-F]{28,63}(?![0-9a-fA-F])",
+            r"0x[0-9a-fA-F]{4,39}(?:…|\.\.\.)",
+        ),
+        "base58check": (
+            rf"(?<![{_BASE58}])[{_BASE58}]{{26,35}}(?![{_BASE58}])",
+            rf"[{_BASE58}]{{4,33}}(?:…|\.\.\.)",
+        ),
+        "bech32": (
+            rf"(?<![{_BECH32}])(?:{hrps}|{hrps.upper()})1[{_BECH32}]{{20,70}}(?![{_BECH32}])",
+            rf"(?:{hrps}|{hrps.upper()})1[{_BECH32}]{{4,}}(?:…|\.\.\.)",
+        ),
+    }
+
+
+def _pattern(*, full: bool) -> re.Pattern[str]:
+    """One of the two matchers, built from **the families the vocabulary table names**.
 
     **Built from the table rather than written here, and that is the whole point of the change
     that introduced this.** The pattern used to hardcode `[13]` and `bc1` — two chains' prefixes
@@ -104,32 +153,10 @@ def _family_patterns() -> list[str]:
     row for litecoin saying `base58check`, and a litecoin address is 26 to 35 base58 characters
     starting with `L`; the hardcoded `[13]` meant it was **not found at all**, and neither were
     dogecoin's, testnet's, or any bech32 chain whose human-readable part is not `bc`.
-
-    What is *not* in the shape is which chain a token is on, and that is deliberate: the shape
-    asks "could this be an address of some chain this library knows", and `chain_for` answers the
-    other question by decoding. A token whose shape matches and whose checksum fails is reported
-    as found-but-unusable, which is the distinction this module already draws.
     """
-    patterns: list[str] = []
-    families = {family for row in ASSETS for family in row.families}
-    if "eip55" in families:
-        patterns.append(r"0x[0-9a-fA-F]{28,63}(?![0-9a-fA-F])")
-    if "base58check" in families:
-        # **Both lookarounds**, and the lookbehind is the one that was missing. Without it the
-        # pattern matches a *suffix* of a longer run — a sixty-four character transaction hash is
-        # all base58-valid characters, so `{26,35}` matched its last twenty-seven and reported
-        # the tail of a txid as a mangled address. The prefix test this replaced anchored on `1`
-        # or `3`, which happens to exclude a hex blob, so the flaw was invisible until the shape
-        # became general.
-        patterns.append(rf"(?<![{_BASE58}])[{_BASE58}]{{26,35}}(?![{_BASE58}])")
-    if "bech32" in families:
-        # Every human-readable part the table names, in both cases: bech32 is defined lowercase
-        # and the upper-case form is the same string for a QR code.
-        hrps = "|".join(sorted(BY_BECH32_HRP))
-        patterns.append(
-            rf"(?<![{_BECH32}])(?:{hrps}|{hrps.upper()})1[{_BECH32}]{{20,70}}(?![{_BECH32}])"
-        )
-    return patterns
+    families = sorted({family for row in ASSETS for family in row.families})
+    shapes = _shapes()
+    return re.compile("|".join(shapes[family][0 if full else 1] for family in families))
 
 
 #: What an address looks like — **near enough to full length to be a mangled one**, and no shorter.
@@ -156,7 +183,7 @@ def _family_patterns() -> list[str]:
 #: than "at most this length". Without it ``{28,63}`` happily matches the first sixty-three
 #: characters of a hundred-and-sixty-character blob and reports the prefix of a hash as a mangled
 #: address.
-_CANDIDATE = re.compile("|".join(_family_patterns()))
+_CANDIDATE = _pattern(full=True)
 
 
 #: Address-shaped tokens that stop short or carry an ellipsis — the shape a screenshot uses when it
@@ -174,14 +201,7 @@ _CANDIDATE = re.compile("|".join(_family_patterns()))
 #: Its base58 alternative keeps a *shape* rather than a prefix, for the same reason `_CANDIDATE`'s
 #: does — and a truncated run is one no checksum can confirm, so this pattern is where the
 #: distinction between "address-shaped" and "an address" is doing the most work.
-_TRUNCATED = re.compile(
-    r"""
-    0x[0-9a-fA-F]{4,39}(?:…|\.\.\.)                             # an EVM address, cut short
-    | [123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{4,33}(?:…|\.\.\.)  # base58
-    | (?:bc|tb|ltc|BC|TB|LTC)1[023456789acdefghjklmnpqrstuvwxyz]{4,}(?:…|\.\.\.)      # bech32
-    """,
-    re.VERBOSE,
-)
+_TRUNCATED = _pattern(full=False)
 
 
 def chains_for(token: str) -> tuple[Chain, ...]:

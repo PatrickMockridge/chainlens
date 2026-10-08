@@ -297,3 +297,53 @@ class TestTheChainsTheTableNames:
         assert chain_for("SdrDNLpVvMZ1rQtHRkqa4nFbRvnRGKH3Ej") is None, (
             "a solana-shaped address is on no chain this table names"
         )
+
+
+class TestTheTwoMatchersOverOneToken:
+    """**The overlap here is deliberate, and the first version of this class asserted it away.**
+
+    `_CANDIDATE` and `_TRUNCATED` answer different questions — *is this a mangled address* and *is
+    this an address at all* — and a token such as `0x1be716…0df5…` is **both**: hex of full length
+    followed by one the note abbreviated. Both readings are true of it. Closing the overlap in the
+    patterns was tried and reverted, because it made `implausible_addresses` drop a true finding and
+    moved a decision down into a regular expression that belongs where it can be explained.
+
+    The resolution is one level up, in `notes/addresses.py` — see
+    `tests/notes/test_addresses.py::test_a_truncated_address_is_named_and_explained`, which is
+    where a reader meets it. What is asserted *here* is the part that had no test: that both
+    matchers range over the same families.
+    """
+
+    #: One real address per family the vocabulary table names.
+    REAL = (
+        "1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX",  # bitcoin, base58check
+        "LKDyUEtTR1HXamkiEphisSiBJu6o3ZPE34",  # litecoin, base58check
+        "D597kHXGdkwkryF9oGhz9Bp1ypTpD1u99Z",  # dogecoin, base58check
+        "mfWyW5fc9NUj75YAnFgoRLrjxgLDn2MMth",  # testnet, base58check
+        "bc1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysn4v0345",  # bitcoin, bech32
+        "ltc1qqqqsyqcyq5rqwzqfpg9scrgwpugpzysn3s44dy",  # litecoin, bech32
+        "0xea674fdde714fd979de3edf0f56aa9716b898ec8",  # ethereum, eip55
+    )
+
+    @pytest.mark.parametrize("address", REAL)
+    def test_both_matchers_find_every_family_the_table_names(self, address: str) -> None:
+        """**The inconsistency a shared shape table prevents.**
+
+        `_CANDIDATE` was built from the vocabulary table and `_TRUNCATED` was left hand-written ten
+        lines below — which is worse than both being hand-written, because adding a chain would
+        have made one matcher find its addresses and the other ignore them, and nothing would have
+        reported it. The table names five chains across three families, and each is exercised.
+
+        Asserted through the two public functions, because that is where a reader meets the
+        inconsistency: the same note should say both that this address is usable and that a cut
+        form of it is a cut form.
+        """
+        assert plausible_addresses(f"sent to {address}") == (address,)
+        cut = address[:-8] + "…"
+        assert truncated_addresses(f"sent to {cut}") == (cut,)
+
+    def test_the_table_still_names_three_families(self) -> None:
+        """A guard on the guard: if a family were removed from the table, the loop above would
+        still pass while covering less, and this would fail instead."""
+        families = {family for row in ASSETS for family in row.families}
+        assert families == {"base58check", "bech32", "eip55"}
