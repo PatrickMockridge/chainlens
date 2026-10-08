@@ -146,6 +146,10 @@ lean:  ## Build the Lean development of the calculus
 	# target in the file that needs a tool that `uv sync` will not install. The guard that
 	# does run everywhere is `tests/calculus/test_lean_claims.py`, and it reads the gate
 	# files and the sources rather than building anything.
+	#
+	# One module needs Mathlib, so a first run needs its olean cache -- a minute, not the
+	# hours a from-source build takes:
+	#     cd lean && lake exe cache get
 	cd lean && lake build
 
 lean-gate:  ## Refuse a proof in the calculus that rests on an axiom we did not agree to

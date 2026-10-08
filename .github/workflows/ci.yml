@@ -30,10 +30,10 @@ jobs:
       - name: ruff format
         run: uv run ruff format --check .
       - name: mypy
-        # case-study/tools is type-checked here as well as in `make typecheck`:
+        # case-study/tools and tools are type-checked here as well as in `make typecheck`:
         # two different scopes would let a type error pass on one side and not the
         # other, which is the divergence that makes a local green run untrustworthy.
-        run: uv run mypy src tests case-study/tools
+        run: uv run mypy src tests tools case-study/tools
 
   test:
     name: test (py${{ matrix.python-version }})
@@ -117,6 +117,44 @@ jobs:
       - run: cargo install mdbook mdbook-linkcheck2 --locked
       # linkcheck runs as an output backend inside this, so a broken internal link fails it.
       - run: make docs
+
+  # The calculus. `make check` deliberately gains nothing that needs Lean or the network, so the
+  # half of the gate that runs everywhere is `tests/calculus/test_lean_claims.py` -- and that test
+  # reads the gate files as *text*. It cannot tell whether the proofs elaborate, whether a theorem
+  # still exists, or whether one rests on an axiom this project did not agree to. Only
+  # `tools/check_lean_axioms.py` does that, and before this job nothing ran it.
+  #
+  # The Mathlib cache is fetched rather than built: ~2 minutes and 7,335 files, against the hours a
+  # from-source build takes. One module needs Mathlib; the other eight build against Lean core.
+  lean:
+    name: the calculus builds and the axiom gate passes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          # A first-party action for the toolchain, which reads `lean/lean-toolchain` -- so the
+          # version is pinned in the repository rather than here, the same arrangement `.nvmrc`
+          # gives the front end.
+          #
+          # `build: false` because the gate builds first itself, on purpose: `lake env lean`
+          # resolves an import to the compiled olean, so a `sorry` added and not rebuilt is
+          # invisible. The cache fetch is left to the action, which runs `lake exe cache get`
+          # for a project downstream of Mathlib -- ~2 minutes, against hours from source.
+          #
+          # The action also offers an `axiom-audit` input defaulting to exactly the three
+          # axioms this project permits. It is not used: this project's own gate walks its two
+          # gate files by name and reports per theorem, which is what the pages cite.
+          build: false
+          test: false
+          lint: false
+          use-mathlib-cache: true
+          lake-package-directory: lean
+      - name: the axiom gate
+        working-directory: lean
+        # stdlib only: `python3` rather than a `uv run`, so this job does not depend on the
+        # Python side of the repository being installed.
+        run: python3 ../tools/check_lean_axioms.py
 
   # One artifact, two descriptions: the pydantic models are the source, the JSON Schema and the
   # zod modules are generated from them. This is what makes "a field added in Python without a

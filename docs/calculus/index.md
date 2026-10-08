@@ -4,6 +4,13 @@
 this section says what its data *is*, and where the two meet the types decide, because a type is
 not a policy and the two are not two answers to one question.
 
+**And it has already paid for itself three times.** Layer 3 found that the apportionment computed
+a wei-scale split through binary floating point and did not conserve the total. Layer 5 found that
+this section's own statement of its claim had *both monotonicity signs backwards* — the ratio
+falls as `k` and `p` rise, which is the whole point of it, and the page said the opposite. Layer 2
+found a dependency declared in `pyproject.toml` as a cross-check oracle that no file imported.
+Those are in the defect table below, at the position they were found.
+
 ## What it is, and what it is for
 
 chainlens's amounts are not a convention. A satoshi and an ether are different dimensions; a USDC
@@ -22,6 +29,8 @@ the actual defects, in the order they were fixed:
 | Ethereum address history had no provider at all | chain |
 | an address string could be truncated, garbled, or usable | the raw/canonical boundary |
 | **the apportionment computed a wei-scale split through binary floating point, and did not conserve the total** | precision, again, in the function that exists to conserve it |
+| **this section's own statement of the ratio's sensitivity had both monotonicity signs backwards** | a claim about a sign, written from memory instead of from the code |
+| **a dependency was declared in `pyproject.toml` as a cross-check oracle that no file imported** | a check that was described and did not exist |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
 what makes the next one fail at construction instead.
@@ -37,6 +46,25 @@ implementation is integer arithmetic now, the bound is uint256-wide, and the thr
 are pinned as cases. See the page and
 `src/chainlens/models/flows.py::largest_remainder_split`.
 
+**The seventh and eighth were found the same way and are the same kind of thing**, which is why
+the count in this table matters more than any one row of it. Layer 5's page asserted that the
+ratio is *non-decreasing* in `k` and in `p`. It is antitone in both — a likelier coincidence and
+more opportunities each make a match less surprising, so the ratio falls toward 1 — and the page
+had the direction of its own central claim wrong, in prose, where no test could see it. Layer 2
+found `pycoin` described in `pyproject.toml` as a "dev-only cross-validation oracle for the BTC
+codec" with nothing in the tree importing it: a check that was written down as existing. Both are
+corrections to *claims*, not to code, and neither would have been made by running the suite.
+
+**And the seventh was wrong twice, which is the most useful entry here.** After the page was
+corrected, the corrected direction was carried into the Lean statement — where the *coincidence
+probability* was then named antitone in `k`. It is monotone; the ratio is the antitone one. The
+two functions move in opposite directions, so fixing the sign on one and moving the other with it
+reproduces the same mistake one step to the left. What caught it the second time was not a reader
+but the compiler: a statement a machine has to accept does not let a direction slide, and
+`coincidence_step` — whose increment is `p·(1-p)^k`, non-negative — contradicts the antitone
+statement outright. That is the difference between a claim written in prose and a claim written
+where it can fail.
+
 **And the honest size of this.** This development follows the one in a sibling project, `azoth`,
 whose calculus of thermodynamic dimensionality is larger and whose proofs carry more weight — because
 *units multiply* there and the exponent algebra is load-bearing. chainlens's amounts are never
@@ -46,8 +74,8 @@ dressed as a theorem.
 
 ## Nine layers, and what each one is worth
 
-Each layer is a page here and the Lean module it is stated against. **The status is the design, not
-a progress bar**, and the three are the ones `azoth` settled on:
+Each layer is a page here and the Lean module it is stated against. The three statuses are the ones
+the sibling project settled on:
 
 | | Means |
 |---|---|
@@ -141,5 +169,18 @@ python tools/check_lean_axioms.py
 ```console
 make lean            # build the development
 make lean-gate       # the axiom gate
-make calculus        # both, plus the gate-to-source correspondence
+make calculus        # both, plus the vocabulary check and the correspondence
 ```
+
+**A first `make lean` needs Mathlib's olean cache, and it is two minutes.** One module
+([layer 5](./sensitivity.md)) needs real analysis, so the project requires Mathlib; the other
+eight build against Lean core alone and do not read it. Fetching the prebuilt oleans is:
+
+```console
+cd lean && lake exe cache get    # ~2 minutes, 7,335 files
+```
+
+Without it, `lake build` compiles Mathlib from source, which is the hours-long build this section
+used to cite as the reason to avoid the dependency. **That was a blocker asserted rather than
+measured**, and the measurement is the two minutes above — [layer
+5](./sensitivity.md) exists because someone asked for the number instead of the worry.

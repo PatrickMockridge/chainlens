@@ -1,7 +1,8 @@
 # The sensitivity of a ratio
 
-**Status: Specified.** `Sensitivity.lean` arrives in T5, and T5 is the tranche that can be dropped.
-It is the only layer that needs Mathlib.
+**Status: Specified** for the Lean leg — `Sensitivity.lean` is being written now — and the *claims*
+below were corrected against the code before it was. The correction is the substance of this page;
+see the table.
 
 ## What it fixes
 
@@ -21,22 +22,64 @@ corpus. Both are inputs, and a reader is entitled to know which of them the answ
 
 | Claim | Statement | Status |
 |---|---|---|
-| monotonicity | `LR` is non-decreasing in `k` and non-decreasing in `p` | Specified — T5 |
-| the derivative | `∂LR/∂k` and `∂LR/∂p` in closed form, and their signs | Specified — T5 |
-| the interval is an interval | the reported range contains the point estimate and its ends are ordered | Specified — T5 |
+| the coincidence probability rises with both | `coincidence` is monotone in `k` and in `p` | Specified — T5 |
+| the ratio falls with both | `LR` is **antitone** in `k` and in `p` | Specified — T5 |
+| the ratio is never below one | a match cannot count against the claim it matches, for `p > 0` and `k > 0` | Specified — T5 |
+| the interval is an interval | its ends are ordered, and it contains the estimate | Specified — T5 |
 
-The third is the one a reader would not think to doubt. It is stated because the library carries an
-interval on the wire and a `lower > upper` row is exactly the kind of defect that a type catches
-and a reader does not.
+**The two functions move in opposite directions and that is the whole content of the layer.** A
+likelier coincidence and more opportunities each make a match **less** surprising, so the
+coincidence probability rises and the ratio falls toward 1. Measured:
 
-## Why it needs Mathlib, and why that is the price
+| | values |
+|---|---|
+| coincidence `(k, p=0.5)` for `k = 1, 2, 5, 10` | 0.5, 0.75, 0.969, 0.999 |
+| ratio `(k, p=0.5)` for `k = 1, 2, 5, 10` | 2.0, 1.333, 1.032, 1.001 |
+| ratio `(k=5, p)` for `p = 0.01, 0.05, 0.1, 0.5` | 20.4, 4.42, 2.44, 1.03 |
 
-`differentiable`, `HasDerivAt` and the real analysis the derivative claim is stated in are all
-Mathlib. Every other layer here is stated against Lean core alone, which is what keeps a
-contributor's first `lake build` from being an hours-long dependency build. **So this layer is
-sequenced next to last.** If `lake exe cache get` turns out to be impractical on a contributor's
-machine, this layer stays Specified and the other eight are unaffected — the drop is designed in
-rather than discovered.
+**This table was wrong twice, in two different ways, and the second is the more instructive.**
+It first said the ratio is *non-decreasing* in `k` and in `p`, which has both signs backwards —
+found by checking the claim against the code rather than against the intuition that "more evidence
+is better". Then the corrected direction was carried into the Lean brief, where the *coincidence
+probability* was named antitone in `k`: also wrong, and wrong in the opposite direction from the
+first error, because the two functions' directions are opposites and it is easy to fix the sign on
+one and move the other with it. Both were caught by writing the claim down as a statement a
+machine has to accept.
+
+**The page also claimed a derivative, and there is no derivative to prove.** `k` in this library is
+a count of transactions the walk actually saw — an integer, never a real — so the continuous
+extension a `∂LR/∂k` would need does not exist in the code, and a theorem about it would be a
+theorem about a function nobody calls. What *is* exact is the increment: the coincidence
+probability's step is `p·(1-p)^k`, and the ratio's step is its negation scaled — a difference, not
+a derivative, and the honest version of "how the ratio moves with `k`".
+
+**And one boundary the model does not share with the code.** `likelihood_ratio` returns `math.inf`
+where the coincidence probability is zero — at `p = 0`, and at `k = 0`. Lean's `(0:ℝ)⁻¹` is `0`,
+so a total Lean function would say "no evidence at all" exactly where the library says "infinite
+evidence". The theorems therefore require `0 < p` and `0 < k` rather than asserting through the
+point, and the boundary is a stated difference between the model and the function rather than a
+hypothesis nobody explains.
+
+The interval claim is the one a reader would not think to doubt. It is stated because the library
+carries an interval on the wire and a `lower > upper` row is exactly the kind of defect that a type
+catches and a reader does not — and because the interval's *containment* of the point estimate is a
+real theorem rather than an artefact of how it is computed.
+
+## Why it needs Mathlib, and what that actually costs
+
+**This is the one layer stated over `ℝ`.** The coincidence probability is `1 - (1 - p)^k` for a
+real `p`, the ratio inverts it, and the Wilson interval's half-width is a `Real.sqrt` — so this
+module needs Mathlib's real arithmetic, where the other eight are stated against Lean core alone.
+That asymmetry is deliberate: seven of the nine layers are about integers and sets, and one is
+about a probability.
+
+**That paragraph was a blocker asserted rather than measured, and the measurement is two minutes.**
+Mathlib is a dependency now; `lake exe cache get` fetches 7,335 prebuilt oleans in about two
+minutes, one module reads them, and the other eight still build against Lean core alone. The
+"hours" figure is what a from-source build costs, and it is not what a contributor pays. The
+layer was sequenced last on the strength of that wrong number, and it is the case in this
+repository where "we will do it later because it looks expensive" turned out to be the expensive
+choice: the wrong signs sat on this page while the work was deferred.
 
 ## What is *not* a claim here
 
