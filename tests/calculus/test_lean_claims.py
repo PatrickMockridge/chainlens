@@ -68,17 +68,56 @@ def gated_names() -> list[str]:
     return names
 
 
+def without_comments(source: str) -> str:
+    """`source` with its block comments and line comments removed.
+
+    **This is not tidiness, it is the difference between a scanner that works and one that
+    lies.** Two ways it goes wrong on a Lean file:
+
+    * A line comment or docstring line beginning `end of ...` reads as a `namespace` close, so
+      the stack pops early and every declaration after it is attributed to no namespace - which
+      is a *false alarm*, and it happened: `Sensitivity.lean` has a docstring line reading "end
+      of the domain on `phat`...", and the three Wilson theorems after it were reported as names
+      no file declares.
+    * A comment containing `theorem foo` reads as a declaration, which is the *false pass*, and
+      the worse of the two: a gate naming a theorem that does not exist would be told it does.
+
+    Block comments nest in Lean, so this counts depth rather than searching for the first `-/`.
+    """
+    out: list[str] = []
+    depth = 0
+    index = 0
+    while index < len(source):
+        if source.startswith("/-", index):
+            depth += 1
+            index += 2
+            continue
+        if depth and source.startswith("-/", index):
+            depth -= 1
+            index += 2
+            continue
+        if not depth and source.startswith("--", index):
+            newline = source.find("\n", index)
+            index = len(source) if newline == -1 else newline
+            continue
+        if not depth:
+            out.append(source[index])
+        index += 1
+    return "".join(out)
+
+
 def declared_names() -> set[str]:
     """Every theorem or definition declared under `Chainlens/`, fully qualified.
 
     A stack rather than a variable, because `Dim.lean` nests `Chainlens` and `Dim` - and
     a single variable would attribute `weight_dimensionless` to `Chainlens` and then
-    report the gate as naming a theorem that does not exist.
+    report the gate as naming a theorem that does not exist. Comments are removed first, for
+    the two reasons `without_comments` gives.
     """
     names: set[str] = set()
     for path in sorted(LEAN_SOURCE.glob("*.lean")):
         open_namespaces: list[str] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in without_comments(path.read_text(encoding="utf-8")).splitlines():
             stripped = line.strip()
             if stripped.startswith("namespace "):
                 open_namespaces.append(stripped.removeprefix("namespace ").strip())
@@ -114,6 +153,42 @@ def test_the_gate_names_something() -> None:
             f"read, which fails silently because a missing name is missing from both "
             f"sides of the comparison."
         )
+
+
+def test_a_comment_is_not_read_as_a_declaration() -> None:
+    """The false pass, and the reason comments are stripped.
+
+    A docstring is prose, and prose in this development talks about `theorem`s constantly. If a
+    comment line beginning `theorem <name>` counted as a declaration, then a gate naming a
+    theorem that does not exist would be told that it does — which is the one thing this file
+    cannot afford to be wrong about.
+    """
+    source = "/-\ntheorem ghost (n : Nat) : n = n := rfl\n-/\nnamespace Chainlens.X\n"
+    assert "ghost" not in without_comments(source)
+
+
+def test_a_comment_line_beginning_with_end_does_not_close_a_namespace() -> None:
+    """The false alarm, and it happened.
+
+    `Sensitivity.lean` has a docstring line reading "end of the domain on `phat`...", which the
+    namespace tracker read as a close. Every declaration after it was attributed to no
+    namespace, and the three Wilson theorems were reported as names no file declares. The file
+    was right and the scanner was wrong, which is the more expensive direction to be wrong in:
+    it teaches a reader to distrust a check that is telling the truth.
+    """
+    source = (
+        "namespace Chainlens.X\n\n/--\nend of the domain on something\n-/\n"
+        "theorem t : True := trivial\n"
+    )
+    stripped = without_comments(source)
+    open_namespaces = [
+        line.strip().removeprefix("namespace ").strip()
+        for line in stripped.splitlines()
+        if line.strip().startswith("namespace ")
+    ]
+    assert open_namespaces == ["Chainlens.X"]
+    assert "end of the domain" not in stripped
+    assert "theorem t" in stripped
 
 
 def test_every_gated_name_is_a_declaration_that_exists() -> None:

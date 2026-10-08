@@ -22,6 +22,13 @@ catch and it was demonstrated here by breaking the thing it guards: a `sorry` in
 `rows_length` passed, because the stale olean still held the old proof. `lake build` is
 run first, and it is fast when there is nothing to do.
 
+**And `lake build` is also where the lakefile's options apply, which `lake env lean` does
+not.** `lean/lakefile.toml` sets `autoImplicit = false`, and a bare `lake env lean` on a
+file ignores it — so a missing binder elaborates happily for this tool and fails only
+under `lake build`. That is a second reason the build comes first rather than a footnote to
+the first: the check below would otherwise be run against a source that does not compile
+under the options the project commits.
+
 **And what it does not do.** The gate proves a proof is *complete*; it does not prove the
 theorem is the one wanted. A lemma with a weakened hypothesis is a proof with no gaps and
 still not the claim a reader expects, and no check closes that — it is what review is for.

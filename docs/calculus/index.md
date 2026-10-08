@@ -72,6 +72,11 @@ multiplied, so four of the nine layers below are small. That is a reason to stat
 to imply parity: a claim dressed as parity with a stronger development is the same defect as a claim
 dressed as a theorem.
 
+**And the dependency runs one way.** `azoth` vendors a units library beneath every layer, so all
+nine of its layers need Mathlib. Here eight are stated against Lean core alone and one — [the
+sensitivity of a ratio](./sensitivity.md) — needs real arithmetic. A reader who wants the integer
+half of this development builds three modules and fetches nothing.
+
 ## Nine layers, and what each one is worth
 
 Each layer is a page here and the Lean module it is stated against. The three statuses are the ones
@@ -92,7 +97,7 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 | [The vocabulary table](./vocabulary.md) | which chains, assets and address families may be named, and what each one is | `Vocabulary.lean` | Proved |
 | [Exactness](./exactness.md) | what conserves a unit and what invents one | `Exactness.lean` | Proved |
 | [Raw and canonical](./canonical.md) | the map from a provider's bytes to the canonical view | `Canonical.lean` | Characterised |
-| [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Specified |
+| [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Proved |
 | [Reflection](./reflection.md) | the document round trip | `Contract.lean` | Characterised |
 | [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Specified |
 | [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Specified |

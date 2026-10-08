@@ -1,8 +1,8 @@
 # The sensitivity of a ratio
 
-**Status: Specified** for the Lean leg — `Sensitivity.lean` is being written now — and the *claims*
-below were corrected against the code before it was. The correction is the substance of this page;
-see the table.
+**Status: Proved.** `lean/Chainlens/Sensitivity.lean` builds, and all thirteen theorems are in
+`Axioms.lean` and rest on nothing outside the three axioms the gate permits. It is the one module
+here that depends on Mathlib, and that was a cost measured rather than assumed — see below.
 
 ## What it fixes
 
@@ -20,12 +20,15 @@ LR = 1 / (1 - (1 - p)^k)
 `k` is a **count of transactions the walk actually saw**, not an estimate, and `p` is read from a
 corpus. Both are inputs, and a reader is entitled to know which of them the answer is fragile to.
 
-| Claim | Statement | Status |
+| Claim | Theorem | Status |
 |---|---|---|
-| the coincidence probability rises with both | `coincidence` is monotone in `k` and in `p` | Specified — T5 |
-| the ratio falls with both | `LR` is **antitone** in `k` and in `p` | Specified — T5 |
-| the ratio is never below one | a match cannot count against the claim it matches, for `p > 0` and `k > 0` | Specified — T5 |
-| the interval is an interval | its ends are ordered, and it contains the estimate | Specified — T5 |
+| the coincidence probability is one | `coincidence_is_probability`, `coincidence_nonneg`, `coincidence_le_one` | Proved |
+| its step is exactly `p·(1-p)^k` | `coincidence_step` | Proved |
+| it rises with both arguments | `coincidence_mono_p`, `coincidence_mono_k`, `coincidence_pos` | Proved |
+| the ratio falls with both | `ratio_antitone_p`, `ratio_antitone_k` | Proved |
+| the ratio is never below one | `ratio_ge_one` | Proved |
+| the interval is an interval | `wilsonSpread_nonneg`, `wilson_ordered` | Proved |
+| it contains the estimate | `wilson_contains_estimate` | Proved |
 
 **The two functions move in opposite directions and that is the whole content of the layer.** A
 likelier coincidence and more opportunities each make a match **less** surprising, so the
@@ -91,13 +94,21 @@ statement about a *selection*, and the place it is dealt with is
 
 ## What it is about in the tree
 
-| The claim's subject | The tree |
+| Lean | The tree |
 |---|---|
-| the ratio, and the coincidence probability it divides | `src/chainlens/verify/likelihood.py::likelihood_ratio` and `::coincidence_probability` |
-| the interval | `src/chainlens/verify/likelihood.py::wilson_interval` |
+| `Chainlens.Sensitivity.coincidence` | `src/chainlens/verify/likelihood.py::coincidence_probability` |
+| `Chainlens.Sensitivity.ratio` | `src/chainlens/verify/likelihood.py::likelihood_ratio` |
+| `wilsonCentre` / `wilsonSpread` / `wilsonLower` / `wilsonUpper` | `src/chainlens/verify/likelihood.py::wilson_interval` |
 | the guard that the count is complete | `src/chainlens/verify/checks/base.py::CheckContext.scan_limit` |
 
 The closed forms the library reports are already written down beside their implementations — the
 `OperationKind` table in `src/chainlens/verify/likelihood.py` maps each operation to the expression
 a reader recomputes by hand — so the page and the code already name the same three formulas. What
-T5 adds is that they have the signs they are claimed to have.
+this layer adds is that they have the signs they are claimed to have.
+
+**Two things the Lean model does not carry, and both are stated rather than absorbed.** The
+`wilson_interval` in the tree clips its output to `[0, 1]` and rounds away a floating-point
+artefact at the endpoints; neither is modelled, because both are about the representation of a
+float and not about the interval. And the estimator's `p` is a `float` read from data, where Lean's
+is a real — the same `float`-versus-`ℝ` gap that [layer 3](./exactness.md) found a live bug in, and
+here it is bounded rather than load-bearing because nothing is summed.

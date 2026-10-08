@@ -23,6 +23,7 @@ table, so that a new row cannot be added without its `#print axioms` line.
 
 import Chainlens.Dim
 import Chainlens.Exactness
+import Chainlens.Sensitivity
 
 /-! ## Layer 1 — amount identity
 
@@ -87,3 +88,54 @@ function's docstring and in `tests/models/test_flows.py`.
 
 -- The layer's claim: the split sums back to the total it was given.
 #print axioms Chainlens.Exactness.split_sum
+
+/-! ## Layer 5 — the sensitivity of a ratio
+
+`docs/calculus/sensitivity.md`. How the likelihood ratio moves with the two numbers it is
+computed from: `k`, the count of transactions a walk actually looked at, and `p`, the
+per-opportunity probability read from data.
+
+**This is the one module that depends on Mathlib.** The coincidence probability is
+`1 - (1 - p) ^ k` over `ℝ`, and the Wilson interval's half-width is a `Real.sqrt`; the other
+eight layers are stated against Lean core alone.
+
+**The claim's direction was wrong on the page when this was written, and then wrong again in
+the statement.** The page said the ratio is non-decreasing in `k` and in `p` — it is antitone
+in both. Correcting that, the *coincidence probability* was then named antitone in `k`, and it
+is the ratio that is the antitone one: the two functions move in opposite directions, so
+fixing one sign and carrying the other with it reproduces the same error one step to the left.
+What caught the second is `coincidence_step`, whose increment `p * (1 - p) ^ k` is
+non-negative and contradicts an antitone statement outright.
+
+**The sensitivity to `k` is a difference and not a derivative**, and that is a property of the
+subject rather than a limit of the proof: `k` is a count of transactions the walk saw, so the
+continuous extension a derivative would need does not exist in the code. `coincidence_step` is
+the increment, exactly.
+
+**And the domain is narrower than the code's, deliberately.** `likelihood_ratio` returns
+`math.inf` where the coincidence probability is zero — at `p = 0` and at `k = 0` — while Lean's
+`(0 : ℝ)⁻¹` is `0`, which would say "no evidence at all" exactly where the library says
+"infinite evidence". The ratio theorems therefore carry `0 < p` and `0 < k` rather than
+asserting through the point, and `tests/verify/test_likelihood.py` guards the same domain.
+-/
+
+-- The coincidence probability lies in `[0, 1]`, and rises with both of its arguments.
+#print axioms Chainlens.Sensitivity.coincidence_is_probability
+#print axioms Chainlens.Sensitivity.coincidence_nonneg
+#print axioms Chainlens.Sensitivity.coincidence_le_one
+#print axioms Chainlens.Sensitivity.coincidence_step
+#print axioms Chainlens.Sensitivity.coincidence_mono_p
+#print axioms Chainlens.Sensitivity.coincidence_mono_k
+#print axioms Chainlens.Sensitivity.coincidence_pos
+
+-- The ratio: never below one, and antitone in both of its arguments.
+#print axioms Chainlens.Sensitivity.ratio_ge_one
+#print axioms Chainlens.Sensitivity.ratio_antitone_p
+#print axioms Chainlens.Sensitivity.ratio_antitone_k
+
+-- The reported interval is an interval, it is not inverted, and it contains the estimate it is
+-- an interval around. `wilsonSpread_nonneg` is what makes the ordering a consequence of the
+-- half-width being a distance rather than a separate fact.
+#print axioms Chainlens.Sensitivity.wilsonSpread_nonneg
+#print axioms Chainlens.Sensitivity.wilson_ordered
+#print axioms Chainlens.Sensitivity.wilson_contains_estimate
