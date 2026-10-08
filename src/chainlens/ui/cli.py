@@ -26,7 +26,7 @@ import webbrowser
 from collections.abc import Sequence
 from pathlib import Path
 
-from chainlens.exceptions import ConfigurationError, LLMError
+from chainlens.exceptions import ChainlensError, ConfigurationError, LLMError
 from chainlens.ledger.annotate import stamp
 from chainlens.ledger.annotations import AnnotationStore
 from chainlens.ledger.derive import derive_finding
@@ -290,6 +290,54 @@ def _notes_with(corpus: Corpus, mentions: Sequence[AddressMention]) -> str:
     return f"{len({mention.note for mention in mentions})} note(s)"
 
 
+async def _lookup_for_cli(args: argparse.Namespace, corpus: Corpus) -> int:
+    """Ask the chain about every address the corpus holds, and report what it said.
+
+    No model and no credential on either chain: the addresses come from the material by pattern
+    rather than by reading it, and the answers come from a provider. This is the pass that turns
+    screenshots into facts about the chain, and everything a model might add is downstream of it.
+    """
+    from chainlens.models.enums import Chain
+    from chainlens.notes.lookup import LookupReport, lookup_addresses, summarise
+
+    mentions = address_mentions(corpus)
+    if not any(mention.usable for mention in mentions):
+        print("no address in this corpus can be looked up; run --addresses to see why")
+        return 0
+
+    registry = get_registry()
+    providers: dict[Chain, Provider] = {}
+    for chain in {mention.chain for mention in mentions if mention.usable and mention.chain}:
+        try:
+            providers[chain] = _address_provider(args.provider, args.chain or chain.value)
+        except (ChainlensError, SystemExit) as exc:
+            print(f"  no provider for {chain.value}: {exc}", file=sys.stderr)
+    if not providers:
+        raise SystemExit(
+            "no provider could be resolved for any chain in this corpus; "
+            f"available: {', '.join(sorted(registry.keys()))}"
+        )
+
+    lookups = await lookup_addresses(mentions, providers=providers)
+    print()
+    for item in lookups:
+        print(f"  {item.format()}")
+        if item.notes:
+            print(f"    in {', '.join(item.notes[:3])}{' …' if len(item.notes) > 3 else ''}")
+    print()
+    print(summarise(lookups))
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            strict_dumps(LookupReport(lookups=lookups, corpus=corpus.root)),
+            encoding="utf-8",
+        )
+        print(f"wrote {out}")
+    return 0
+
+
 async def _write_claims(args: argparse.Namespace, corpus: Corpus, client: StructuredLLM) -> int:
     """Read the corpus into claims, choose among them, and write them as records.
 
@@ -527,6 +575,9 @@ def _command_notes(args: argparse.Namespace) -> int:
     if args.addresses:
         _report_addresses(corpus)
         return 0
+
+    if args.lookup:
+        return anyio.run(_lookup_for_cli, args, corpus)
 
     if args.labels_out:
         return _write_labels(args, corpus)
@@ -966,6 +1017,14 @@ def build_parser() -> argparse.ArgumentParser:
             "read a corpus saved by --save instead of reading the directory again. Reading a "
             "corpus costs a model call per screenshot, and a second question about it should not "
             "cost that twice"
+        ),
+    )
+    notes.add_argument(
+        "--lookup",
+        action="store_true",
+        help=(
+            "ask the chain about every address the corpus holds — balance, whether it is a "
+            "contract, and its activity — and report what it said. No model, no credential"
         ),
     )
     notes.add_argument(

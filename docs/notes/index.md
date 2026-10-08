@@ -231,6 +231,37 @@ being screenshotted chose to render, which sends you nowhere, because the charac
 to find. A corpus that reported only the usable ones would describe forty abbreviations as holding
 nothing.
 
+### First-order data: the addresses themselves
+
+```console
+chainlens notes --from-corpus corpus.json --lookup --out addresses.json
+```
+
+**This is the pass that needs no model, and it is the one to run first.** Every address the corpus
+holds is found by pattern — a regex and the library's own validator, so it cannot hallucinate — and
+each one is put to the chain:
+
+```console
+  0xea674fdde714fd979de3edf0f56aa9716b898ec8  contract  balance 67405741441939559062
+    in GJGAohUW8AEczWp.png
+  1F1tAaz5x1HUXrCNLbtMDqcw6o5GNn4xqX  balance 33061617  1845 txs  last seen 2025-11-04
+    in note.txt
+
+33/33 address(es) answered
+```
+
+**What each chain can answer without a key is different, and it says so rather than hiding it.**
+Bitcoin has a free address index (Esplora), so balance, transaction count and first/last seen are
+one call. **Ethereum does not** — a JSON-RPC node answers a balance and whether there is code at the
+address, which is how a named contract is told from an address typed into a table, but "list every
+transaction this address made" needs an indexer, and the one this library can reach is Etherscan,
+which needs a key. A lookup that got less than the chain could give reports the gap rather than
+presenting a short answer as the whole of it.
+
+One address mentioned in four screenshots is looked up once, and the record names all four notes.
+An address that could not be reached is reported with its reason, because a list of sixteen answers
+from nineteen addresses, with the missing three invisible, overstates what is known.
+
 ### The claim records
 
 `--claims-out` reads every note and writes one record per claim, in the same shape the case study

@@ -89,6 +89,7 @@
     - [claims](reference/notes/claims.md)
     - [corpus](reference/notes/corpus.md)
     - [identifiers](reference/notes/identifiers.md)
+    - [lookup](reference/notes/lookup.md)
     - [search](reference/notes/search.md)
     - [selection](reference/notes/selection.md)
     - [vision](reference/notes/vision.md)

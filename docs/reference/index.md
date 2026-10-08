@@ -61,6 +61,7 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.notes.claims`](notes/claims.md)
 - [`chainlens.notes.corpus`](notes/corpus.md)
 - [`chainlens.notes.identifiers`](notes/identifiers.md)
+- [`chainlens.notes.lookup`](notes/lookup.md)
 - [`chainlens.notes.search`](notes/search.md)
 - [`chainlens.notes.selection`](notes/selection.md)
 - [`chainlens.notes.vision`](notes/vision.md)

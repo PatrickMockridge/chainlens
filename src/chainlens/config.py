@@ -30,7 +30,12 @@ __all__ = ["CacheMode", "Settings", "get_settings", "reset_settings_cache"]
 #: a store-then-serve cache it would be indistinguishable from ``offline``.
 CacheMode = Literal["live", "offline"]
 
-_DEFAULT_ETH_RPC_URL = "https://eth.llamarpc.com"
+#: A public Ethereum node that answers. **Replaced after measuring it**, which is the only way to
+#: choose one: these endpoints come and go, and the one that was here — ``eth.llamarpc.com`` —
+#: returned an SSL 525 to every request while the Bitcoin side worked fine. Four candidates were
+#: tried against the same call; this and ``eth.drpc.org`` answered, and ``cloudflare-eth.com`` and
+#: ``rpc.ankr.com/eth`` returned 200 with no result. Override with ``CHAINLENS_ETH_RPC_URL``.
+_DEFAULT_ETH_RPC_URL = "https://ethereum-rpc.publicnode.com"
 #: Where model calls go unless something says otherwise. See `anthropic_base_url` for why this is
 #: a gateway rather than Anthropic's own endpoint, and what a caller should know about it.
 _DEFAULT_MODEL_ENDPOINT = "https://api.deepseek.com/anthropic/"
