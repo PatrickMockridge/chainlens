@@ -30,6 +30,8 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
+from pydantic import Field
+
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Chain
 from chainlens.notes.corpus import Corpus, Note, NoteKind
@@ -97,6 +99,10 @@ class AddressMention(LensModel):
             touched and some it did not.
         warnings: the note's own warnings, carried verbatim, so a caution raised about the note is
             attached to the mentions read out of it rather than left behind at the note.
+        position: where the token sits in the *raw* note text, as a character offset. Carried
+            because the collapsed ``context`` has destroyed the line structure, and anything asking
+            "were these two on the same row?" needs to know which line each one is on. This was
+            computed and thrown away until a caller needed it.
     """
 
     as_written: str
@@ -107,6 +113,7 @@ class AddressMention(LensModel):
     context: str = ""
     transcribed: bool = False
     warnings: tuple[str, ...] = ()
+    position: int = Field(default=0, ge=0)
 
     @property
     def usable(self) -> bool:
@@ -183,6 +190,7 @@ def _mentions_in(note: Note) -> tuple[AddressMention, ...]:
             context=context_around(note.text, token),
             transcribed=transcribed,
             warnings=note.warnings,
+            position=position(token),
         )
 
     found: list[AddressMention] = [mention(cut, MentionKind.TRUNCATED) for cut in truncated]
