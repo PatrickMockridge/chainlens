@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -32,8 +32,8 @@ format:  ## Auto-fix lint and format in place
 	uv run ruff check --fix .
 	uv run ruff format .
 
-typecheck:  ## Typecheck src, tests, and the case-study tools
-	uv run mypy src tests case-study/tools
+typecheck:  ## Typecheck src, tests, the case-study tools and the repository tools
+	uv run mypy src tests tools case-study/tools
 
 test:  ## Run the test suite with the network blocked
 	uv run pytest --block-network
@@ -129,6 +129,25 @@ verify:  ## Re-run every case-study claim record and check the verdicts reproduc
 
 case-study-check:  ## The case study's static guardrails, no network needed
 	uv run pytest tests/case_study -q
+
+lean:  ## Build the Lean development of the calculus
+	# Not part of `check`: a Lean toolchain is not a Python dependency, and this is the one
+	# target in the file that needs a tool that `uv sync` will not install. The guard that
+	# does run everywhere is `tests/calculus/test_lean_claims.py`, and it reads the gate
+	# files and the sources rather than building anything.
+	cd lean && lake build
+
+lean-gate:  ## Refuse a proof in the calculus that rests on an axiom we did not agree to
+	# The tool builds first, and that is not a convenience: `lake env lean` resolves an
+	# `import` to the compiled olean rather than to the source, so a `sorry` added and not
+	# rebuilt is invisible to the gate, which then reports a clean result for a proof with a
+	# hole in it. See the tool's docstring, where that was measured rather than reasoned about.
+	uv run python tools/check_lean_axioms.py
+
+calculus:  ## The whole calculus: the Lean build, the axiom gate, the claim correspondence
+	$(MAKE) lean
+	$(MAKE) lean-gate
+	uv run pytest tests/calculus -q
 
 build:  ## Build wheel and sdist
 	uv build

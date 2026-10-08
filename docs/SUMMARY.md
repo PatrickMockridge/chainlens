@@ -24,6 +24,19 @@
 - [Is a likelihood ratio any good?](explanation/calibration.md)
 - [Using a model](explanation/extraction.md)
 
+# The calculus of chain dimensionality
+
+- [The calculus](calculus/index.md)
+- [Amount identity](calculus/dimensions.md)
+- [The vocabulary table](calculus/vocabulary.md)
+- [Exactness](calculus/exactness.md)
+- [Raw and canonical](calculus/canonical.md)
+- [The sensitivity of a ratio](calculus/sensitivity.md)
+- [Reflection](calculus/reflection.md)
+- [The keycard as a capability](calculus/capability.md)
+- [Barbs](calculus/barbs.md)
+- [Processes and channels](calculus/process.md)
+
 # Plugins
 
 - [Writing a provider](plugins/writing-a-provider.md)

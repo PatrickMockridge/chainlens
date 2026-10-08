@@ -1,0 +1,18 @@
+# The Lean development of the calculus in `docs/calculus/`.
+#
+# The toolchain is pinned by `lean-toolchain` and committed, so a build here is the
+# same build everywhere. **It depends on nothing.** Eight of the nine layers are
+# stated against Lean core alone — which ChemEng cannot do, because it vendors a
+# units library beneath every layer — so a contributor needs no Mathlib download
+# until layer 5, and layer 5 is the one tranche that can be dropped.
+name = "chainlens"
+version = "0.1.0"
+defaultTargets = ["Chainlens"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+pp.unicode.fun = true
+
+[[lean_lib]]
+name = "Chainlens"

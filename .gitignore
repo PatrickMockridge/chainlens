@@ -44,6 +44,15 @@ book/
 # which is the package that reads it, and the whole feature would have been ignored silently.
 /notes/
 
+# --- Lean ---
+# The calculus's proof development. The toolchain pin (`lean/lean-toolchain`) and the dependency
+# manifest (`lean/lake-manifest.json`) are committed, so a build is the same build everywhere; the
+# compiled oleans under `.lake/` are not, and `lake build` regenerates them.
+#
+# `lake exe cache get` puts fetched dependency oleans in the same directory, which is the other
+# reason it is ignored: it is a cache, and the largest directory in this repository after `web/`.
+lean/.lake/
+
 # --- Notebooks ---
 .ipynb_checkpoints/
 
