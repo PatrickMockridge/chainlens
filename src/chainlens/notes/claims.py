@@ -26,6 +26,7 @@ import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from chainlens.exceptions import LLMError
 from chainlens.notes.corpus import Corpus, Note, NoteKind
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef, TextSource
 from chainlens.verify.extract import ExtractionReport, Extractor, StructuredLLM
@@ -102,16 +103,22 @@ class CorpusExtraction:
         note: the note's path, which is how a reader finds the original.
         report: what the extractor produced, including the claims its own quote check discarded.
             Carried whole because the drop count is the extraction's error rate, and a reading that
-            fabricated nine claims out of ten has to be visible as such.
+            fabricated nine claims out of ten has to be visible as such. ``None`` when the note
+            could not be read at all.
+        failure: why the note yielded no reading, in words, or ``None`` when it yielded one. Kept
+            apart from an empty report for the same reason the corpus keeps an unreadable file
+            apart from an empty one: "this note claimed nothing" and "this note could not be read"
+            are different findings, and only the second is a defect to look at.
     """
 
     note: str
-    report: ExtractionReport
+    report: ExtractionReport | None = None
+    failure: str | None = None
 
     @property
     def claims(self) -> tuple[Claim, ...]:
-        """The claims that survived quote validation."""
-        return self.report.extraction.claims
+        """The claims that survived quote validation. Empty when the note failed."""
+        return () if self.report is None else self.report.extraction.claims
 
 
 async def claims_from_corpus(
@@ -128,6 +135,12 @@ async def claims_from_corpus(
     from. Per note, the quote check is against exactly the material the claim came from, which is
     the check the extraction layer is built around.
 
+    **A note that fails is recorded, not raised.** One dense table can produce an answer longer than
+    the extractor's token cap, and letting that end the run would mean the flakiest note in a corpus
+    decides how much of the corpus gets read — the failure the corpus layer already refuses to have,
+    where one unreadable screenshot must not cost the other four hundred. The reason travels on the
+    reading, so a note that yielded nothing is visibly different from one that claimed nothing.
+
     Only notes that were read contribute. A note that could not be read has no text to read claims
     from, and its reason travels on the corpus rather than being restated as an empty extraction —
     the difference between "this note said nothing" and "this note could not be read" is the
@@ -138,8 +151,12 @@ async def claims_from_corpus(
     # comprehension makes it an async generator, which `tuple()` cannot consume.
     readings: list[CorpusExtraction] = []
     for note in corpus.readable:
-        report = await extractor.extract(post_for_note(note, corpus))
-        readings.append(CorpusExtraction(note=note.path, report=report))
+        try:
+            report = await extractor.extract(post_for_note(note, corpus))
+        except LLMError as exc:
+            readings.append(CorpusExtraction(note=note.path, failure=str(exc)))
+        else:
+            readings.append(CorpusExtraction(note=note.path, report=report))
     return tuple(readings)
 
 

@@ -8,10 +8,14 @@ disclosure, so that a choice cannot pass for a reading.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from chainlens.exceptions import LLMError
+from chainlens.models.base import LensModel
 from chainlens.notes import read_corpus
 from chainlens.notes.claims import (
     CorpusExtraction,
@@ -46,6 +50,32 @@ def _corpus(tmp_path: Path, **files: str) -> Corpus:
 
 def _claim_answer(quote: str = QUOTE) -> dict[str, object]:
     return {"claims": [{"type": "transfer", "quote": quote, "addresses": [ALICE, BOB]}]}
+
+
+class _FailsOnTheSecondCall:
+    """A client that answers everything but the second call, then raises.
+
+    Written here rather than using :class:`~chainlens.verify.extract.FakeLLM`'s ``fail_with``,
+    which fails *every* call: what is under test is a run that survives one bad note, and that
+    needs a fake which can have exactly one.
+    """
+
+    name = "flaky"
+
+    def __init__(self, answers: list[dict[str, object]]) -> None:
+        self._answers = list(answers)
+        self.calls = 0
+
+    async def complete(
+        self, *, system: str, prompt: str, shape: type[LensModel]
+    ) -> Mapping[str, Any]:
+        self.calls += 1
+        if self.calls == 2:
+            raise LLMError(
+                "the model's answer was cut off at the token cap, so the extraction is incomplete "
+                "rather than absent; raise max_tokens or shorten the post"
+            )
+        return self._answers.pop(0)
 
 
 def _reading_of(corpus: Corpus, quote: str = QUOTE) -> CorpusExtraction:
@@ -149,10 +179,12 @@ class TestReadingTheCorpusIntoClaims:
         readings = await claims_from_corpus(corpus, llm)
 
         assert len(readings[0].claims) == 1
+        report = readings[0].report
+        assert report is not None, "the note was read, so it has a report rather than a failure"
         # `dropped` is the count and the quote itself is carried in the validation, so the reason
         # survives as text rather than only as a number.
-        assert readings[0].report.dropped == 1
-        assert readings[0].report.validation.dropped == ("something nobody said",)
+        assert report.dropped == 1
+        assert report.validation.dropped == ("something nobody said",)
 
     @pytest.mark.anyio
     async def test_the_reading_keeps_the_drop_count_visible(self, tmp_path: Path) -> None:
@@ -162,8 +194,39 @@ class TestReadingTheCorpusIntoClaims:
         readings = await claims_from_corpus(corpus, llm)
 
         assert readings[0].claims == ()
-        assert readings[0].report.dropped == 1
-        assert any("dropped" in warning for warning in readings[0].report.warnings)
+        report = readings[0].report
+        assert report is not None
+        assert report.dropped == 1
+        assert any("dropped" in warning for warning in report.warnings)
+
+    @pytest.mark.anyio
+    async def test_a_note_the_model_could_not_finish_costs_only_itself(
+        self, tmp_path: Path
+    ) -> None:
+        """One dense table can outrun the token cap, and letting that end the run would mean the
+        flakiest note decides how much of the corpus gets read.
+
+        This is the failure the corpus layer already refuses to have — one unreadable file must not
+        cost the rest — and it took a real run over forty notes to find it: the extractor raised on
+        one table and thirty-nine notes went unread.
+        """
+        corpus = _corpus(tmp_path, a=SENTENCE, b="carol paid dave 5 btc", c="erin paid frank 2 btc")
+        llm = _FailsOnTheSecondCall(
+            [
+                _claim_answer(QUOTE),
+                {"claims": [{"type": "transfer", "quote": "erin paid frank 2 btc"}]},
+            ]
+        )
+        readings = await claims_from_corpus(corpus, llm)
+
+        assert [reading.note for reading in readings] == ["a.txt", "b.txt", "c.txt"]
+        assert readings[1].failure is not None
+        assert "token cap" in readings[1].failure
+        assert readings[1].report is None, "a failure is not a reading that claimed nothing"
+        assert readings[1].claims == ()
+        # And the notes either side of it were still read.
+        assert len(readings[0].claims) == 1
+        assert len(readings[2].claims) == 1
 
     @pytest.mark.anyio
     async def test_each_claim_keeps_the_note_it_came_from(self, tmp_path: Path) -> None:

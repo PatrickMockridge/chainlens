@@ -293,7 +293,12 @@ async def _write_claims(args: argparse.Namespace, corpus: Corpus, client: Struct
     print()
     readings = await claims_from_corpus(corpus, client)
     for reading in readings:
-        if reading.report.dropped:
+        if reading.failure is not None:
+            # Reported rather than swallowed. A note that produced no reading is not a note that
+            # claimed nothing, and a run that hid the difference would look complete when it was
+            # not — the failure this whole layer is arranged against.
+            print(f"  not read: {reading.note} — {reading.failure}")
+        elif reading.report is not None and reading.report.dropped:
             print(f"  {reading.note}: {reading.report.format()}")
 
     kept = claims_of(readings)
