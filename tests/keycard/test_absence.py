@@ -97,3 +97,59 @@ def test_a_card_is_not_where_a_credential_lives() -> None:
     """
     with pytest.raises(KeycardError, match="unknown section"):
         loads('schema_version = 1\n[credentials]\napi_key = "x"\n')
+
+
+def test_importing_the_card_does_not_need_an_optional_parser() -> None:
+    """**The regression, and the reason the suite did not catch it.**
+
+    `chainlens.keycard` imports `presets/records.py` for the `Preset` type. With `import yaml` at
+    that module's top, `chainlens ui --help` in a clean install died with
+    ``ModuleNotFoundError: No module named 'yaml'`` — a dev-only dependency made load-bearing on a
+    path that never reads a YAML file. CI's clean-wheel step caught it; the suite could not,
+    because in a development environment PyYAML *is* installed.
+
+    So the assertion is about `sys.modules` in a fresh interpreter rather than about behaviour here:
+    it fails the moment a module-level YAML import returns to that path, whatever is installed
+    locally.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, chainlens.keycard;print([name for name in ('yaml',) if name in sys.modules])"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == "[]", (
+        "importing the keycard pulled in a YAML parser, which is an optional extra — a clean "
+        "install would fail to import it at all"
+    )
+
+
+def test_the_card_can_be_loaded_in_a_process_that_has_no_yaml() -> None:
+    """And the same thing behaviourally: a card loads with no parser available.
+
+    The subprocess blocks the import rather than uninstalling anything, by putting a finder in
+    front of the real one that refuses `yaml` — which is the situation a clean install is in.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "class Refuse:\n"
+        "    def find_module(self, name, path=None):\n"
+        "        return self if name == 'yaml' else None\n"
+        "    def load_module(self, name):\n"
+        "        raise ImportError('yaml is not installed in this process')\n"
+        "sys.meta_path.insert(0, Refuse())\n"
+        "sys.modules.pop('yaml', None)\n"
+        "from chainlens.keycard import SHIPPED, loads\n"
+        "loaded = loads('schema_version = 1')\n"
+        "print(SHIPPED.resolved_thresholds.scan_limit, loaded.resolved_thresholds.scan_limit)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.split() == ["2000", "2000"]

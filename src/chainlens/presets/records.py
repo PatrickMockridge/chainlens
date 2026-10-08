@@ -30,7 +30,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import yaml
 from pydantic import Field, model_validator
 
 from chainlens.exceptions import ChainlensError
@@ -276,12 +275,39 @@ def load_named(name: str, *, card: Keycard | None = None) -> Preset:
     )
 
 
+def _yaml() -> Any:
+    """The YAML parser, imported where it is used rather than where this module is.
+
+    **A module-level `import yaml` on this module was a real regression once**, and the shape of
+    the failure is worth keeping: `chainlens.keycard` imports this module for `Preset`, so with
+    the import at the top, `chainlens ui --help` in a clean install died with
+    ``ModuleNotFoundError: No module named 'yaml'`` — a *dev-only* dependency made load-bearing on
+    a path that never reads a YAML file. It was caught by CI's clean-wheel step and not by the
+    suite, because in a development environment PyYAML is installed.
+
+    It is a function-local import for the reason the rest of this library does the same for `PIL`
+    and `anthropic`: an optional dependency belongs where it is used. ``chainlens[presets]``
+    declares it, and the message below names that, because a bare `ModuleNotFoundError` from four
+    frames down is not a thing a user can act on.
+    """
+    try:
+        import yaml
+    except ImportError as exc:  # pragma: no cover - the extra is installed in this environment
+        raise PresetError(
+            "reading a preset from YAML needs PyYAML, which is not a core dependency; install "
+            "chainlens[presets], or use `load_named` — the shipped presets are in the keycard and "
+            "need no YAML parser"
+        ) from exc
+    return yaml
+
+
 def load_file(path: Path) -> Preset:
     """One preset from a YAML file.
 
     Raises:
         PresetError: the file is unreadable or does not describe a preset.
     """
+    yaml = _yaml()
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
