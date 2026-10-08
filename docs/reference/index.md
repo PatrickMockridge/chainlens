@@ -32,6 +32,7 @@ would be editing a copy. See `tests/docs/gen_reference.py`.
 - [`chainlens.graph.build`](graph/build.md)
 - [`chainlens.graph.export`](graph/export.md)
 - [`chainlens.graph.metrics`](graph/metrics.md)
+- [`chainlens.keycard`](keycard.md)
 - [`chainlens.labels`](labels/index.md)
 - [`chainlens.labels.ingest`](labels/ingest.md)
 - [`chainlens.labels.provider`](labels/provider.md)

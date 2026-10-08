@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PatrickMockridge/chainlens/specs/schema/keycard.schema.json",
+  "title": "A keycard",
+  "description": "The data an answer rests on: the thresholds a finding is computed under, and the attributions a holder asserts. A card is a citation and not a credential — an API key here would put a secret in a file whose purpose is to be shared. Nothing reads this file at run time: `chainlens.keycard.load` is the enforcement, and its refusals are what a holder meets. This is the declared shape, for a reader and for an editor that offers completion. Every field is optional, because a card states what it states and inherits the rest from the shipped baseline, per item: a card naming one threshold keeps the library's values for the other four, and a card naming one address keeps the shipped assertions about every other address.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bumped when the shape of a card changes. The loader refuses a version it does not know rather than guessing at a newer one."
+    },
+    "keyholder": {
+      "type": "string",
+      "description": "Who is asserting the right to use these values. Nothing in the library reads it; it is here so that a card found in a directory says whose it is, which is the first question a reader of one asks."
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The numbers a finding is computed under. **Unstated means inherited, not defaulted** — and the difference is what makes an overlay per item possible, so a loader must keep `null` distinct from a stated value.",
+      "properties": {
+        "hedge_tolerance": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "How much wider a hedge word makes an amount's band, as a fraction of the amount. The largest free parameter in the whole calculation: it moves the likelihood ratio roughly linearly, and a reader of a finding is entitled to know which value produced the number in front of them."
+        },
+        "min_joint_successes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Below this many joint successes, an estimate is not reported at all — a rate from three observations is not a rate."
+        },
+        "z_95": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The normal quantile for a 95% interval."
+        },
+        "scan_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many of a sender's transactions to walk before declaring the scan truncated. A claim about a busy exchange address is not one this machinery can price, and saying so is better than walking a million transactions to find out that it could have."
+        },
+        "transfer_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many transfers one finding carries in its evidence. The cap is reported when it is hit: a partial list that looks complete is worse than a short one that says it is short."
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "description": "Attributions the holder asserts. **The card speaks for the addresses it names and not for every other** — the shipped assertions about anything else are kept.",
+      "items": {
+        "$ref": "#/$defs/assertion"
+      }
+    }
+  },
+  "$defs": {
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address",
+        "name",
+        "source"
+      ],
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The label itself — \"Mt Gox\", \"the July proceeds\". Distinct from `kind`, which is the category: \"this is an exchange\" is what a source says, where the name is what it is called."
+        },
+        "kind": {
+          "enum": [
+            "heuristic",
+            "service",
+            "exchange",
+            "mixer",
+            "sanctioned",
+            "individual",
+            "marketplace",
+            "fundraiser",
+            "dao",
+            "unknown"
+          ],
+          "description": "What kind of real-world actor the address is believed to be. **A category and not an identity**, which is what lets the same address be an exchange in one source and sanctioned in another without either being wrong. See `chainlens.models.enums.EntityKind`. **These members are held to `EntityKind` by a test rather than trusted**: this list was hand-written first and was already missing a member and out of order, which is the defect the vocabulary table exists to prevent one layer down. A schema is a second description of a shape Python owns, and the only safe version of that is one something compares."
+        },
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "description": "Where the assertion can be read. **Required, and a URL rather than a sentence**, because a label with no citation is an assertion nobody can check — a claim dressed as a finding. This is the whole of the card's citation story: there is deliberately no `verify_status`-style field, because a field that could not be checked by a tool, required anyway, teaches people to fill it in rather than to know the answer."
+        }
+      }
+    }
+  }
+}

@@ -35,6 +35,7 @@ the actual defects, in the order they were fixed:
 | **a page claimed its round trip held for five document kinds; the test covered one, and two kinds had no committed example at all** | a claim asserting a guard it did not have |
 | **the committed fixture spelled an instant `+00:00` where the models spell it `Z`** | the fixture was not the document it claimed to be |
 | **the page stated the extraction invariant as a discipline; it is a one-field type, and the claim with teeth — the quote filter — was not the one the page named** | a claim weaker than the truth, which is the same defect as one stronger |
+| **the keycard's schema listed an enum's members by hand, and the list was already wrong — one member missing, the rest out of order** | a value written in a second place, again, and again with nothing comparing the two |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
 what makes the next one fail at construction instead.
@@ -59,7 +60,7 @@ found `pycoin` described in `pyproject.toml` as a "dev-only cross-validation ora
 codec" with nothing in the tree importing it: a check that was written down as existing. Both are
 corrections to *claims*, not to code, and neither would have been made by running the suite.
 
-**The ninth is this section's own tranche making the mistake the section is about**, which is why
+**The ninth and the tenth are this section's own tranches making the mistake the section is about**, which is why
 it is in the table rather than quietly fixed. Adding `Amount` for layer 4 meant adding a tag for how
 the number was arrived at — and `models/ledger.py::AmountStatus` already carried `RECORDED` and
 `MISSING` with the same two strings, and `Transfer.ambiguous` and `ValueFlow.apportioned` were
@@ -67,6 +68,13 @@ already two more spellings of the same distinction. The new enum was a third. It
 reading what `LedgerEdge` carries while adding the chain/asset check to it, and not by any test:
 the values agreed, so nothing failed. A duplicated *value* has no symptom until one of the copies
 changes, and that is exactly the argument the vocabulary table makes one layer down.
+
+The tenth is the same mistake in a schema rather than in code. `specs/schema/keycard.schema.json`
+declares the card's shape for a reader and an editor, and its `kind` enum was typed out from
+`EntityKind` by hand — **missing `heuristic` and in the wrong order on the first attempt**, with
+nothing comparing the two. A schema is a useful thing and it is also a second description of a
+shape Python owns, so it is now held to the models by three tests: an enum, a field list, and a
+required-fields list, each compared rather than trusted.
 
 **And the seventh was wrong twice, which is the most useful entry here.** After the page was
 corrected, the corrected direction was carried into the Lean statement — where the *coincidence
@@ -112,7 +120,7 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 | [Raw and canonical](./canonical.md) | the map from a provider's bytes to the canonical view | `Canonical.lean` | Characterised |
 | [The sensitivity of a ratio](./sensitivity.md) | how a ratio moves with its own two terms | `Sensitivity.lean` | Proved |
 | [Reflection](./reflection.md) | the document round trip | — none, deliberately | Characterised |
-| [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Specified |
+| [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Proved |
 | [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Specified |
 | [Processes and channels](./process.md) | a verification as a process on typed channels | `Process.lean` | Proved |
 

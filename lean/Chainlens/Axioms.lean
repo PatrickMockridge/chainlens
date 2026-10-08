@@ -25,6 +25,7 @@ import Chainlens.Dim
 import Chainlens.Exactness
 import Chainlens.Sensitivity
 import Chainlens.Process
+import Chainlens.Capability
 
 /-! ## Layer 1 — amount identity
 
@@ -168,3 +169,40 @@ the two halves meeting.
 
 -- The assembled invariant.
 #print axioms Chainlens.Process.every_finding_is_about_a_claim_the_source_contains
+
+/-! ## Layer 7 — the keycard as a capability
+
+`docs/calculus/capability.md`. Authority a run *holds* rather than a global it *reads*.
+
+**The four claims are the sibling project's, and so is the witness that keeps the second from
+being vacuous.** `run_exists_unique` says one card and one set of inputs determine exactly one
+answer, which is what makes two cards in one process two answers rather than an ordering;
+`run_derives_in_grant` says the authority a run exercises is inside what it holds; and the three
+witness theorems are what stop the second from holding of the empty relation — *a gate that
+cannot fail is not a gate*.
+
+**One hypothesis was added to the statement, and it is not a weakening.** `run_exists_unique`
+carries `computation.demands ⊆ card.grant`, because without it the proposition is *false*: a card
+that does not grant what a computation demands admits no result at all, which is precisely what
+`the_gate_refuses` proves exists. Stating uniqueness without the hypothesis would have
+contradicted the witness in the same file. The page's `∃! r. Run c x r` is the same shorthand,
+read as "under a grant that covers the demands".
+
+`∃!` itself is written unfolded as `∃ r, Run c x r ∧ ∀ r', Run c x r' → r' = r`, because
+`ExistsUnique` is a Mathlib definition and this module is one of the eight that build against
+Lean core alone. It is a verbatim unfolding and not a weakened form.
+-/
+
+-- Determinism: one card and one set of inputs determine exactly one answer.
+#print axioms Chainlens.Capability.run_exists_unique
+#print axioms Chainlens.Capability.run_deterministic
+
+-- Non-amplification, and disclosure: the answer rests on nothing the card did not grant, and
+-- it says what it rested on.
+#print axioms Chainlens.Capability.run_derives_in_grant
+#print axioms Chainlens.Capability.the_result_carries_what_it_used
+
+-- The witness, in three parts, without which non-amplification holds of the empty relation.
+#print axioms Chainlens.Capability.witness_datum_is_outside
+#print axioms Chainlens.Capability.the_gate_refuses
+#print axioms Chainlens.Capability.the_gate_can_succeed

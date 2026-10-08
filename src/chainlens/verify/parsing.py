@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from chainlens.codec import address_to_script, is_valid_address, normalize_address
+from chainlens.keycard import SHIPPED
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import AssetRef
 from chainlens.verify.claims import AmountBand, ClaimElements
@@ -53,7 +54,10 @@ __all__ = [
 #: names it, and the sensitivity analysis sweeps it — because it is the largest
 #: free parameter in the calculation and hiding it would be the difference between
 #: a stated model and an invented number.
-HEDGE_TOLERANCE = 0.05
+#: Read from the shipped keycard rather than written here. The value is the same number; what
+#: changes is that it has one home, and that a caller holding a card can see which value produced
+#: the finding in front of them.
+HEDGE_TOLERANCE: float = SHIPPED.resolved_thresholds.hedge_tolerance
 
 _HEDGE_WORDS = (
     "about",

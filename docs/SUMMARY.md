@@ -73,6 +73,7 @@
     - [build](reference/graph/build.md)
     - [export](reference/graph/export.md)
     - [metrics](reference/graph/metrics.md)
+  - [keycard](reference/keycard.md)
   - [labels](reference/labels/index.md)
     - [ingest](reference/labels/ingest.md)
     - [provider](reference/labels/provider.md)

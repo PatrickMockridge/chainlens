@@ -35,6 +35,7 @@ from __future__ import annotations
 import math
 
 from chainlens.exceptions import ChainlensError
+from chainlens.keycard import SHIPPED, Keycard
 from chainlens.models.calculation import (
     Binding,
     BoundDirection,
@@ -52,8 +53,6 @@ from chainlens.models.wire import detail_entries
 from chainlens.providers.base import Provider
 from chainlens.social.models import Post
 from chainlens.verify.checks import (
-    DEFAULT_SCAN_LIMIT,
-    DEFAULT_TRANSFER_LIMIT,
     CheckContext,
     CheckerRegistry,
     default_registry,
@@ -187,6 +186,9 @@ class VerificationEngine:
         thresholds: the verbal-scale boundaries. ENFSI-aligned by default, and
             configurable because the guideline treats the scale as
             jurisdiction-dependent.
+        card: the data this run is entitled to rest an answer on. The two limits above default to
+            the card's entries; a card is a *value a caller holds* and never a global this reads,
+            so two engines in one process can be run under two different cards.
         estimate_requested: whether anybody wanted a coincidence priced. Says nothing about
             whether one *could* be: with no estimator, this field is the difference between a
             caller who decided against it and a setup that never had one, and the two read
@@ -199,8 +201,9 @@ class VerificationEngine:
         *,
         estimator: CoincidenceEstimator | None = None,
         registry: CheckerRegistry | None = None,
-        scan_limit: int = DEFAULT_SCAN_LIMIT,
-        transfer_limit: int = DEFAULT_TRANSFER_LIMIT,
+        scan_limit: int | None = None,
+        transfer_limit: int | None = None,
+        card: Keycard = SHIPPED,
         thresholds: VerbalThresholds = DEFAULT_THRESHOLDS,
         estimate_requested: bool = True,
         selection: SelectionDisclosure | None = None,
@@ -213,8 +216,21 @@ class VerificationEngine:
         #: gap in the setup. `ui derive --no-estimate` is the caller that says not to.
         self._estimate_requested = estimate_requested
         self._registry = registry if registry is not None else default_registry()
-        self._scan_limit = scan_limit
-        self._transfer_limit = transfer_limit
+        # **Precedence: an explicit argument wins over the card.** `None` means "the caller did
+        # not say", which is different from a caller who said a number equal to the shipped one —
+        # and it is the difference between a run under the library's defaults and a run under a
+        # holder's card, which a reader of a finding is entitled to tell apart. The card is a
+        # parameter rather than a module-level card read here, so that two engines in one process
+        # can run under two cards; `tests/keycard/test_absence.py` is what holds that.
+        self._card = card
+        self._scan_limit = (
+            scan_limit if scan_limit is not None else card.resolved_thresholds.scan_limit
+        )
+        self._transfer_limit = (
+            transfer_limit
+            if transfer_limit is not None
+            else card.resolved_thresholds.transfer_limit
+        )
         self._thresholds = thresholds
         #: How the claims reached this engine, when a chooser picked them. Stamped on every
         #: finding and added to its caveats, because the alternative — carrying it on the batch —
