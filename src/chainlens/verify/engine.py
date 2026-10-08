@@ -144,6 +144,9 @@ def _card_caveats(card: Keycard) -> tuple[str, ...]:
     # a holder *chose*, and a card that restates a shipped value has chosen nothing.
     stated = card.thresholds.model_dump(exclude_none=True)
     baseline = SHIPPED.resolved_thresholds
+    # Every threshold the engine actually reads, not only those a card states: `hedge_tolerance`
+    # now shapes a band, so a card that sets it has changed a number in the finding even though
+    # `scan_limit` may still be the shipped one.
     chosen = {name: value for name, value in stated.items() if getattr(baseline, name) != value}
     if not chosen:
         return ()
@@ -309,7 +312,12 @@ class VerificationEngine:
 
     async def verify_claim(self, claim: Claim, post: Post) -> VerificationFinding:
         """Adjudicate one claim, and attach a ratio only where one is justified."""
-        parsed = parse_claim(claim)
+        # The card reaches the parse here, which is the other half of what it is for: the hedge
+        # tolerance is the largest free parameter in the calculation, and a run under a holder's
+        # card must widen a band by the holder's value *and say so*. `parse_amount` takes one
+        # parameter rather than two for exactly that reason — two would let a run apply one number
+        # and report another.
+        parsed = parse_claim(claim, hedge_tolerance=self._card.resolved_thresholds.hedge_tolerance)
         outcome = await self._dispatch(claim, parsed)
 
         likelihood, attempt = await self._ratio_for(outcome, parsed.elements)

@@ -52,13 +52,17 @@ that sentence is the whole motive: nothing here checks a number, it makes the nu
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Final
 
 from pydantic import Field, ValidationError, model_validator
 
+from chainlens._shipped_card import SHIPPED_PRESETS
 from chainlens.models.base import LensModel
-from chainlens.models.enums import EntityKind
+from chainlens.models.entities import Label
+from chainlens.models.enums import EntityKind, LabelSource
+from chainlens.presets.records import Preset
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -170,12 +174,60 @@ class Keycard(LensModel):
             first question a reader of one asks.
         thresholds: the numbers a finding is computed under, unstated ones inherited.
         labels: the attributions the holder asserts, each with its citation.
+        presets: the terms of events the holder knows about, in the *same type* the shipped
+            data uses — so a preset's rules (a citable source, rate tiers that increase) apply to
+            a holder's as well, rather than a second and weaker shape existing for users.
     """
 
     schema_version: int = SCHEMA_VERSION
     keyholder: str | None = None
     thresholds: Thresholds = Field(default_factory=Thresholds)
     labels: tuple[LabelAssertion, ...] = ()
+    presets: tuple[Preset, ...] = ()
+
+    def preset(self, name: str) -> Preset | None:
+        """The preset of this name the card carries, or ``None``.
+
+        Looked up by name rather than by position, because a name is what a caller has in hand
+        from a command line and what the shipped data is keyed by.
+        """
+        return next((preset for preset in self.presets if preset.name == name), None)
+
+    def labels_for(self, addresses: Sequence[str]) -> dict[str, tuple[Label, ...]]:
+        """The assertions this card makes about ``addresses``, in the shape a provider answers in.
+
+        **The card's assertions are the holder's own, and the shipped ones are not rendered into
+        this form on purpose.** `labels/data/events.yaml` carries a `corroboration` beside each
+        record — what the chain showed when somebody looked — and the file's own header calls that
+        the half that makes this chain analysis rather than a literature review. A card entry has
+        no way to carry one, because a holder cannot observe the chain at load time, and *a field
+        that could not be checked by a tool, required anyway, teaches people to fill it in rather
+        than to know the answer*. So the two are two kinds with an overlap, and
+        `labels/provider.py::LocalLabelProvider` overlays them where the answer is given rather
+        than flattening one into the other here.
+
+        An address the card does not speak for gets an empty tuple rather than being left out, for
+        the reason the provider gives: a missing key and an empty tuple are different findings.
+        """
+        wanted = {address.lower() for address in addresses}
+        out: dict[str, list[Label]] = {address: [] for address in addresses}
+        for assertion in self.effective().labels:
+            lowered = assertion.address.lower()
+            if lowered not in wanted:
+                continue
+            for address in addresses:
+                if address.lower() == lowered:
+                    out[address].append(
+                        Label(
+                            name=assertion.name,
+                            source=LabelSource.USER,
+                            kind=assertion.kind,
+                            address=assertion.address,
+                            url=assertion.source,
+                            provider=self.keyholder,
+                        )
+                    )
+        return {address: tuple(labels) for address, labels in out.items()}
 
     def effective(self) -> Keycard:
         """This card's stated entries over the shipped baseline, per item.
@@ -192,6 +244,7 @@ class Keycard(LensModel):
             keyholder=self.keyholder if self.keyholder is not None else SHIPPED.keyholder,
             thresholds=SHIPPED.thresholds.model_copy(update=stated),
             labels=self.labels + _labels_not_named(self.labels),
+            presets=self.presets + _presets_not_named(self.presets),
         )
 
     @property
@@ -223,6 +276,16 @@ class Keycard(LensModel):
         caller listing them is stating which the answer depends on and a set would lose that.
         """
         return tuple(f"threshold:{name}" for name in names)
+
+
+def _presets_not_named(asserted: tuple[Preset, ...]) -> tuple[Preset, ...]:
+    """The shipped presets for events this card does not state terms for.
+
+    Per item, like the labels and the thresholds: a holder who knows the terms of one event is
+    not thereby saying the library's terms for every other event are wrong.
+    """
+    named = {preset.name for preset in asserted}
+    return tuple(preset for preset in SHIPPED.presets if preset.name not in named)
 
 
 def _stated(value: Any, name: str) -> Any:
@@ -263,11 +326,12 @@ SHIPPED: Final[Keycard] = Keycard(
         transfer_limit=50,
     ),
     labels=(),
+    presets=SHIPPED_PRESETS,
 )
 
 #: The sections a card may carry. Closed, so that a section nothing reads is refused rather than
 #: carried: *a value nothing reads is data that looks in use and is not.*
-SECTIONS: Final[tuple[str, ...]] = ("keyholder", "thresholds", "labels")
+SECTIONS: Final[tuple[str, ...]] = ("keyholder", "thresholds", "labels", "presets")
 
 
 def loads(text: str, *, where: str = "<card>") -> Keycard:
@@ -295,6 +359,7 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
 
     thresholds = payload.pop("thresholds", {})
     labels = payload.pop("labels", [])
+    presets = payload.pop("presets", [])
 
     if payload:
         raise KeycardError(
@@ -304,6 +369,8 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
         raise KeycardError(f"{where}: [thresholds] must be a table")
     if not isinstance(labels, list):
         raise KeycardError(f"{where}: [[labels]] must be an array of tables")
+    if not isinstance(presets, list):
+        raise KeycardError(f"{where}: [[presets]] must be an array of tables")
 
     try:
         return Keycard(
@@ -311,6 +378,7 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
             keyholder=keyholder,
             thresholds=Thresholds(**thresholds),
             labels=tuple(LabelAssertion(**entry) for entry in labels),
+            presets=tuple(Preset.model_validate(entry) for entry in presets),
         )
     except TypeError as exc:
         # An unknown key under [thresholds] reaches pydantic as a TypeError, because the model is

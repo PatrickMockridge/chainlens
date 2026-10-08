@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import Field, model_validator
@@ -36,6 +36,9 @@ from pydantic import Field, model_validator
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Chain
+
+if TYPE_CHECKING:  # the card imports this module for `Preset`, so the edge runs one way only
+    from chainlens.keycard import Keycard
 
 __all__ = [
     "DATA_DIR",
@@ -46,6 +49,7 @@ __all__ = [
     "RateTier",
     "load_directory",
     "load_file",
+    "load_named",
 ]
 
 #: The presets this package ships.
@@ -235,6 +239,41 @@ def _amount(text: str) -> float | None:
         return float(text.replace(",", ""))
     except ValueError:
         return None
+
+
+def load_named(name: str, *, card: Keycard | None = None) -> Preset:
+    """A preset by name: the card's if it states terms for that event, else the shipped one.
+
+    **The precedence every other card lookup follows**, and the reason a card carries presets in
+    the first place: a holder who knows the terms of an event should not have to put a YAML file
+    somewhere the library looks, nor should the library need a second shape for a user's terms. A
+    card's preset *is* a `Preset`, so the rules — a citable source, tiers that increase — are
+    enforced once.
+
+    Raises:
+        PresetError: neither the card nor the shipped data names that event. The message lists
+            what is available, because "no such preset" without a list is a dead end.
+    """
+    # `Keycard` is only an annotation here, so it is quoted rather than imported.
+    # Imported here rather than at the top of the file, and that is a cycle and not a
+    # preference: `chainlens.keycard` imports *this* module for `Preset`, so the edge has to run
+    # one way. A module-level import would make the two unimportable in either order.
+    from chainlens.keycard import SHIPPED
+
+    if card is not None:
+        found = card.preset(name)
+        if found is not None:
+            return found
+    shipped = next(
+        (preset for preset in SHIPPED.presets if preset.name == name),
+        None,
+    )
+    if shipped is not None:
+        return shipped
+    raise PresetError(
+        f"no preset named {name!r}; the shipped ones are "
+        f"{sorted(preset.name for preset in SHIPPED.presets)}"
+    )
 
 
 def load_file(path: Path) -> Preset:

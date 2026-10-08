@@ -25,6 +25,7 @@ from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.testing.factories import btc_transaction, inp, out
 from chainlens.testing.in_memory import InMemoryProvider
 from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.parsing import parse_amount
 from chainlens.verify.schema import Claim, ClaimType, Extraction
 
 SENDER = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
@@ -60,10 +61,16 @@ def _provider() -> InMemoryProvider:
     )
 
 
-def _post() -> Post:
+def _post(text: str = "the post") -> Post:
+    """A post whose text holds whatever the claim quotes.
+
+    Parameterised because `validate_quotes` drops a claim whose quote is not in the post — the
+    guard [layer 9](../../docs/calculus/process.md) is about — and a test of the hedge tolerance
+    needs its amount text to survive that.
+    """
     return Post(
         id="1",
-        text="the post",
+        text=text,
         source=SourceRef(strength=ProvenanceStrength.PASTE, captured_at=STAMP, url=None),
     )
 
@@ -162,3 +169,49 @@ async def test_the_shipped_baseline_is_not_disclosed_because_it_is_already_state
     engine = VerificationEngine(_provider(), card=SHIPPED)
     report = await engine.verify_post(_post(), Extraction(claims=(_claim(),)))
     assert not any("card" in caveat for caveat in report.findings[0].caveats)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("tolerance", "expected"), [(0.01, 400), (0.5, 20_000)])
+async def test_a_cards_hedge_tolerance_widens_the_band(tolerance: float, expected: int) -> None:
+    """The other half of what a card is for: the tolerance shapes a band, not only a scan.
+
+    `hedge_tolerance` is the largest free parameter in the whole calculation — it moves the
+    likelihood ratio roughly linearly — and this is the assertion that it reaches the number
+    rather than sitting in a card that is read for two other fields.
+    """
+    text = "approximately 40,000 sats"
+    claim = Claim(
+        type=ClaimType.TRANSFER,
+        quote=text,
+        addresses=(SENDER, RECIPIENT),
+        amount_text=text,
+    )
+    card = loads(f"schema_version = 1\n[thresholds]\nhedge_tolerance = {tolerance}\n")
+    engine = VerificationEngine(_provider(), card=card)
+    report = await engine.verify_post(_post(text), Extraction(claims=(claim,)))
+    elements = report.findings[0].elements
+
+    assert elements is not None, "the claim was not priced, so the band never formed"
+    assert elements.band is not None
+    assert elements.band.tolerance == expected, (
+        f"{tolerance:.0%} of 40,000 sats is {expected}, got {elements.band.tolerance}"
+    )
+
+
+def test_the_sentence_names_the_value_that_was_applied() -> None:
+    """The trap: the tolerance is used twice — to widen the band and to say by how much.
+
+    `parse_amount` takes one parameter rather than two for that reason. Two would let a run apply
+    a card's value and *report* the library's, which is a finding that misdescribes its own
+    arithmetic — the same defect as a decimals count written down twice, one layer up.
+    """
+    text = "approximately 40,000 sats"
+    wide = parse_amount(text, hedge_tolerance=0.5)
+    shipped = parse_amount(text)
+
+    assert wide is not None
+    assert shipped is not None
+    assert "50%" in wide.tolerance_rule
+    assert "5%" not in wide.tolerance_rule
+    assert "5%" in shipped.tolerance_rule

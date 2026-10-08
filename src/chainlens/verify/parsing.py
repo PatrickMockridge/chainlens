@@ -201,7 +201,7 @@ def _quantise(value: Decimal, decimals: int) -> int | None:
     return int(scaled)
 
 
-def parse_amount(text: str) -> AmountReading | None:
+def parse_amount(text: str, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> AmountReading | None:
     """Read an amount, its asset and its tolerance out of the text a claim used.
 
     ``None`` when nothing priceable is there — an unstated asset, a chain this
@@ -209,6 +209,11 @@ def parse_amount(text: str) -> AmountReading | None:
 
     Args:
         text: the amount as written, e.g. ``"more than 40,000 BTC"``.
+        hedge_tolerance: how much wider a hedge word makes the band, as a fraction of the amount.
+            Defaults to the shipped keycard's value, which is where the number lives; a caller
+            holding a card passes the card's. **There is one parameter and not two**, because the
+            number is used twice — once to widen the band and once to say by how much — and two
+            parameters would let a run apply one value and report another.
     """
     match = _AMOUNT.search(text)
     if match is None:
@@ -259,9 +264,9 @@ def parse_amount(text: str) -> AmountReading | None:
         tolerance = 0
         rule = "one-sided claim; the band is open above the stated bound"
     elif hedged:
-        tolerance = round(nominal * HEDGE_TOLERANCE)
+        tolerance = round(nominal * hedge_tolerance)
         rule = (
-            f"hedge word in the claim; band widened by {HEDGE_TOLERANCE:.0%} of the "
+            f"hedge word in the claim; band widened by {hedge_tolerance:.0%} of the "
             "amount, which is a convention of this library and not a stated precision"
         )
     else:
@@ -294,7 +299,7 @@ class ParsedClaim:
         return self.elements is not None
 
 
-def parse_claim(claim: Claim) -> ParsedClaim:
+def parse_claim(claim: Claim, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> ParsedClaim:
     """Reduce one extracted claim to priceable elements.
 
     The chain comes from the amount's unit when the claim states one, and from the
@@ -311,7 +316,11 @@ def parse_claim(claim: Claim) -> ParsedClaim:
         return ParsedClaim(elements=None, notes=("claim type is not checkable here",))
 
     notes: list[str] = []
-    reading = parse_amount(claim.amount_text) if claim.amount_text else None
+    reading = (
+        parse_amount(claim.amount_text, hedge_tolerance=hedge_tolerance)
+        if claim.amount_text
+        else None
+    )
     if claim.amount_text and reading is None:
         notes.append(
             f"the amount {claim.amount_text!r} could not be read as a supported asset "

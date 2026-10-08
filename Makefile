@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check vocabulary vocabulary-check lean lean-gate calculus build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -130,6 +130,13 @@ verify:  ## Re-run every case-study claim record and check the verdicts reproduc
 case-study-check:  ## The case study's static guardrails, no network needed
 	uv run pytest tests/case_study -q
 
+shipped-card:  ## Render the package's own presets into the shipped keycard
+	# The YAML under `presets/data/` is the hand-edited source; this renders it into
+	# `src/chainlens/_shipped_card.py` so that the library's data and a holder's are one object
+	# rather than two. The *guard* is `tests/keycard/test_shipped.py`, which fails on a diff and
+	# runs in `make check` -- same arrangement as `make vocabulary` and `make contract`.
+	uv run python tools/gen_shipped_data.py
+
 vocabulary:  ## Regenerate the vocabulary table's artefacts
 	# One hand-written table (`specs/vocabulary/vocabulary.toml`) and four generated files: the
 	# asset JSON Schema, the Python rows, the Lean rows, and the Lean gate that carries one
@@ -162,6 +169,7 @@ lean-gate:  ## Refuse a proof in the calculus that rests on an axiom we did not 
 calculus:  ## The whole calculus: the build, the gate, the vocabulary, the correspondence
 	$(MAKE) lean
 	$(MAKE) vocabulary-check
+	uv run python tools/gen_shipped_data.py --check
 	$(MAKE) lean-gate
 	uv run pytest tests/calculus tests/vocabulary -q
 

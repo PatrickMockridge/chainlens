@@ -197,3 +197,21 @@ One preset from a YAML file.
 **Raises**
 
 - `PresetError` — the file is unreadable or does not describe a preset.
+
+## `load_named`
+
+```python
+load_named(name: str, *, card: Keycard | None = None) -> Preset
+```
+
+A preset by name: the card's if it states terms for that event, else the shipped one.
+
+**The precedence every other card lookup follows**, and the reason a card carries presets in
+the first place: a holder who knows the terms of an event should not have to put a YAML file
+somewhere the library looks, nor should the library need a second shape for a user's terms. A
+card's preset *is* a `Preset`, so the rules — a citable source, tiers that increase — are
+enforced once.
+
+**Raises**
+
+- `PresetError` — neither the card nor the shipped data names that event. The message lists what is available, because "no such preset" without a list is a dead end.

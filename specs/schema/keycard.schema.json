@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/PatrickMockridge/chainlens/specs/schema/keycard.schema.json",
   "title": "A keycard",
-  "description": "The data an answer rests on: the thresholds a finding is computed under, and the attributions a holder asserts. A card is a citation and not a credential — an API key here would put a secret in a file whose purpose is to be shared. Nothing reads this file at run time: `chainlens.keycard.load` is the enforcement, and its refusals are what a holder meets. This is the declared shape, for a reader and for an editor that offers completion. Every field is optional, because a card states what it states and inherits the rest from the shipped baseline, per item: a card naming one threshold keeps the library's values for the other four, and a card naming one address keeps the shipped assertions about every other address.",
+  "description": "The data an answer rests on: the thresholds a finding is computed under, the attributions a holder asserts, and the terms of events they know about. A card is a citation and not a credential — an API key here would put a secret in a file whose purpose is to be shared. Nothing reads this file at run time: `chainlens.keycard.load` is the enforcement, and its refusals are what a holder meets. This is the declared shape, for a reader and for an editor that offers completion. Every field is optional, because a card states what it states and inherits the rest from the shipped baseline, per item: a card naming one threshold keeps the library's values for the other four, and a card naming one address keeps the shipped assertions about every other address.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -56,6 +56,14 @@
       "description": "Attributions the holder asserts. **The card speaks for the addresses it names and not for every other** — the shipped assertions about anything else are kept.",
       "items": {
         "$ref": "#/$defs/assertion"
+      }
+    },
+    "presets": {
+      "type": "array",
+      "description": "Terms of events the holder knows about, in the same shape `presets/records.py::Preset` validates — a citable source, rate tiers that increase. **The same type the shipped data uses**, so a holder's terms are checked by the same rules rather than by a second and weaker set. The shipped presets are *rendered* into `SHIPPED` from `presets/data/*.yaml` by `tools/gen_shipped_data.py`; a card's overlay them per event name. The item schema is deliberately not restated here: the rules live in the model, and a second description of them would be a second place they can disagree.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
       }
     }
   },

@@ -17,6 +17,7 @@ import pytest
 
 from chainlens.keycard import (
     SCHEMA_VERSION,
+    SECTIONS,
     SHIPPED,
     KeycardError,
     LabelAssertion,
@@ -221,3 +222,72 @@ class TestTheSchemaDoesNotDrift:
             name for name, field in LabelAssertion.model_fields.items() if field.is_required()
         }
         assert set(assertion["required"]) == model_required
+
+    def test_the_sections_are_the_loaders_sections(self) -> None:
+        """The one drift that makes the schema worse than useless: an editor completing a section
+        the loader refuses, or refusing one it accepts. Compared rather than trusted, like the
+        rest of this class."""
+        assert set(self._schema()["properties"]) == {*SECTIONS, "schema_version"}
+
+
+class TestTheLabels:
+    """A card's assertions, and the provider that overlays them on the shipped data.
+
+    **Why the shipped labels are not rendered into the card, asserted as behaviour rather than
+    only described.** `labels/data/events.yaml` carries a `corroboration` beside every record —
+    what the chain showed when somebody looked — and the file's own header calls that the half
+    that makes this chain analysis rather than a literature review. A card entry has no way to
+    carry one, so rendering them would drop the field that carries the weight. The two are two
+    kinds with an overlap, and the overlap is resolved where the answer is given.
+    """
+
+    CARD = (
+        "schema_version = 1\n"
+        'keyholder = "Example Analysis Ltd"\n'
+        "[[labels]]\n"
+        'address = "bc1qexampleaddress"\n'
+        'name = "ours"\n'
+        'kind = "service"\n'
+        'source = "https://example.invalid/mine"\n'
+    )
+
+    def test_a_card_answers_about_the_addresses_it_names(self) -> None:
+        card = loads(self.CARD)
+        answered = card.labels_for(["bc1qexampleaddress"])
+        (label,) = answered["bc1qexampleaddress"]
+        assert label.name == "ours"
+        assert label.url == "https://example.invalid/mine"
+        assert label.provider == "Example Analysis Ltd"
+
+    def test_an_address_the_card_does_not_name_gets_an_empty_tuple(self) -> None:
+        """Not a missing key. `check_label` reads the two differently — a source that was never
+        asked, and a source that was asked and holds nothing — and they have different remedies."""
+        answered = loads(self.CARD).labels_for(["bc1qsomeoneelse"])
+        assert answered == {"bc1qsomeoneelse": ()}
+
+    @pytest.mark.anyio
+    async def test_the_provider_concatenates_a_cards_labels_with_the_shipped_ones(self) -> None:
+        """**Concatenated and not preferred.** A holder saying an address is theirs does not
+        withdraw what a sanctions list says about it, and the provider's own rule for two files
+        disagreeing applies unchanged. A card that could *silence* a sanctions label by naming the
+        address would be a capability nobody asked for."""
+        from chainlens.labels.provider import LocalLabelProvider
+
+        address = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+        bare = LocalLabelProvider()
+        with_card = LocalLabelProvider(card=loads(self.CARD))
+
+        from_disk = await bare.get_labels([address])
+        merged = await with_card.get_labels([address])
+        assert merged[address][: len(from_disk[address])] == from_disk[address]
+
+    @pytest.mark.anyio
+    async def test_a_provider_without_a_card_answers_exactly_as_before(self) -> None:
+        """A card is a value a caller passes, so the parameter's absence changes nothing — which
+        is what let this be added without touching a single existing caller."""
+        from chainlens.labels.provider import LocalLabelProvider
+
+        address = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+        assert await LocalLabelProvider().get_labels([address]) == await LocalLabelProvider(
+            card=None
+        ).get_labels([address])

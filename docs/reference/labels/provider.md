@@ -24,7 +24,7 @@ the chain is what the registry sorts it by.
 ## `LocalLabelProvider`
 
 ```python
-LocalLabelProvider(*, chain: Chain | None = None, directory: Path | None = None, name: str | None = None, settings: Settings | None = None)
+LocalLabelProvider(*, chain: Chain | None = None, directory: Path | None = None, name: str | None = None, settings: Settings | None = None, card: Keycard | None = None)
 ```
 
 Labels read from ``labels/data/*.yaml``, or from a directory a caller names.
@@ -56,9 +56,16 @@ How many addresses it can answer about.
 get_labels(addresses: Sequence[str]) -> Mapping[str, tuple[Label, ...]]
 ```
 
-What every committed source says about each address.
+What every committed source says about each address, and what a card adds.
 
 An address nobody has labelled gets an empty tuple rather than being left out. The
 distinction is the checker's: ``check_label`` reads a *missing* key as a source that was
 never asked, and an empty tuple as a source that was asked and holds nothing — which are
 different findings with different remedies.
+
+**The card overlays per address and is concatenated rather than preferred.** A holder
+saying an address is theirs does not withdraw what a sanctions list says about it, and the
+provider's own rule for two files disagreeing applies unchanged: an address two sources
+describe yields both descriptions, each carrying whoever asserted it. Preferring one would
+make the provider an adjudicator, which it has no standing to be — and a card that could
+*silence* a sanctions label by naming the address would be a capability nobody asked for.

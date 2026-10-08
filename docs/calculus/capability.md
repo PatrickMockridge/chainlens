@@ -135,16 +135,40 @@ after the finding was seen was chosen with the evidence in view, and no grant re
 card does is make the selection **visible** — recorded, passed and disclosed — which is what this
 library has always done instead of claiming a soundness it cannot deliver.
 
-## What a card does not reach yet
+## What the card now reaches, and the one thing it deliberately does not
 
-**The hedge tolerance, at the parse call.** It has one home now and the module constant reads it,
-but threading a card into `parse_amount` is a signature change through `parse_claim`, and half of
-a migration stated plainly is better than the same half left for a reader to infer.
+**The hedge tolerance reaches the band.** `parse_amount` and `parse_claim` take a `hedge_tolerance`
+and the engine passes the card's, so a run under a holder's card widens a band by the holder's
+value and *says by how much*. **One parameter and not two**, because the number is used twice —
+once in the arithmetic and once in the sentence beside it — and two would let a run apply one value
+and report another. That is the same defect as a decimals count written down twice, one layer up,
+and it is the reason this was a trap rather than a formality: the sentence used to format the
+module constant directly.
 
-**Labels and presets as card entries.** The card carries `LabelAssertion`s and `LocalLabelProvider`
-reads its own directory; the two are not yet one object. `labels` is on the card and tested; making
-the shipped label data *be* a card entry, and `presets/data/*.yaml` likewise, is the remaining half
-of "the library's data and a user's data are one object".
+**Presets are in the card, in the type the shipped data already uses.** `tools/gen_shipped_data.py`
+renders `presets/data/*.yaml` into `src/chainlens/_shipped_card.py`, `SHIPPED.presets` holds the
+result, and a card's own terms overlay per event name. A card's preset *is* a
+`presets/records.py::Preset`, so the rules — a citable source, tiers that increase — are enforced
+once rather than twice.
+
+**Labels are not, and the asymmetry is the finding rather than an omission.** The obvious move was
+to render `labels/data/events.yaml` into card entries the same way. Measured first, that would
+*drop the field that carries the weight*: every shipped label record carries a `corroboration` —
+what the chain showed when somebody looked — and the file's own header calls that the half that
+makes this chain analysis rather than a literature review. A card entry has no way to carry one,
+because a holder cannot observe the chain at load time, and *a field that could not be checked by a
+tool, required anyway, teaches people to fill it in rather than to know the answer*.
+
+So the two are **two kinds with an overlap**, and the overlap is resolved where the answer is
+given: `LocalLabelProvider(card=...)` answers with the shipped labels *concatenated* with the
+card's, per address. Concatenated and not preferred — a holder saying an address is theirs does not
+withdraw what a sanctions list says about it, and a card that could *silence* a sanctions label by
+naming the address would be a capability nobody asked for. A provider built without a card answers
+exactly as it did before the parameter existed, which is what let this be added without touching a
+single existing caller.
+
+**Checked, not just described:** `tests/keycard/test_shipped.py::test_the_shipped_render_is_lossless`
+asserts the preset render loses nothing, which is the half of the asymmetry the code can check.
 
 ## What it is about in the tree
 

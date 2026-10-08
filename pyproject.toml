@@ -173,6 +173,7 @@ ignore = [
 # line length by hand, because the next `make vocabulary` would undo it. What holds it to the
 # table is `tests/vocabulary/test_the_table.py`, not the linter.
 "src/chainlens/vocabulary/_generated.py" = ["E501"]
+"src/chainlens/_shipped_card.py" = ["E501"]
 
 [tool.ruff.format]
 # Markdown code fences are hand-aligned for readability (comments line up with
@@ -183,7 +184,7 @@ ignore = [
 # emitted, not written, so a formatter pass over it is a change the next `make vocabulary`
 # reverts -- and a `--check` failure that fixes itself on the following command is worse than
 # no check at all.
-exclude = ["**/*.md", "src/chainlens/vocabulary/_generated.py"]
+exclude = ["**/*.md", "src/chainlens/vocabulary/_generated.py", "src/chainlens/_shipped_card.py"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["chainlens"]

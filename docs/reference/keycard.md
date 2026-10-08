@@ -60,6 +60,7 @@ What a run is entitled to rest an answer on.
 - `keyholder` `str | None` — who is asserting the right to use these values. Nothing in this library reads it — it is here so that a card found in a directory says whose it is, which is the first question a reader of one asks.
 - `thresholds` `Thresholds` — the numbers a finding is computed under, unstated ones inherited.
 - `labels` `tuple[LabelAssertion, ...]` — the attributions the holder asserts, each with its citation.
+- `presets` `tuple[Preset, ...]` — the terms of events the holder knows about, in the *same type* the shipped data uses — so a preset's rules (a citable source, rate tiers that increase) apply to a holder's as well, rather than a second and weaker shape existing for users.
 
 **Members**
 
@@ -67,6 +68,39 @@ What a run is entitled to rest an answer on.
 - `keyholder` = None
 - `thresholds` = Field(default_factory=Thresholds)
 - `labels` = ()
+- `presets` = ()
+
+### `preset`
+
+```python
+preset(name: str) -> Preset | None
+```
+
+The preset of this name the card carries, or ``None``.
+
+Looked up by name rather than by position, because a name is what a caller has in hand
+from a command line and what the shipped data is keyed by.
+
+### `labels_for`
+
+```python
+labels_for(addresses: Sequence[str]) -> dict[str, tuple[Label, ...]]
+```
+
+The assertions this card makes about ``addresses``, in the shape a provider answers in.
+
+**The card's assertions are the holder's own, and the shipped ones are not rendered into
+this form on purpose.** `labels/data/events.yaml` carries a `corroboration` beside each
+record — what the chain showed when somebody looked — and the file's own header calls that
+the half that makes this chain analysis rather than a literature review. A card entry has
+no way to carry one, because a holder cannot observe the chain at load time, and *a field
+that could not be checked by a tool, required anyway, teaches people to fill it in rather
+than to know the answer*. So the two are two kinds with an overlap, and
+`labels/provider.py::LocalLabelProvider` overlays them where the answer is given rather
+than flattening one into the other here.
+
+An address the card does not speak for gets an empty tuple rather than being left out, for
+the reason the provider gives: a missing key and an empty tuple are different findings.
 
 ### `effective`
 
