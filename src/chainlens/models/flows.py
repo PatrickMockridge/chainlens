@@ -20,11 +20,17 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from chainlens.models.base import LensModel, Provenance
 from chainlens.models.enums import Chain, ChainModel, FlowDirection, FlowVia
-from chainlens.models.primitives import AssetRef, Transaction, Transfer, _to_decimal
+from chainlens.models.primitives import (
+    AssetRef,
+    Transaction,
+    Transfer,
+    _to_decimal,
+    require_asset_on_chain,
+)
 
 __all__ = [
     "AddressRef",
@@ -124,6 +130,11 @@ class ValueFlow(LensModel):
     heuristics: tuple[str, ...] = ()
 
     provenance: Provenance | None = None
+
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> ValueFlow:
+        require_asset_on_chain(self.chain, self.asset)
+        return self
 
     @property
     def confidence(self) -> float:

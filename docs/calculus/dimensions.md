@@ -74,13 +74,43 @@ live in the generated `Vocabulary.lean`, where a row cannot be added without the
 
 ## What it is about in the tree
 
-`lean/Chainlens/Dim.lean`, and through it
-`src/chainlens/models/primitives.py::AssetRef` — the `(chain, asset)` pair a dimension is a weight
-over — and `src/chainlens/models/enums.py::Chain`.
+| Lean | The tree |
+|---|---|
+| `Chainlens.Dim.weight`, `weight_add`, `weight_neg` | `src/chainlens/models/primitives.py::Amount` — the type that carries the dimension |
+| the group laws | `Amount.__add__`, which refuses two different dimensions |
+| the basis | `src/chainlens/vocabulary/_generated.py::ASSETS`, the rows a dimension is a weight over |
 
-**The defect this layer exists to catch is already in the tree.**
-`src/chainlens/models/primitives.py::Transfer` carries a `chain: Chain` *and* an
-`asset: AssetRef`, which carries its own `chain`, and nothing makes the two agree. A transfer on
-Bitcoin holding an Ethereum asset is constructible today, and one was constructed during this
-session's work on the coincidence estimator. T2 closes it by making the asset's chain a checked
-property of the pair rather than a field a caller is trusted to keep in step.
+**`Amount` is where this layer lands, and the type refuses the two things the layer is about.**
+Adding two amounts of different dimensions raises, and a value that pairs a chain with an asset
+on another chain cannot be constructed at all.
+
+**That check closed a hole in five models, and it was latent rather than live.** `Transfer`
+carried a `chain: Chain` *and* an `asset: AssetRef` that carries its own chain, and nothing made
+the two agree — so a transfer on Bitcoin holding an Ethereum asset was constructible. The same
+was true of `Balance`, `ValueFlow`, `LedgerEdge` and the newly added `Amount`. **Adding the check
+broke no test in the suite**, which is worth stating rather than glossing: nothing in this
+repository was constructing a bad pair, so the hole had never been stepped in. It was found by
+reading the pairing in the type and not by a failure, which is the only way this class of defect
+is ever found.
+
+**The check is one function and not a validator written five times**, because the rule is one
+fact — `chainlens/models/primitives.py::require_asset_on_chain` — and five copies is five places
+for it to drift. It is deliberately not a shared *base model*: a mixin carrying `chain` and
+`asset` would put them first in every inheriting model and so reorder the properties in the
+generated JSON Schema, which is a diff in a committed artefact for a rule that has nothing to do
+with field order.
+
+**The tag already existed, twice, and one of the two had to move.** `models/ledger.py::AmountStatus`
+carries `RECORDED` and `MISSING` with the same two strings this layer's `AmountTag` uses, and
+`AmountStatus` is on the wire. They are **not** the same set and should not be merged — the ledger
+view deliberately has no `APPORTIONED`, because it does not estimate and so has nothing to
+apportion, and its docstring says so. But the two members they share are the same two facts, so
+they are now stated once, in `models/enums.py::AMOUNT_STATUS_SPELLINGS`, and `AmountStatus` reads
+its values from there. A test holds the subset relation as well, so a member added to one and not
+the other fails rather than diverging between two documents.
+
+**That is the same defect this layer is about, caught in this layer's own tranche.** The first
+draft added `AmountTag` beside `AmountStatus` without noticing it, which is a third spelling of a
+fact that already had two. It was found by reading what `LedgerEdge` carries — the same way the
+open validators were found, and a reminder that the person adding a type is the least likely
+person to notice the type already exists.

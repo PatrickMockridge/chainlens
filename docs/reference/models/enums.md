@@ -6,6 +6,29 @@ These are deliberately pure ``StrEnum`` definitions with no pydantic import, so
 ``chainlens.codec`` can depend on the shared vocabulary without dragging in the
 model layer. Everything here is stable, serialisable and safe to put on the wire.
 
+## `AmountTag`
+
+How an amount was arrived at, as distinct from what it is an amount *of*.
+
+``(chain, asset)`` says a number is a quantity of something; the tag says where the number
+came from, and the two are independent. This library already draws the distinction and
+spells it three ways — ``Transfer.ambiguous``, ``ValueFlow``'s ``APPORTIONED_CONFIDENCE``,
+and the ``apportioned_shares`` mapping on a verdict — which is what a tag is for.
+
+**A recorded figure and an apportioned one are different kinds even when their dimension
+is the same**, and they are added together only by someone who has decided the inference is
+good enough. Naming the difference is what lets that decision be made at the addition rather
+than in a comment three functions away.
+
+Reaches the wire in the tranche that bumps ``schema_version`` and not before, so that a
+reader can tell the two apart in a document rather than in a docstring.
+
+**Members**
+
+- `RECORDED` = 'recorded'
+- `APPORTIONED` = 'apportioned'
+- `MISSING` = 'missing'
+
 ## `AssetKind`
 
 The kind of asset a transfer or balance refers to.
@@ -273,3 +296,5 @@ Position on the scale, for comparison and for spanning checks.
 
 ``NONE`` is 0, so an interval whose bands span a range can be compared by
 rank without string manipulation.
+
+## `AMOUNT_STATUS_SPELLINGS`

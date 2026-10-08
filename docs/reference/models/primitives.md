@@ -37,6 +37,84 @@ An address with whatever summary the provider could supply.
 - `provenance` = None
 - `is_labeled`
 
+## `Amount`
+
+A magnitude, and the three things that say what it is.
+
+The **dimension** is ``(chain, asset)`` and the **tag** is how the number was arrived at.
+Both are carried, so that ``eth_amount + btc_amount`` and ``recorded + apportioned`` are
+refused by the value rather than by a reader noticing a comment. See
+`docs/calculus/dimensions.md` for why the first is a group and
+`docs/calculus/exactness.md` for why the second is not one.
+
+**``chain`` is here as well as on ``asset``, and that is the point rather than a
+redundancy.** ``AssetRef`` carries its own chain and nothing made the two agree, so a
+transfer on Bitcoin holding an Ethereum asset was constructible — and one was constructed
+while the coincidence estimator was being fixed. The validator below is what refuses it, and
+every model that pairs a chain with an asset carries the same one.
+
+**Why ``asset`` is an `AssetRef` and not the vocabulary table's row id.** The plan for this
+layer had it as the row id, which is the right identity for a *native* asset and does not
+exist for a token: this library reads ERC-20 transfers, and a token's identity is its
+contract at an address on a chain. `AssetRef` already carries exactly ``(chain, kind,
+contract)``, which is that identity, and it distinguishes mainnet from testnet where a
+symbol would not — two chains, after all, both write ``BTC``.
+
+**Members**
+
+- `chain`
+- `asset`
+- `base_units`
+- `tag` = AmountTag.RECORDED
+
+### `of`
+
+```python
+of(transfer: Transfer, *, tag: AmountTag | None = None) -> Amount
+```
+
+The amount a `Transfer` carries, as a value that knows what it is.
+
+**The tag defaults to what the transfer already says and not to `RECORDED`.** A
+transfer with ``ambiguous`` set is one whose sender attribution is a convention of this
+library — a share of a co-funded output — and calling that recorded would be the exact
+substitution the tag exists to prevent. Pass ``tag`` to override; the override is here
+because a caller who has decided the apportionment is good enough should say so out
+loud rather than have it inferred.
+
+### `of_balance`
+
+```python
+of_balance(balance: Balance, *, tag: AmountTag | None = None) -> Amount
+```
+
+The amount a `Balance` carries. A balance is read from a provider, so it is
+recorded unless a caller says otherwise.
+
+### `amount_to_decimal`
+
+```python
+amount_to_decimal() -> Decimal
+```
+
+Render the amount in whole units, exactly.
+
+**Raises**
+
+- `ValueError` — if the asset's decimals are unknown.
+
+### `with_tag`
+
+```python
+with_tag(tag: AmountTag) -> Amount
+```
+
+The same amount, tagged differently.
+
+For the one case where a caller changes their mind about how a figure was arrived at —
+accepting an apportioned share as good enough, say. Kept as a method rather than a
+mutable field so that the change is visible at the call site.
+
 ## `AssetRef`
 
 A reference to an asset: the native coin, or a token contract.
@@ -107,6 +185,15 @@ Render the amount in whole units, exactly.
 **Raises**
 
 - `ValueError` — if ``asset.decimals`` is unknown.
+
+### `to_amount`
+
+```python
+to_amount() -> Amount
+```
+
+This balance as an `Amount`. A balance is read from a provider, so it is
+recorded; `Amount.of_balance` is the same thing with the tag made explicit.
 
 ## `Block`
 
@@ -277,6 +364,17 @@ amount_to_decimal() -> Decimal
 
 Render the amount in whole units, exactly.
 
+### `to_amount`
+
+```python
+to_amount() -> Amount
+```
+
+This transfer as an `Amount`, tagged by how the value was arrived at.
+
+An ``ambiguous`` transfer is apportioned and not recorded — see
+`Amount.of`, which is the same thing with the tag overridable.
+
 ## `TxInput`
 
 A transaction input.
@@ -330,3 +428,26 @@ chains, so a ``Transfer`` can always point back at its origin.
 - `spent_by_input` = None
 - `raw` = Field(default_factory=dict)
 - `all_addresses`
+
+## `require_asset_on_chain`
+
+```python
+require_asset_on_chain(chain: Chain, asset: AssetRef) -> None
+```
+
+Refuse an asset that does not belong to the chain it is paired with.
+
+**One function rather than a shared base model, and the reason is the wire contract.** A
+mixin carrying the `chain` and `asset` fields would put them first in every inheriting
+model, which reorders the properties in the generated JSON Schema — a diff in a committed
+artefact, for a rule that has nothing to do with field order. A function per model keeps the
+contract byte-identical, which is what makes this tranche's "no wire change" checkable
+rather than merely intended.
+
+One function rather than a copy of the check per model, though, because the check is one
+fact and four models need it: four copies is four places for the rule to drift, which is the
+failure the vocabulary table exists to prevent one layer down.
+
+**Raises**
+
+- `ValueError` — the asset's chain is not the chain it is paired with.

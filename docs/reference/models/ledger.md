@@ -38,10 +38,18 @@ amount is reported as unknown rather than filled in. ``missing`` is the honest
 answer for an unindexed prevout — Esplora's ``vin`` frequently omits input values —
 and inventing one would corrupt every total that touched it.
 
+**Its two values are read from `chainlens.models.enums.AmountTag` and not restated.**
+The tag is the wider vocabulary — it also has ``APPORTIONED``, which the flow view needs and
+this one must not have — so this is its subset, and the strings the two share are stated
+once. Two enums that happen to agree on ``"recorded"`` are two places that string lives, and
+one of them is going to change; `tests/models/test_amount.py` holds the subset relation as
+well, so a member added to one and not the other is a failing test rather than a silent
+divergence between two documents.
+
 **Members**
 
-- `RECORDED` = 'recorded'
-- `MISSING` = 'missing'
+- `RECORDED` = AMOUNT_STATUS_SPELLINGS['recorded']
+- `MISSING` = AMOUNT_STATUS_SPELLINGS['missing']
 
 ## `LedgerAddressNode`
 

@@ -31,6 +31,7 @@ the actual defects, in the order they were fixed:
 | **the apportionment computed a wei-scale split through binary floating point, and did not conserve the total** | precision, again, in the function that exists to conserve it |
 | **this section's own statement of the ratio's sensitivity had both monotonicity signs backwards** | a claim about a sign, written from memory instead of from the code |
 | **a dependency was declared in `pyproject.toml` as a cross-check oracle that no file imported** | a check that was described and did not exist |
+| **a new tag enum was added beside two existing spellings of the same fact** | a value written in a second place, by the tranche about not doing that |
 
 Each was found by reading a value and noticing what it was in. A type that carries the dimension is
 what makes the next one fail at construction instead.
@@ -54,6 +55,15 @@ had the direction of its own central claim wrong, in prose, where no test could 
 found `pycoin` described in `pyproject.toml` as a "dev-only cross-validation oracle for the BTC
 codec" with nothing in the tree importing it: a check that was written down as existing. Both are
 corrections to *claims*, not to code, and neither would have been made by running the suite.
+
+**The ninth is this section's own tranche making the mistake the section is about**, which is why
+it is in the table rather than quietly fixed. Adding `Amount` for layer 4 meant adding a tag for how
+the number was arrived at — and `models/ledger.py::AmountStatus` already carried `RECORDED` and
+`MISSING` with the same two strings, and `Transfer.ambiguous` and `ValueFlow.apportioned` were
+already two more spellings of the same distinction. The new enum was a third. It was caught by
+reading what `LedgerEdge` carries while adding the chain/asset check to it, and not by any test:
+the values agreed, so nothing failed. A duplicated *value* has no symptom until one of the copies
+changes, and that is exactly the argument the vocabulary table makes one layer down.
 
 **And the seventh was wrong twice, which is the most useful entry here.** After the page was
 corrected, the corrected direction was carried into the Lean statement — where the *coincidence

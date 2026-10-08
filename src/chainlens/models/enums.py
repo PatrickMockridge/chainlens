@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import Self
 
 __all__ = [
+    "AmountTag",
     "AssetKind",
     "Chain",
     "ChainModel",
@@ -80,6 +81,51 @@ class AssetKind(StrEnum):
     ERC721 = "erc721"
     ERC1155 = "erc1155"
     OTHER = "other"
+
+
+class AmountTag(StrEnum):
+    """How an amount was arrived at, as distinct from what it is an amount *of*.
+
+    ``(chain, asset)`` says a number is a quantity of something; the tag says where the number
+    came from, and the two are independent. This library already draws the distinction and
+    spells it three ways — ``Transfer.ambiguous``, ``ValueFlow``'s ``APPORTIONED_CONFIDENCE``,
+    and the ``apportioned_shares`` mapping on a verdict — which is what a tag is for.
+
+    **A recorded figure and an apportioned one are different kinds even when their dimension
+    is the same**, and they are added together only by someone who has decided the inference is
+    good enough. Naming the difference is what lets that decision be made at the addition rather
+    than in a comment three functions away.
+
+    Reaches the wire in the tranche that bumps ``schema_version`` and not before, so that a
+    reader can tell the two apart in a document rather than in a docstring.
+    """
+
+    #: A provider returned this figure, or it is arithmetic over figures a provider returned.
+    RECORDED = "recorded"
+
+    #: Split from a co-funded output — a *convention* of this library about which sender paid
+    #: which output, and not something any ledger states. ``Transfer.ambiguous`` is this case.
+    APPORTIONED = "apportioned"
+
+    #: The provider did not carry it. ``TxOutput.value`` is ``None`` on Esplora's ``vin``, and
+    #: inventing a number there corrupts every fee downstream — so the absence is carried
+    #: rather than filled.
+    MISSING = "missing"
+
+
+#: The ledger view's status is a **narrower** vocabulary than the tag above, and the ledger edge
+#: two files over spells its two shared members out. This is the string table that keeps the two
+#: in step: ``models/ledger.py::AmountStatus`` reads its values from here rather than restating
+#: them, because two enums that happen to agree on ``"recorded"`` are two places that string
+#: lives and one of them is going to change.
+#:
+#: It exists as a separate enum at all because the ledger view deliberately has no
+#: ``APPORTIONED``: it does not estimate, so it has nothing to apportion. The flow view does
+#: estimate, which is why :class:`AmountTag` is the wider set and the ledger's is the subset.
+AMOUNT_STATUS_SPELLINGS = {
+    "recorded": AmountTag.RECORDED.value,
+    "missing": AmountTag.MISSING.value,
+}
 
 
 class ScriptType(StrEnum):

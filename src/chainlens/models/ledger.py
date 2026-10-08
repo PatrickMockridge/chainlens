@@ -33,12 +33,19 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from chainlens.models.annotate import Annotation
 from chainlens.models.base import LensModel
-from chainlens.models.enums import Chain, Direction, FlowVia, ScriptType, TxStatus
-from chainlens.models.primitives import AssetRef
+from chainlens.models.enums import (
+    AMOUNT_STATUS_SPELLINGS,
+    Chain,
+    Direction,
+    FlowVia,
+    ScriptType,
+    TxStatus,
+)
+from chainlens.models.primitives import AssetRef, require_asset_on_chain
 from chainlens.models.wire import BaseUnits
 
 __all__ = [
@@ -155,10 +162,18 @@ class AmountStatus(StrEnum):
     amount is reported as unknown rather than filled in. ``missing`` is the honest
     answer for an unindexed prevout — Esplora's ``vin`` frequently omits input values —
     and inventing one would corrupt every total that touched it.
+
+    **Its two values are read from :data:`~chainlens.models.enums.AmountTag` and not restated.**
+    The tag is the wider vocabulary — it also has ``APPORTIONED``, which the flow view needs and
+    this one must not have — so this is its subset, and the strings the two share are stated
+    once. Two enums that happen to agree on ``"recorded"`` are two places that string lives, and
+    one of them is going to change; `tests/models/test_amount.py` holds the subset relation as
+    well, so a member added to one and not the other is a failing test rather than a silent
+    divergence between two documents.
     """
 
-    RECORDED = "recorded"
-    MISSING = "missing"
+    RECORDED = AMOUNT_STATUS_SPELLINGS["recorded"]
+    MISSING = AMOUNT_STATUS_SPELLINGS["missing"]
 
 
 class LedgerEdgeRole(StrEnum):
@@ -382,6 +397,18 @@ class LedgerEdge(LensModel):
     spent_by_txid: str | None = None
 
     annotation_ids: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _the_asset_is_on_this_chain(self) -> LedgerEdge:
+        """The same rule the flow view's models carry, for the same reason.
+
+        `asset` is optional here — a ledger edge may record a movement whose asset the provider
+        did not name — so the check is skipped when it is absent rather than treating absence as
+        a mismatch.
+        """
+        if self.asset is not None:
+            require_asset_on_chain(self.chain, self.asset)
+        return self
 
     @property
     def is_unknown_amount(self) -> bool:
