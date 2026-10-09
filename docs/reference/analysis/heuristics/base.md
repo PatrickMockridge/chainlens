@@ -22,7 +22,10 @@ cannot break a run.
 One clustering rule.
 
 Subclasses set ``name``, optionally ``version`` and the ledger models they
-apply to, and implement `run`.
+apply to, and implement `run`. A subclass with tunable numbers takes a
+`HeuristicParams` on its constructor — defaulted to the shipped values,
+so the registry's no-argument construction and the plugin entry points are
+untouched — and reads them through ``self.params``.
 
 **Members**
 
@@ -85,6 +88,27 @@ transactions_touching(address: str) -> tuple[Transaction, ...]
 ```
 
 Transactions in which ``address`` appears on either side.
+
+## `HeuristicParams`
+
+The numbers one heuristic reasons under, as a value its caller may replace.
+
+**A heuristic's confidences and thresholds are its own defaults, and this is
+where they are written.** They used to be module globals read inside the
+function that used them, so no caller could vary one and no reader could see
+which value applied — the defect ``docs/calculus/parameters.md`` decides the
+home of. A subclass states its numbers as the field defaults of its own
+params model and reaches them through ``self.params``; a caller who wants
+other numbers passes a configured instance to the heuristic's constructor.
+
+A frozen `chainlens.models.base.LensModel`, so a params object is
+immutable like every other value here, and ``extra="forbid"`` means a
+misspelled field is refused rather than silently ignored.
+
+**Not a card.** A card is authority a *holder asserts*, per run and citable;
+a heuristic's confidence is the *author's* shipped default. The two are
+different kinds, which is why this type exists rather than a card section —
+see the page for the argument.
 
 ## `HeuristicRegistry`
 

@@ -27,6 +27,10 @@ merges. The happy consequence is that it cannot contribute a false merge.
 
 ## `AddressReuse`
 
+```python
+AddressReuse(params: AddressReuseParams = DEFAULT_ADDRESS_REUSE_PARAMS)
+```
+
 Labels reused addresses and receive-then-spend behaviour.
 
 Emits no merges by design -- see the module docstring.
@@ -36,12 +40,32 @@ Emits no merges by design -- see the module docstring.
 - `name` = 'address-reuse'
 - `version` = '1'
 - `chain_models` = frozenset()
+- `params` = params
 
 ### `run`
 
 ```python
 run(context: HeuristicContext) -> HeuristicResult
 ```
+
+## `AddressReuseParams`
+
+The confidences the two reuse observations carry.
+
+The shipped values are the field defaults, and they are the only place these
+numbers are written down.
+
+**Attributes**
+
+- `reuse_confidence` `float` — for an address spent as an input more than once.
+- `received_then_spent_confidence` `float` — for an address that received and later spent, which is a slightly weaker observation -- the order is inferred from block heights, so a missing height removes the label entirely.
+
+**Members**
+
+- `reuse_confidence` = Field(default=0.9, gt=0.0, le=1.0)
+- `received_then_spent_confidence` = Field(default=0.85, gt=0.0, le=1.0)
+
+## `DEFAULT_ADDRESS_REUSE_PARAMS`
 
 ## `RECEIVED_THEN_SPENT`
 

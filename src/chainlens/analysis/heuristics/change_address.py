@@ -20,35 +20,95 @@ matter more than the weights:
 
 from __future__ import annotations
 
-from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext
+from collections.abc import Mapping
+from typing import Final
+
+from pydantic import Field, model_validator
+
+from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext, HeuristicParams
 from chainlens.analysis.heuristics.common_input import looks_like_coinjoin
 from chainlens.models.entities import HeuristicResult
 from chainlens.models.enums import ChainModel, ScriptType
 from chainlens.models.primitives import Transaction, TxOutput
 
-__all__ = ["ChangeAddressDetector", "flag_change_outputs", "is_round"]
+__all__ = [
+    "DEFAULT_CHANGE_ADDRESS_PARAMS",
+    "ChangeAddressDetector",
+    "ChangeAddressParams",
+    "flag_change_outputs",
+    "is_round",
+]
 
-#: A value divisible by this is "round": a payment someone chose, rather than the
-#: remainder of one. 0.1 BTC.
-_ROUND_UNIT = 10_000_000
-
-#: Individual signal weights. They sum to more than 1 on purpose; the total is
-#: clipped, so a transaction firing every signal scores 1.0 rather than 1.15.
-_WEIGHTS = {
-    "script_type_matches_inputs": 0.35,
-    "output_not_a_known_external_address": 0.25,
-    "smaller_than_smallest_input": 0.2,
-    "non_round_among_round": 0.2,
-    "two_outputs": 0.15,
-}
-
-#: Below this, the detector says nothing.
-_THRESHOLD = 0.5
+#: The signals the score is built from, and the whole closed set. A params object
+#: must name every one of them — a missing key would otherwise be a ``KeyError``
+#: from inside ``_score`` rather than a refusal at construction.
+_SIGNALS: Final[tuple[str, ...]] = (
+    "script_type_matches_inputs",
+    "output_not_a_known_external_address",
+    "smaller_than_smallest_input",
+    "non_round_among_round",
+    "two_outputs",
+)
 
 
-def is_round(value: int) -> bool:
+class ChangeAddressParams(HeuristicParams):
+    """The numbers this heuristic reasons under.
+
+    The shipped values are the field defaults, and they are the only place these
+    numbers are written down.
+
+    Attributes:
+        round_unit: a value divisible by this is "round" — a payment someone
+            chose, rather than the remainder of one. 0.1 BTC by default, which
+            presumes eight decimals; see the page for why that makes it
+            chain-relative in disguise.
+        weights: each signal's contribution. They sum to more than 1 on purpose;
+            the total is clipped, so a transaction firing every signal scores 1.0
+            rather than 1.15.
+        threshold: below this the detector says nothing.
+    """
+
+    round_unit: int = Field(default=10_000_000, ge=1)
+    weights: Mapping[str, float] = Field(
+        default_factory=lambda: {
+            "script_type_matches_inputs": 0.35,
+            "output_not_a_known_external_address": 0.25,
+            "smaller_than_smallest_input": 0.2,
+            "non_round_among_round": 0.2,
+            "two_outputs": 0.15,
+        }
+    )
+    threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _the_signals_are_the_closed_set(self) -> ChangeAddressParams:
+        """Every signal named once, each weighted in ``[0, 1]``.
+
+        The score indexes the weights by signal name, so a set that is missing one
+        would fail as a ``KeyError`` deep in a scoring loop; refusing it here names
+        the signal instead.
+        """
+        missing = [signal for signal in _SIGNALS if signal not in self.weights]
+        if missing:
+            raise ValueError(f"weights must name every signal; missing {missing}")
+        unknown = [key for key in self.weights if key not in _SIGNALS]
+        if unknown:
+            raise ValueError(f"weights names signals that do not exist: {unknown}")
+        out_of_range = {
+            key: value for key, value in self.weights.items() if not 0.0 <= value <= 1.0
+        }
+        if out_of_range:
+            raise ValueError(f"every weight must be within [0, 1]; got {out_of_range}")
+        return self
+
+
+#: The shipped numbers, and the only place they are written.
+DEFAULT_CHANGE_ADDRESS_PARAMS = ChangeAddressParams()
+
+
+def is_round(value: int, *, params: ChangeAddressParams = DEFAULT_CHANGE_ADDRESS_PARAMS) -> bool:
     """Whether a satoshi amount looks deliberately chosen."""
-    return value > 0 and value % _ROUND_UNIT == 0
+    return value > 0 and value % params.round_unit == 0
 
 
 def _score(
@@ -59,26 +119,28 @@ def _score(
     external_addresses: frozenset[str],
     any_round_output: bool,
     output_count: int,
+    params: ChangeAddressParams = DEFAULT_CHANGE_ADDRESS_PARAMS,
 ) -> tuple[float, dict[str, float]]:
     """Score one output as a change candidate."""
     signals: dict[str, float] = {}
+    weights = params.weights
 
     if output.script_type is not None and output.script_type in input_script_types:
-        signals["script_type_matches_inputs"] = _WEIGHTS["script_type_matches_inputs"]
+        signals["script_type_matches_inputs"] = weights["script_type_matches_inputs"]
 
     if output.address is not None and output.address not in external_addresses:
-        signals["output_not_a_known_external_address"] = _WEIGHTS[
+        signals["output_not_a_known_external_address"] = weights[
             "output_not_a_known_external_address"
         ]
 
     if output.value is not None and smallest_input is not None and output.value < smallest_input:
-        signals["smaller_than_smallest_input"] = _WEIGHTS["smaller_than_smallest_input"]
+        signals["smaller_than_smallest_input"] = weights["smaller_than_smallest_input"]
 
-    if output.value is not None and any_round_output and not is_round(output.value):
-        signals["non_round_among_round"] = _WEIGHTS["non_round_among_round"]
+    if output.value is not None and any_round_output and not is_round(output.value, params=params):
+        signals["non_round_among_round"] = weights["non_round_among_round"]
 
     if output_count == 2:
-        signals["two_outputs"] = _WEIGHTS["two_outputs"]
+        signals["two_outputs"] = weights["two_outputs"]
 
     return round(min(1.0, sum(signals.values())), 4), signals
 
@@ -86,6 +148,8 @@ def _score(
 def flag_change_outputs(
     transaction: Transaction,
     external_addresses: frozenset[str] = frozenset(),
+    *,
+    params: ChangeAddressParams = DEFAULT_CHANGE_ADDRESS_PARAMS,
 ) -> dict[int, dict[str, float]]:
     """Return the change output index and the signals that voted for it.
 
@@ -113,7 +177,7 @@ def flag_change_outputs(
     }
     input_values = [tx_input.value for tx_input in transaction.inputs if tx_input.value is not None]
     smallest_input = min(input_values) if input_values else None
-    any_round_output = any(is_round(output.value or 0) for output in valued)
+    any_round_output = any(is_round(output.value or 0, params=params) for output in valued)
 
     scored = sorted(
         (
@@ -125,6 +189,7 @@ def flag_change_outputs(
                     external_addresses=external_addresses,
                     any_round_output=any_round_output,
                     output_count=len(valued),
+                    params=params,
                 ),
                 output.index,
             )
@@ -134,7 +199,7 @@ def flag_change_outputs(
     )
 
     best_score, best_signals, best_index = scored[0]
-    if best_score < _THRESHOLD:
+    if best_score < params.threshold:
         return {}
     if len(scored) > 1 and scored[1][0] == best_score:
         # Ambiguous: two outputs look equally like change. Guessing would fold an
@@ -150,6 +215,9 @@ class ChangeAddressDetector(Heuristic):
     version = "2"
     chain_models = frozenset({ChainModel.UTXO})
 
+    def __init__(self, params: ChangeAddressParams = DEFAULT_CHANGE_ADDRESS_PARAMS) -> None:
+        self.params = params
+
     async def run(self, context: HeuristicContext) -> HeuristicResult:
         # Labeled addresses are the external knowledge the detector uses. Deriving
         # it from labels rather than from what the engine has fetched is what makes
@@ -162,10 +230,12 @@ class ChangeAddressDetector(Heuristic):
                 continue
             # A CoinJoin's outputs are deliberately ambiguous; there is no change
             # output to find, and calling one of them change would be a guess.
+            # The gate's parameters are `common_input`'s — it is that heuristic's
+            # concept — so this use takes their shipped defaults.
             if looks_like_coinjoin(transaction):
                 continue
 
-            flagged = flag_change_outputs(transaction, external_addresses)
+            flagged = flag_change_outputs(transaction, external_addresses, params=self.params)
             if not flagged:
                 continue
             index = next(iter(flagged))

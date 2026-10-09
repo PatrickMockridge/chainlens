@@ -57,6 +57,23 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- A clustering heuristic's **confidences and thresholds are now parameters**, not
+  module globals read inside the function that used them. That was the last instance
+  of the defect the keycard was built against — *a number read at a call site no
+  caller can vary* — and it landed on every `Merge`, hence on a cluster's confidence,
+  hence on a finding. Each heuristic now states its numbers as the field defaults of a
+  frozen `…Params` model (`CommonInputParams`, `ChangeAddressParams`,
+  `AddressReuseParams`, `EthDepositParams`) and reaches them through `self.params`; the
+  free functions (`input_confidence`, `looks_like_coinjoin`, `flag_change_outputs`,
+  `is_round`) take the params as a defaulted argument. **The shipped values are
+  unchanged**, so no existing run computes a different number, and the registry's
+  no-argument construction, the process-wide registry, and the `chainlens.heuristics`
+  entry points are untouched — a caller who wants other numbers passes a configured
+  instance through the existing `ClusteringEngine(provider, heuristics=[...])`. The
+  home is decided, and the alternatives (the card, a `HeuristicContext` policy, class
+  attributes) rejected with their reasons, in `docs/calculus/parameters.md`; the guard
+  is `tests/analysis/test_heuristic_parameters.py`, which fails on a new bare number
+  and on a literal written back into a function body.
 - The keycard carries a **sixth number**: `sample_limit`, the cap on how many of a
   sender's movements the coincidence estimator reads. It was a literal in
   `verify/estimators.py` — a second `2_000` beside the card's `scan_limit`, bounding the

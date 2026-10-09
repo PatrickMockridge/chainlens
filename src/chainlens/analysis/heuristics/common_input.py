@@ -16,27 +16,72 @@ from __future__ import annotations
 
 from collections import Counter
 
-from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext
+from pydantic import Field, model_validator
+
+from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext, HeuristicParams
 from chainlens.models.entities import Evidence, HeuristicResult, Merge
 from chainlens.models.enums import ChainModel
 from chainlens.models.primitives import Transaction
 
-__all__ = ["CommonInputOwnership", "input_confidence", "looks_like_coinjoin"]
-
-#: A two-input transaction is the strongest signal; more inputs slightly weaken it
-#: because consolidation and CoinJoin both produce them.
-_BASE_CONFIDENCE = 0.95
-_PER_EXTRA_INPUT_PENALTY = 0.05
-_MIN_CONFIDENCE = 0.5
-
-#: CoinJoin shape: several inputs and several outputs of identical value. Equal
-#: outputs are the whole point of a CoinJoin -- they are what makes the mapping
-#: from inputs to outputs ambiguous.
-_COINJOIN_MIN_INPUTS = 3
-_COINJOIN_MIN_EQUAL_OUTPUTS = 3
+__all__ = [
+    "DEFAULT_COMMON_INPUT_PARAMS",
+    "CommonInputOwnership",
+    "CommonInputParams",
+    "input_confidence",
+    "looks_like_coinjoin",
+]
 
 
-def looks_like_coinjoin(transaction: Transaction) -> bool:
+class CommonInputParams(HeuristicParams):
+    """The numbers this heuristic reasons under.
+
+    The shipped values are the field defaults, and they are the only place these
+    numbers are written down.
+
+    Attributes:
+        base_confidence: the confidence of a two-input transaction, the strongest
+            signal. More inputs slightly weaken it because consolidation and
+            CoinJoin both produce them.
+        per_extra_input_penalty: how much one input beyond the second subtracts.
+        min_confidence: the floor the score is held to, so a many-input
+            transaction is weak rather than absent.
+        coinjoin_min_inputs: inputs at or above which a transaction may be
+            CoinJoin-shaped.
+        coinjoin_min_equal_outputs: equal-valued outputs required for the same.
+            Equal outputs are the whole point of a CoinJoin -- they are what makes
+            the mapping from inputs to outputs ambiguous.
+    """
+
+    base_confidence: float = Field(default=0.95, gt=0.0, le=1.0)
+    per_extra_input_penalty: float = Field(default=0.05, ge=0.0)
+    min_confidence: float = Field(default=0.5, gt=0.0, le=1.0)
+    coinjoin_min_inputs: int = Field(default=3, ge=2)
+    coinjoin_min_equal_outputs: int = Field(default=3, ge=2)
+
+    @model_validator(mode="after")
+    def _the_floor_is_not_above_the_base(self) -> CommonInputParams:
+        """A floor above the base would *raise* every score, not cap it.
+
+        The values are the same kind of quantity, so the invariant is stated where
+        the type carries it rather than left to arithmetic that happens to work.
+        """
+        if self.min_confidence > self.base_confidence:
+            raise ValueError(
+                f"min_confidence ({self.min_confidence}) must not exceed base_confidence "
+                f"({self.base_confidence}); the floor would raise every score"
+            )
+        return self
+
+
+#: The shipped numbers, and the only place they are written. Reached by every call
+#: that does not pass its own; a caller varies them by passing a configured
+#: ``CommonInputParams``.
+DEFAULT_COMMON_INPUT_PARAMS = CommonInputParams()
+
+
+def looks_like_coinjoin(
+    transaction: Transaction, *, params: CommonInputParams = DEFAULT_COMMON_INPUT_PARAMS
+) -> bool:
     """Whether a transaction has the shape of a CoinJoin.
 
     The test is the standard one: multiple inputs together with several
@@ -48,7 +93,7 @@ def looks_like_coinjoin(transaction: Transaction) -> bool:
     direction of suppression: a false positive here costs a missed merge (a gap),
     while a false negative costs a wrong merge (a false accusation).
     """
-    if len(transaction.inputs) < _COINJOIN_MIN_INPUTS:
+    if len(transaction.inputs) < params.coinjoin_min_inputs:
         return False
 
     values = [
@@ -56,18 +101,20 @@ def looks_like_coinjoin(transaction: Transaction) -> bool:
         for output in transaction.outputs
         if output.value is not None and output.value > 0
     ]
-    if len(values) < _COINJOIN_MIN_EQUAL_OUTPUTS:
+    if len(values) < params.coinjoin_min_equal_outputs:
         return False
 
-    return max(Counter(values).values()) >= _COINJOIN_MIN_EQUAL_OUTPUTS
+    return max(Counter(values).values()) >= params.coinjoin_min_equal_outputs
 
 
-def input_confidence(input_count: int) -> float:
+def input_confidence(
+    input_count: int, *, params: CommonInputParams = DEFAULT_COMMON_INPUT_PARAMS
+) -> float:
     """Confidence that ``input_count`` co-spent addresses share an owner."""
     if input_count < 2:
         raise ValueError(f"co-ownership needs at least two inputs, got {input_count}")
-    value = _BASE_CONFIDENCE - _PER_EXTRA_INPUT_PENALTY * (input_count - 2)
-    return round(max(_MIN_CONFIDENCE, value), 4)
+    value = params.base_confidence - params.per_extra_input_penalty * (input_count - 2)
+    return round(max(params.min_confidence, value), 4)
 
 
 class CommonInputOwnership(Heuristic):
@@ -76,6 +123,9 @@ class CommonInputOwnership(Heuristic):
     name = "common-input-ownership"
     version = "1"
     chain_models = frozenset({ChainModel.UTXO})
+
+    def __init__(self, params: CommonInputParams = DEFAULT_COMMON_INPUT_PARAMS) -> None:
+        self.params = params
 
     async def run(self, context: HeuristicContext) -> HeuristicResult:
         merges: list[Merge] = []
@@ -91,11 +141,11 @@ class CommonInputOwnership(Heuristic):
             if len(addresses) < 2:
                 continue
 
-            if looks_like_coinjoin(transaction):
+            if looks_like_coinjoin(transaction, params=self.params):
                 suppressed += 1
                 continue
 
-            confidence = input_confidence(len(addresses))
+            confidence = input_confidence(len(addresses), params=self.params)
             merges.append(
                 Merge(
                     addresses=frozenset(addresses),

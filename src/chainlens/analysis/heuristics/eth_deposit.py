@@ -21,11 +21,53 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
-from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext
+from pydantic import Field, model_validator
+
+from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext, HeuristicParams
 from chainlens.models.entities import Evidence, HeuristicResult, Merge
 from chainlens.models.enums import ChainModel
 
-__all__ = ["EthDepositAddressHeuristic"]
+__all__ = [
+    "DEFAULT_ETH_DEPOSIT_PARAMS",
+    "EthDepositAddressHeuristic",
+    "EthDepositParams",
+]
+
+
+class EthDepositParams(HeuristicParams):
+    """The numbers this heuristic reasons under.
+
+    The shipped values are the field defaults, and they are the only place these
+    numbers are written down. They were class attributes before, readable through
+    ``self`` — the defect one notch quieter, since only a subclass could vary one.
+
+    Attributes:
+        minimum_senders: below this many distinct senders, the pattern is
+            indistinguishable from ordinary activity.
+        base_confidence: the confidence at the minimum sender count.
+        per_sender: how much each sender beyond the minimum adds.
+        max_confidence: the cap that climb is held to, because the shape is not
+            evidence of *who* the operator is.
+    """
+
+    minimum_senders: int = Field(default=3, ge=1)
+    base_confidence: float = Field(default=0.4, gt=0.0, le=1.0)
+    per_sender: float = Field(default=0.05, ge=0.0)
+    max_confidence: float = Field(default=0.9, gt=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _the_base_is_not_above_the_cap(self) -> EthDepositParams:
+        """A base above the cap would make the cap the value, not the cap."""
+        if self.base_confidence > self.max_confidence:
+            raise ValueError(
+                f"base_confidence ({self.base_confidence}) must not exceed max_confidence "
+                f"({self.max_confidence})"
+            )
+        return self
+
+
+#: The shipped numbers, and the only place they are written.
+DEFAULT_ETH_DEPOSIT_PARAMS = EthDepositParams()
 
 
 class EthDepositAddressHeuristic(Heuristic):
@@ -35,13 +77,8 @@ class EthDepositAddressHeuristic(Heuristic):
     version = "1"
     chain_models = frozenset({ChainModel.ACCOUNT})
 
-    #: Below this many distinct senders, the pattern is indistinguishable from
-    #: ordinary activity.
-    minimum_senders = 3
-
-    _BASE_CONFIDENCE = 0.4
-    _PER_SENDER = 0.05
-    _MAX_CONFIDENCE = 0.9
+    def __init__(self, params: EthDepositParams = DEFAULT_ETH_DEPOSIT_PARAMS) -> None:
+        self.params = params
 
     async def run(self, context: HeuristicContext) -> HeuristicResult:
         senders: dict[str, set[str]] = defaultdict(set)
@@ -67,7 +104,7 @@ class EthDepositAddressHeuristic(Heuristic):
         merges: list[Merge] = []
         for address in sorted(senders):
             distinct_senders = senders[address]
-            if len(distinct_senders) < self.minimum_senders:
+            if len(distinct_senders) < self.params.minimum_senders:
                 continue
 
             destinations = forwards.get(address)
@@ -79,8 +116,8 @@ class EthDepositAddressHeuristic(Heuristic):
 
             confidence = round(
                 min(
-                    self._MAX_CONFIDENCE,
-                    self._BASE_CONFIDENCE + self._PER_SENDER * len(distinct_senders),
+                    self.params.max_confidence,
+                    self.params.base_confidence + self.params.per_sender * len(distinct_senders),
                 ),
                 4,
             )

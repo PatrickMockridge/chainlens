@@ -12,7 +12,7 @@ observes are, for the purpose of a comparison, the same document — and saying 
 are is what makes "these two derivations agree" a statement with content rather than an equality
 between two JSON blobs.
 
-## The layer is the most forced of the nine, and this page says so first
+## The layer is among the most forced of the ten, and this page says so first
 
 **A barb is what an observer can see of a process without looking inside it.** The general
 machinery is: a barbed bisimulation is a relation that preserves the observable set and simulates

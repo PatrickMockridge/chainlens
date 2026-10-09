@@ -34,6 +34,7 @@
 - [The sensitivity of a ratio](calculus/sensitivity.md)
 - [Reflection](calculus/reflection.md)
 - [The keycard as a capability](calculus/capability.md)
+- [Where a pluggable rule's parameters live](calculus/parameters.md)
 - [Barbs](calculus/barbs.md)
 - [Processes and channels](calculus/process.md)
 
