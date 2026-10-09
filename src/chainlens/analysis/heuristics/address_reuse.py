@@ -28,17 +28,43 @@ from __future__ import annotations
 
 from collections import Counter
 
-from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext
+from pydantic import Field
+
+from chainlens.analysis.heuristics.base import Heuristic, HeuristicContext, HeuristicParams
 from chainlens.models.entities import HeuristicResult, Label
 from chainlens.models.enums import LabelSource
 
-__all__ = ["RECEIVED_THEN_SPENT", "REUSED_INPUT", "AddressReuse"]
+__all__ = [
+    "DEFAULT_ADDRESS_REUSE_PARAMS",
+    "RECEIVED_THEN_SPENT",
+    "REUSED_INPUT",
+    "AddressReuse",
+    "AddressReuseParams",
+]
 
 REUSED_INPUT = "reused-input-address"
 RECEIVED_THEN_SPENT = "received-then-spent"
 
-_REUSE_CONFIDENCE = 0.9
-_RECEIVED_THEN_SPENT_CONFIDENCE = 0.85
+
+class AddressReuseParams(HeuristicParams):
+    """The confidences the two reuse observations carry.
+
+    The shipped values are the field defaults, and they are the only place these
+    numbers are written down.
+
+    Attributes:
+        reuse_confidence: for an address spent as an input more than once.
+        received_then_spent_confidence: for an address that received and later
+            spent, which is a slightly weaker observation -- the order is inferred
+            from block heights, so a missing height removes the label entirely.
+    """
+
+    reuse_confidence: float = Field(default=0.9, gt=0.0, le=1.0)
+    received_then_spent_confidence: float = Field(default=0.85, gt=0.0, le=1.0)
+
+
+#: The shipped numbers, and the only place they are written.
+DEFAULT_ADDRESS_REUSE_PARAMS = AddressReuseParams()
 
 
 class AddressReuse(Heuristic):
@@ -52,6 +78,9 @@ class AddressReuse(Heuristic):
     #: Applies to both ledger models: account chains reuse addresses constantly,
     #: and the observation is just as informative there.
     chain_models = frozenset()
+
+    def __init__(self, params: AddressReuseParams = DEFAULT_ADDRESS_REUSE_PARAMS) -> None:
+        self.params = params
 
     async def run(self, context: HeuristicContext) -> HeuristicResult:
         spend_counts: Counter[str] = Counter()
@@ -75,7 +104,7 @@ class AddressReuse(Heuristic):
                     Label(
                         name=REUSED_INPUT,
                         source=LabelSource.HEURISTIC,
-                        confidence=_REUSE_CONFIDENCE,
+                        confidence=self.params.reuse_confidence,
                         address=address,
                     )
                 )
@@ -87,7 +116,7 @@ class AddressReuse(Heuristic):
                     Label(
                         name=RECEIVED_THEN_SPENT,
                         source=LabelSource.HEURISTIC,
-                        confidence=_RECEIVED_THEN_SPENT_CONFIDENCE,
+                        confidence=self.params.received_then_spent_confidence,
                         address=address,
                     )
                 )

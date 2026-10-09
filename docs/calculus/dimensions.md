@@ -34,7 +34,7 @@ there multiply and a square root of a unit is a unit, so its exponents need a fi
 amounts add and never multiply — a satoshi is a count of things that cannot be divided — so the
 weights are integers, every one of them is meaningful as a count, and the carrier is a free
 abelian group rather than a vector space. That is a smaller development, and it is stated here
-rather than implied, because the difference is the reason four of these nine layers are short.
+rather than implied, because the difference is the reason five of these ten layers are short.
 
 ## The claims, and which are proved
 

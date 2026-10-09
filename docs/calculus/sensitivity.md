@@ -73,8 +73,8 @@ real theorem rather than an artefact of how it is computed.
 **This is the one layer stated over `ℝ`.** The coincidence probability is `1 - (1 - p)^k` for a
 real `p`, the ratio inverts it, and the Wilson interval's half-width is a `Real.sqrt` — so this
 module needs Mathlib's real arithmetic, where the other eight are stated against Lean core alone.
-That asymmetry is deliberate: seven of the nine layers are about integers and sets, and one is
-about a probability.
+That asymmetry is deliberate: seven of the ten layers are about integers and sets, one is about a
+probability, and two carry no Lean at all.
 
 **That paragraph was a blocker asserted rather than measured, and the measurement is two minutes.**
 Mathlib is a dependency now; `lake exe cache get` fetches 7,335 prebuilt oleans in about two

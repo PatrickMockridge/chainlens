@@ -102,16 +102,17 @@ measurement disagreed with it and won.**
 **And the honest size of this.** This development follows the one in a sibling project, `azoth`,
 whose calculus of thermodynamic dimensionality is larger and whose proofs carry more weight — because
 *units multiply* there and the exponent algebra is load-bearing. chainlens's amounts are never
-multiplied, so four of the nine layers below are small. That is a reason to state them, not a reason
+multiplied, so five of the ten layers below are small. That is a reason to state them, not a reason
 to imply parity: a claim dressed as parity with a stronger development is the same defect as a claim
 dressed as a theorem.
 
 **And the dependency runs one way.** `azoth` vendors a units library beneath every layer, so all
-nine of its layers need Mathlib. Here eight are stated against Lean core alone and one — [the
-sensitivity of a ratio](./sensitivity.md) — needs real arithmetic. A reader who wants the integer
-half of this development builds three modules and fetches nothing.
+nine of its layers need Mathlib. Here eight are stated against Lean core alone, one — [the
+sensitivity of a ratio](./sensitivity.md) — needs real arithmetic, and the last carries no Lean at
+all ([where a pluggable rule's parameters live](./parameters.md), whose claim is about the tree). A
+reader who wants the integer half of this development builds three modules and fetches nothing.
 
-## Nine layers, and what each one is worth
+## Ten layers, and what each one is worth
 
 Each layer is a page here and the Lean module it is stated against. The three statuses are the ones
 the sibling project settled on:
@@ -136,16 +137,18 @@ which claim is which. **The statuses below are as of this commit, not as of the 
 | [The keycard as a capability](./capability.md) | authority a run holds rather than a global it reads | `Capability.lean` | Proved |
 | [Barbs](./barbs.md) | what two ledgers are indistinguishable by | `Barb.lean` | Proved (general), Specified (the chain barb) |
 | [Processes and channels](./process.md) | a verification as a process on typed channels | `Process.lean` | Proved |
+| [Where a pluggable rule's parameters live](./parameters.md) | a number a pluggable rule reads, and who may vary it | — none, deliberately | Characterised |
 
-**A reader is entitled to the bookkeeping before reading nine pages.** The statuses above say what
+**A reader is entitled to the bookkeeping before reading ten pages.** The statuses above say what
 is built; this says what the claims are *worth* once built, which is a different question and the
-one the sibling project's own pages answer up front. Of the nine: **four are genuine core layers**
+one the sibling project's own pages answer up front. Of the ten: **four are genuine core layers**
 whose proofs guard real arithmetic (1, 2, 3, 7); **two are genuine and better placed than the
 development this follows** (5, 9 — both have closed forms where `azoth` needs an implicit function
 theorem); **one is real but its proof is blocked** (4 — the layer exists and does work, and what
 blocks the theorem is that two of its three conversions are keccak and bech32, which are not the
-layer's to prove); and **two are forced** (6 and 8). The pages say which, individually, and say
-why.
+layer's to prove); and **three are forced** (6, 8 and 10 — 10 carries no Lean at all, deliberately,
+because its claim is about where a number is written in the tree and no object a proof could carry
+states that). The pages say which, individually, and say why.
 
 ## The rule the rest depends on
 

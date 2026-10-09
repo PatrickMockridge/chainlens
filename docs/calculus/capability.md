@@ -235,7 +235,7 @@ So the classification of `src/`'s module-level constants, measured rather than a
 | a format version (`SCHEMA_VERSION` in `keycard`, `verify/records`, the vocabulary compiler) | three different shapes, deliberately three constants; not one value in two places. |
 | a registration or a prompt (`METHOD`, `CHECKER`, `SYSTEM_PROMPT`) | the method, pinned by a version that travels with the output. |
 | a reported display cap (`ledger/annotate.py::_MAX_UNJOINED`) | unreachable, and **the number is named in the sentence that reports the truncation**, which is the half that matters. |
-| **the clustering heuristics' confidence model** | **the one remaining instance of the defect.** |
+| **the clustering heuristics' confidence model** | **the one remaining instance of the defect** — answered by [a page of its own](./parameters.md), which puts the numbers in the heuristic's constructible contract rather than on the card. |
 
 **And the guard the plan proposed for this — a snapshot of every module-level constant — is a
 check this page would warn about.** It would fire on an added opcode, a new prompt, a new
@@ -256,8 +256,11 @@ the definition this layer uses. **They are not moved here because a set of param
 pluggable heuristic is a design question and not a relocation**: heuristics are third-party
 extensible through an entry point, so where their parameters live — the card, a policy object
 like `LedgerPolicy`, or the heuristic's own constructor — decides what a third-party heuristic
-may vary, and that is a page to write before a tranche to build. This one is deliberately left
-for it.
+may vary. That page is now written, [Where a pluggable rule's parameters live](./parameters.md),
+and its answer is that a heuristic's tunables belong to the heuristic's **own constructible
+contract** and not to a card: the card is a holder's *asserted* authority, and a heuristic's
+confidence is the *author's* shipped default — the same family this page already classifies as
+not the defect.
 
 ## What it is about in the tree
 

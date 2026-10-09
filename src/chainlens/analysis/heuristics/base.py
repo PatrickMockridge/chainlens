@@ -26,6 +26,7 @@ from importlib.metadata import EntryPoint, entry_points
 from typing import Any, ClassVar
 
 from chainlens.exceptions import PluginLoadError
+from chainlens.models.base import LensModel
 from chainlens.models.entities import HeuristicResult, Label
 from chainlens.models.enums import Chain, ChainModel
 from chainlens.models.primitives import Transaction
@@ -35,6 +36,7 @@ __all__ = [
     "HEURISTIC_ENTRY_POINT_GROUP",
     "Heuristic",
     "HeuristicContext",
+    "HeuristicParams",
     "HeuristicRegistry",
     "get_heuristic_registry",
 ]
@@ -79,11 +81,36 @@ class HeuristicContext:
         )
 
 
+class HeuristicParams(LensModel):
+    """The numbers one heuristic reasons under, as a value its caller may replace.
+
+    **A heuristic's confidences and thresholds are its own defaults, and this is
+    where they are written.** They used to be module globals read inside the
+    function that used them, so no caller could vary one and no reader could see
+    which value applied — the defect ``docs/calculus/parameters.md`` decides the
+    home of. A subclass states its numbers as the field defaults of its own
+    params model and reaches them through ``self.params``; a caller who wants
+    other numbers passes a configured instance to the heuristic's constructor.
+
+    A frozen :class:`~chainlens.models.base.LensModel`, so a params object is
+    immutable like every other value here, and ``extra="forbid"`` means a
+    misspelled field is refused rather than silently ignored.
+
+    **Not a card.** A card is authority a *holder asserts*, per run and citable;
+    a heuristic's confidence is the *author's* shipped default. The two are
+    different kinds, which is why this type exists rather than a card section —
+    see the page for the argument.
+    """
+
+
 class Heuristic(ABC):
     """One clustering rule.
 
     Subclasses set ``name``, optionally ``version`` and the ledger models they
-    apply to, and implement :meth:`run`.
+    apply to, and implement :meth:`run`. A subclass with tunable numbers takes a
+    :class:`HeuristicParams` on its constructor — defaulted to the shipped values,
+    so the registry's no-argument construction and the plugin entry points are
+    untouched — and reads them through ``self.params``.
     """
 
     name: ClassVar[str] = "unnamed"
