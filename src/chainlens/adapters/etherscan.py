@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from chainlens.adapters._etherscan_api import EtherscanCompatProvider
-from chainlens.adapters._evm import parse_rpc_block, parse_rpc_transaction
+from chainlens.adapters._evm import has_code, parse_rpc_block, parse_rpc_transaction
 from chainlens.codec.eth_address import normalize_address
 from chainlens.config import Settings
 from chainlens.exceptions import ConfigurationError, NotFoundError
@@ -110,7 +110,7 @@ class EtherscanProvider(EtherscanCompatProvider):
         # Etherscan has no cheap transaction count: txlist would have to be paged to
         # exhaustion. Leaving it None is honest; a wrong count is not.
         code = await self._proxy("eth_getCode", address=normalized, tag="latest")
-        is_contract = isinstance(code, str) and code not in ("0x", "")
+        is_contract = has_code(code)
         return Address(
             chain=self.chain,
             address=normalized,
@@ -130,6 +130,7 @@ class EtherscanProvider(EtherscanCompatProvider):
             tx,
             receipt_map,
             chain=self.chain,
+            provider=self.name,
             provenance=self._provenance(f"tx/{txid}"),
         )
 

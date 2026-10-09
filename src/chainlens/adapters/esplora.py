@@ -25,9 +25,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
+from pydantic import BeforeValidator, Field
+
+from chainlens.adapters._payload import ProviderPayload, read_payload
 from chainlens.codec.btc_script import classify_script
 from chainlens.exceptions import SchemaError
 from chainlens.models.base import Provenance
@@ -48,6 +51,107 @@ from chainlens.providers.ratelimit import RateLimit
 from chainlens.providers.transport import Transport, read_provenance
 
 __all__ = ["EsploraProvider", "mempool_space_rate_limit"]
+
+
+def _absent_object(value: Any) -> Any:
+    """Esplora spells "no status" and "no prevout" as ``null``; the shape spells it as ``{}``.
+
+    Preserved from the parser bodies this replaced, where every one of these was a
+    ``payload.get("x") or {}``: a mempool transaction has no ``status``, and an input whose
+    previous output the instance has not indexed has no ``prevout``. Both are ordinary, and
+    refusing them would make a normal transaction unparseable. Anything that is not a mapping at
+    all is treated the same way, which is what the ``isinstance`` guard in those bodies did.
+    """
+    return value if isinstance(value, Mapping) else {}
+
+
+def _absent_list(value: Any) -> Any:
+    """The same, for a list-typed field — an empty transaction has ``vin: []`` or omits it."""
+    return value if isinstance(value, list | tuple) else []
+
+
+class _EsploraOutput(ProviderPayload):
+    """One `vout` entry, and one `prevout` — Esplora gives them the same shape."""
+
+    scriptpubkey: str | None = None
+    scriptpubkey_asm: str | None = None
+    scriptpubkey_type: str | None = None
+    scriptpubkey_address: str | None = None
+    value: int | None = None
+
+
+class _EsploraInput(ProviderPayload):
+    """One `vin` entry.
+
+    **The value is on `prevout`, not on the input** — see the module docstring: `vin[].value`
+    does not exist in Esplora's schema, and reading one would be reading a key that is not there.
+    """
+
+    txid: str | None = None
+    vout: int | None = None
+    prevout: Annotated[_EsploraOutput, BeforeValidator(_absent_object)] = Field(
+        default_factory=_EsploraOutput
+    )
+    witness: tuple[str, ...] = ()
+    sequence: int | None = None
+    is_coinbase: bool = False
+
+
+class _EsploraStatus(ProviderPayload):
+    confirmed: bool = False
+    block_height: int | None = None
+    block_hash: str | None = None
+    block_time: int | None = None
+
+
+class _EsploraTransaction(ProviderPayload):
+    """A transaction as Esplora serves it.
+
+    ``txid`` is **required**, and that is the one field here that is not optional. The parser used
+    to read it with a bare subscript, so a payload without one raised ``KeyError`` — a message
+    naming no field and no provider — where every other absence was tolerated. Required here makes
+    it a validation error naming ``txid``, which is the failure a reader can act on.
+    """
+
+    txid: str
+    #: The entries stay as mappings here and are validated by `_EsploraInput`/`_EsploraOutput` where
+    #: they are parsed, because those parsers keep the *verbatim* entry for `TxInput.raw`. A tuple
+    #: of models here would be a second parse and would replace the record with the declared fields.
+    vin: Annotated[tuple[Mapping[str, Any], ...], BeforeValidator(_absent_list)] = ()
+    vout: Annotated[tuple[Mapping[str, Any], ...], BeforeValidator(_absent_list)] = ()
+    status: Annotated[_EsploraStatus, BeforeValidator(_absent_object)] = Field(
+        default_factory=_EsploraStatus
+    )
+    fee: int | None = None
+    size: int | None = None
+    weight: int | None = None
+
+
+class _EsploraStats(ProviderPayload):
+    tx_count: int = 0
+    funded_txo_sum: int = 0
+    spent_txo_sum: int = 0
+
+
+class _EsploraAddress(ProviderPayload):
+    address: str | None = None
+    chain_stats: Annotated[_EsploraStats, BeforeValidator(_absent_object)] = Field(
+        default_factory=_EsploraStats
+    )
+    mempool_stats: Annotated[_EsploraStats, BeforeValidator(_absent_object)] = Field(
+        default_factory=_EsploraStats
+    )
+
+
+class _EsploraBlock(ProviderPayload):
+    id: str
+    height: int | None = None
+    timestamp: int | None = None
+    tx_count: int | None = None
+    size: int | None = None
+    weight: int | None = None
+    previousblockhash: str | None = None
+
 
 #: Esplora's declared output types, across the spellings seen in the wild.
 _SCRIPT_TYPE_MAP: dict[str, ScriptType] = {
@@ -106,12 +210,15 @@ class EsploraProvider(BaseProvider):
 
     rate_limit: RateLimit | None = None
 
-    #: Esplora pages `/address/{a}/txs/chain` at 25 transactions.
-    _chain_page_size = 25
-
     #: How many pages a movement scan will read before stopping. A rate limit in spirit rather
     #: than in practice: it is what keeps a sample request from becoming a crawl of an exchange's
     #: history, and the ceiling is why the estimate it feeds has to describe its own bound.
+    #:
+    #: Esplora serves 25 transactions a page (`/address/{a}/txs/chain`), so this is roughly a
+    #: thousand transactions — stated here because the page size is a fact about somebody else's
+    #: API that nothing here acts on. It used to be a `_chain_page_size` constant, and the paging
+    #: loop is cursor-driven: the last txid of a page is the next page's cursor, so the size is
+    #: never read, and a value nothing reads is data that looks in use and is not.
     _max_transfer_pages = 40
 
     def __init__(
@@ -143,116 +250,114 @@ class EsploraProvider(BaseProvider):
         return AssetRef.of_native(self.chain)
 
     @staticmethod
-    def _script_type(raw: Mapping[str, Any]) -> ScriptType | None:
+    def _script_type(payload: _EsploraOutput) -> ScriptType | None:
         """Map Esplora's declared type, falling back to local classification."""
-        declared = raw.get("scriptpubkey_type")
-        if isinstance(declared, str):
+        declared = payload.scriptpubkey_type
+        if declared is not None:
             mapped = _SCRIPT_TYPE_MAP.get(declared.lower())
             if mapped is not None:
                 return mapped
-        script_hex = raw.get("scriptpubkey")
-        if isinstance(script_hex, str) and script_hex:
+        script_hex = payload.scriptpubkey
+        if script_hex:
             return classify_script(script_hex)
         return None
 
     def _parse_input(self, raw: Mapping[str, Any], index: int) -> TxInput:
-        prevout = raw.get("prevout")
-        prevout = prevout if isinstance(prevout, Mapping) else {}
-        value = prevout.get("value")
+        entry = read_payload(_EsploraInput, raw, provider=self.name, what="vin entry")
+        prevout = entry.prevout
+        # Whether the provider *gave* a prevout at all, which is not the same as whether it
+        # carried a value: an unindexed previous output is a `null` prevout, and the script type
+        # is left unstated for it rather than derived from nothing.
+        given = bool(raw.get("prevout"))
         return TxInput(
             index=index,
-            address=prevout.get("scriptpubkey_address"),
-            value=int(value) if value is not None else None,
-            asset=self._native_asset() if value is not None else None,
-            prev_txid=raw.get("txid"),
-            prev_vout=raw.get("vout"),
-            script_type=self._script_type(prevout) if prevout else None,
-            script_hex=prevout.get("scriptpubkey"),
-            script_asm=prevout.get("scriptpubkey_asm"),
-            witness=tuple(raw.get("witness") or ()),
-            sequence=raw.get("sequence"),
-            is_coinbase=bool(raw.get("is_coinbase")),
+            address=prevout.scriptpubkey_address,
+            value=prevout.value,
+            asset=self._native_asset() if prevout.value is not None else None,
+            prev_txid=entry.txid,
+            prev_vout=entry.vout,
+            script_type=self._script_type(prevout) if given else None,
+            script_hex=prevout.scriptpubkey,
+            script_asm=prevout.scriptpubkey_asm,
+            witness=entry.witness,
+            sequence=entry.sequence,
+            is_coinbase=entry.is_coinbase,
             raw=dict(raw),
         )
 
     def _parse_output(self, raw: Mapping[str, Any], index: int) -> TxOutput:
-        value = raw.get("value")
+        entry = read_payload(_EsploraOutput, raw, provider=self.name, what="vout entry")
         return TxOutput(
             index=index,
-            address=raw.get("scriptpubkey_address"),
-            value=int(value) if value is not None else None,
-            asset=self._native_asset() if value is not None else None,
-            script_type=self._script_type(raw),
-            script_hex=raw.get("scriptpubkey"),
-            script_asm=raw.get("scriptpubkey_asm"),
+            address=entry.scriptpubkey_address,
+            value=entry.value,
+            asset=self._native_asset() if entry.value is not None else None,
+            script_type=self._script_type(entry),
+            script_hex=entry.scriptpubkey,
+            script_asm=entry.scriptpubkey_asm,
             raw=dict(raw),
         )
 
     def _parse_transaction(self, payload: Mapping[str, Any]) -> Transaction:
-        status = payload.get("status") or {}
-        confirmed = bool(status.get("confirmed"))
-        inputs = tuple(self._parse_input(raw, i) for i, raw in enumerate(payload.get("vin") or []))
-        outputs = tuple(
-            self._parse_output(raw, i) for i, raw in enumerate(payload.get("vout") or [])
-        )
-        weight = payload.get("weight")
-        txid = str(payload["txid"])
+        entry = read_payload(_EsploraTransaction, payload, provider=self.name, what="transaction")
+        inputs = tuple(self._parse_input(raw, i) for i, raw in enumerate(entry.vin))
+        outputs = tuple(self._parse_output(raw, i) for i, raw in enumerate(entry.vout))
+        weight = entry.weight
         return Transaction(
             chain=self.chain,
-            txid=txid,
-            status=TxStatus.CONFIRMED if confirmed else TxStatus.PENDING,
-            block_hash=status.get("block_hash"),
-            block_height=status.get("block_height"),
-            block_time=_to_datetime(status.get("block_time")),
+            txid=entry.txid,
+            status=TxStatus.CONFIRMED if entry.status.confirmed else TxStatus.PENDING,
+            block_hash=entry.status.block_hash,
+            block_height=entry.status.block_height,
+            block_time=_to_datetime(entry.status.block_time),
             inputs=inputs,
             outputs=outputs,
-            fee=payload.get("fee"),
+            fee=entry.fee,
             fee_asset=self._native_asset(),
-            size=payload.get("size"),
+            size=entry.size,
             weight=weight,
-            vsize=(int(weight) + 3) // 4 if weight is not None else None,
+            vsize=(weight + 3) // 4 if weight is not None else None,
             is_coinbase=bool(inputs and inputs[0].is_coinbase),
-            provenance=self._provenance(f"tx/{txid}"),
+            provenance=self._provenance(f"tx/{entry.txid}"),
         )
 
     def _parse_address(self, address: str, payload: Mapping[str, Any]) -> Address:
-        chain_stats = payload.get("chain_stats") or {}
-        mempool_stats = payload.get("mempool_stats") or {}
-        tx_count = int(chain_stats.get("tx_count", 0)) + int(mempool_stats.get("tx_count", 0))
+        entry = read_payload(_EsploraAddress, payload, provider=self.name, what="address")
         return Address(
             chain=self.chain,
-            address=str(payload.get("address") or address),
-            balance=self._confirmed_balance(payload),
-            tx_count=tx_count,
+            address=entry.address or address,
+            balance=self._confirmed_balance(entry),
+            tx_count=entry.chain_stats.tx_count + entry.mempool_stats.tx_count,
             provenance=self._provenance(f"address/{address}"),
         )
 
     @staticmethod
-    def _confirmed_balance(payload: Mapping[str, Any]) -> int:
+    def _confirmed_balance(payload: _EsploraAddress) -> int:
         """Confirmed balance: funded minus spent, excluding mempool activity.
 
         Unconfirmed amounts are deliberately excluded. For an analysis library the
         defensible figure is what is settled on chain; including mempool value
         would make the same query return different answers minute to minute.
         """
-        stats = payload.get("chain_stats") or {}
-        return int(stats.get("funded_txo_sum", 0)) - int(stats.get("spent_txo_sum", 0))
+        stats = payload.chain_stats
+        return stats.funded_txo_sum - stats.spent_txo_sum
 
     def _parse_block(self, payload: Mapping[str, Any], height: int | None = None) -> Block:
-        block_hash = str(payload.get("id"))
-        raw_height = payload.get("height", height)
+        entry = read_payload(_EsploraBlock, payload, provider=self.name, what="block")
+        block_hash = entry.id
+        raw_height = entry.height if entry.height is not None else height
         if raw_height is None:
             # A block without a height cannot be placed; guessing would be worse.
             raise SchemaError(self.name, f"block {block_hash} payload carries no height")
         return Block(
             chain=self.chain,
             hash=block_hash,
-            height=int(raw_height),
-            timestamp=_to_datetime(payload.get("timestamp")),
-            tx_count=payload.get("tx_count"),
-            size=payload.get("size"),
-            weight=payload.get("weight"),
-            prev_hash=payload.get("previousblockhash"),
+            height=raw_height,
+            timestamp=_to_datetime(entry.timestamp),
+            tx_count=entry.tx_count,
+            size=entry.size,
+            weight=entry.weight,
+            prev_hash=entry.previousblockhash,
             provenance=self._provenance(f"block/{block_hash}"),
         )
 
@@ -274,7 +379,9 @@ class EsploraProvider(BaseProvider):
             chain=self.chain,
             address=address,
             asset=self._native_asset(),
-            amount=self._confirmed_balance(payload),
+            amount=self._confirmed_balance(
+                read_payload(_EsploraAddress, payload, provider=self.name, what="address")
+            ),
             provenance=self._provenance(f"address/{address}"),
         )
 

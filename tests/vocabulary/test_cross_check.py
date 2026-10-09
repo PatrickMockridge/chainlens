@@ -24,7 +24,6 @@ from decimal import Decimal
 
 import pytest
 
-from chainlens.adapters._evm import WEI_DECIMALS
 from chainlens.codec.btc_amount import SATS_PER_BTC, btc_to_sats, sats_to_btc
 from chainlens.codec.btc_script import NETWORKS
 from chainlens.models.enums import Chain
@@ -78,17 +77,6 @@ class TestTheEthereumRow:
         assert reading is not None
         assert reading.asset.decimals == decimals_for(Chain.ETHEREUM)
         assert reading.band.nominal == 10 ** decimals_for(Chain.ETHEREUM)
-
-    def test_the_evm_adapters_decimals_are_the_tables(self) -> None:
-        """`WEI_DECIMALS` is derived from the row rather than stated beside it.
-
-        This assertion is nearly free — it compares a name to the expression that defines it —
-        and it is here because the *change* it guards is the one that reintroduces the literal:
-        an edit to `_evm.py` that wrote `18` back would leave this reading the same number and
-        the test would still pass. What catches that is the source, not the value, so the real
-        guard is that the module no longer contains the digits.
-        """
-        assert decimals_for(Chain.ETHEREUM) == WEI_DECIMALS
 
     def test_the_asset_reference_carries_the_rows_symbol_and_decimals(self) -> None:
         asset = AssetRef.of_native(Chain.ETHEREUM)

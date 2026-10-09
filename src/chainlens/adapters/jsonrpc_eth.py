@@ -29,6 +29,7 @@ from chainlens.adapters._evm import (
     TRANSFER_TOPIC,
     address_to_topic,
     erc20_transfer_from_log,
+    has_code,
     parse_hex_int,
     parse_rpc_block,
     parse_rpc_transaction,
@@ -163,7 +164,7 @@ class JsonRpcEthProvider(BaseProvider):
             balance=parse_hex_int(balance_hex),
             # A node can say whether code exists, but not how many transactions an
             # address has: that requires an index it does not keep.
-            is_contract=isinstance(code, str) and code not in ("0x", ""),
+            is_contract=has_code(code),
             provenance=self._provenance("eth_getBalance+eth_getCode"),
         )
 
@@ -235,6 +236,7 @@ class JsonRpcEthProvider(BaseProvider):
             tx,
             receipt if isinstance(receipt, Mapping) else None,
             chain=self.chain,
+            provider=self.name,
             provenance=self._provenance(f"tx/{txid}"),
         )
 

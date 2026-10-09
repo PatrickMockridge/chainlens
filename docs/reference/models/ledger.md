@@ -285,6 +285,7 @@ running under defaults chosen for the other.
 - `max_edges` `int` — edges to admit.
 - `time_budget` `float | None` — wall-clock seconds, or ``None`` for no limit.
 - `max_concurrency` `int` — provider requests in flight at once.
+- `max_transactions_per_address` `int` — how many of one address's transactions the walk will read before moving on. A busy address has hundreds of thousands and the point of this view is a slice; when it bites, the reason recorded is ``per_address_limit`` rather than ``budget_nodes``, so a reader can tell a cap on *this address* from a cap on the walk.
 - `min_value` `int | None` — ignore movements below this, in base units. Applies to *edges*, so a transaction all of whose edges fall below it disappears — the transaction is not itself dust, but there is nothing left to draw.
 - `dust_ratio` `float | None` — additionally ignore an output worth less than this fraction of its transaction's total output value.
 - `max_fan_out` `int | None` — above this many outputs, draw the first ``max_fan_out`` and mark the transaction collapsed. **Collapse, never drop** — the true counts stay on the node, so the view can say "312 outputs, 40 drawn" rather than quietly showing a transaction that looks smaller than it is.
@@ -300,6 +301,7 @@ running under defaults chosen for the other.
 - `max_edges` = Field(default=600, ge=1)
 - `time_budget` = Field(default=60.0, gt=0)
 - `max_concurrency` = Field(default=8, ge=1)
+- `max_transactions_per_address` = Field(default=200, ge=1)
 - `min_value` = Field(default=None, ge=0)
 - `dust_ratio` = Field(default=None, gt=0.0, lt=1.0)
 - `max_fan_out` = Field(default=40, gt=0)

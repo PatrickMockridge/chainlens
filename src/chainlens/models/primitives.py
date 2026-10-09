@@ -327,6 +327,15 @@ class TxInput(LensModel):
     sequence: int | None = None
     is_coinbase: bool = False
 
+    #: The provider's own record for this input, kept verbatim.
+    #:
+    #: **Nothing in this library reads it**, and that is stated rather than left to be discovered:
+    #: the fields above are the canonical view, and what this carries is the bytes the view was
+    #: made from. It is here for a caller who has to go back to them — a fork, a provider that
+    #: disagrees with another, a field this library has not modelled yet — which is a thing a
+    #: forensics library owes a reader and a thing no test can want for itself. A provider whose
+    #: parser does not populate it leaves it empty, and `tests/models/test_primitives.py` pins the
+    #: two that do, so the promise is one a change can break.
     raw: Mapping[str, Any] = Field(default_factory=dict)
 
     @property
@@ -358,6 +367,7 @@ class TxOutput(LensModel):
     spent_by_txid: str | None = None
     spent_by_input: int | None = None
 
+    #: The provider's own record for this output, kept verbatim — see :attr:`TxInput.raw`.
     raw: Mapping[str, Any] = Field(default_factory=dict)
 
     @property
@@ -375,6 +385,7 @@ class LogEntry(LensModel):
     topics: tuple[str, ...] = ()
     data: str | None = None
     removed: bool = False
+    #: The provider's own record for this log, kept verbatim — see :attr:`TxInput.raw`.
     raw: Mapping[str, Any] = Field(default_factory=dict)
 
 
@@ -478,7 +489,13 @@ class Transaction(LensModel):
     internal_transfers: tuple[Transfer, ...] = ()
 
     provenance: Provenance | None = None
-    raw: Mapping[str, Any] = Field(default_factory=dict)
+
+    # **No `raw` here, and that is the removal of a promise with no keeper.** `TxInput`, `TxOutput`
+    # and `LogEntry` carry the provider's record for *the thing they are*; a transaction's own
+    # record was declared the same way, never written by any parser, and therefore read nothing —
+    # a field guaranteed to be empty is not a pass-through, it is the shape of one. The inputs and
+    # outputs a transaction was built from travel with it and carry theirs, which is where a
+    # reader who needs the bytes should look.
 
     @property
     def chain_model(self) -> ChainModel:

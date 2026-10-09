@@ -31,8 +31,6 @@ partial sum wearing a total's clothes.
 
 ## `FRONTIER_DEFERRED`
 
-## `MAX_TRANSACTIONS_PER_ADDRESS`
-
 ## `PER_ADDRESS_LIMIT`
 
 ## `POLICY_COINBASE`

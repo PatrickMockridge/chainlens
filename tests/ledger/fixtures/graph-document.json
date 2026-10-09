@@ -3241,6 +3241,7 @@
         "max_edges": 40,
         "max_fan_out": 2,
         "max_nodes": 40,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
@@ -3849,6 +3850,7 @@
         "max_edges": 40,
         "max_fan_out": 2,
         "max_nodes": 40,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
@@ -3897,6 +3899,7 @@
         "max_edges": 600,
         "max_fan_out": 40,
         "max_nodes": 300,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
@@ -4135,6 +4138,7 @@
         "max_edges": 30,
         "max_fan_out": 40,
         "max_nodes": 30,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
@@ -4640,6 +4644,7 @@
         "max_edges": 40,
         "max_fan_out": 40,
         "max_nodes": 40,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
@@ -4884,6 +4889,7 @@
         "max_edges": 4,
         "max_fan_out": 40,
         "max_nodes": 5,
+        "max_transactions_per_address": 200,
         "min_value": null,
         "time_budget": 60.0
       },
