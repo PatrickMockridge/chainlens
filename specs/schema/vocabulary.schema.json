@@ -40,7 +40,7 @@
             "bitcoin_cash",
             "ethereum"
           ],
-          "description": "A member of `chainlens.models.enums.Chain`. Closed, and checked by the generator against the enum rather than restated from it."
+          "description": "A member of `chainlens.models.enums.Chain`. **Held to the enum by a test rather than trusted**, like every other enum written out here: this list is a second description of a set Python owns, and the only safe version of that is one something compares. See `tests/vocabulary/test_the_table.py::TestTheSchemaDoesNotDrift`."
         },
         "symbol": {
           "type": "string",
@@ -63,6 +63,18 @@
         "note": {
           "type": "string",
           "description": "Optional prose. Carried into the Python row and the Lean row, so a reader of either finds the same qualification."
+        },
+        "base58check_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "description": "The version bytes that identify this chain within base58check — what makes a `1…` address bitcoin's rather than litecoin's. **Required of a row that names the `base58check` family and refused on one that does not**, because a family a row claims without the parameter that identifies the chain within it is a capability no caller can act on. `bitcoin` and `bitcoin_cash` share `[0, 5]`, which is why a lookup returns a tuple."
+        },
+        "bech32_hrp": {
+          "type": "string",
+          "pattern": "^[a-z]+$",
+          "description": "The human-readable part that identifies this chain within bech32 (`bc`, `ltc`), or absent on a row that does not name the family. Lowercase, because bech32 defines the part that way. Required of a `bech32` row for the same reason as the version bytes above."
         }
       }
     }

@@ -134,9 +134,18 @@ is that the three answer different questions with different staleness. The docum
 "is the shape of a document current"; the vocabulary asks "is the set of things a chain has
 current".
 
-**The generator is the schema.** `specs/schema/vocabulary.schema.json` declares the table's shape
-for a reader, and nothing consults it at run time — the refusals in `tools/gen_vocabulary.py` are
-what actually enforce it, and each of them is tested rather than trusted:
-`tests/vocabulary/test_the_table.py::TestTheRefusals` holds nine tables the generator must not
-compile, including a field nothing reads, a chain the enum does not have, and a family no codec
-implements.
+**The generator is the schema.** Nothing consults `specs/schema/vocabulary.schema.json` at run
+time: the refusals in `tools/gen_vocabulary.py` are what enforce the shape, and each of them is
+tested rather than trusted — `tests/vocabulary/test_the_table.py::TestTheRefusals` holds nine
+tables the generator must not compile, including a field nothing reads, a chain the enum does not
+have, and a family no codec implements.
+
+**And the schema file is a second description of that shape, which is only safe when something
+compares it — so `TestTheSchemaDoesNotDrift` now does.** This is the keycard's lesson arriving one
+layer down, and it arrived the same way: **the file was already wrong when the comparison was
+written.** It listed the required fields and both enums, and had no entry at all for
+`base58check_versions` or `bech32_hrp` — the two fields *this page* says the table had to grow so
+that a family could identify a chain. Nothing noticed, because nothing compared the two, and a
+reader trusting the file would have written a table the generator refuses. The comparison holds
+the row's fields to the generator's `REQUIRED`/`OPTIONAL`, the `chain` enum to `Chain`, the
+`families` enum to the generator's closed set, and the top-level sections to the table's.
