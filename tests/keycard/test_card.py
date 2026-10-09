@@ -21,6 +21,7 @@ from chainlens.keycard import (
     SHIPPED,
     KeycardError,
     LabelAssertion,
+    StatedVerbalScale,
     Thresholds,
     load,
     loads,
@@ -62,7 +63,13 @@ class TestTheOverlay:
         card = loads("schema_version = 1\n[thresholds]\ntransfer_limit = 5\n")
         resolved = card.resolved_thresholds
         assert resolved.transfer_limit == 5
-        for name in ("hedge_tolerance", "min_joint_successes", "z_95", "scan_limit"):
+        for name in (
+            "hedge_tolerance",
+            "min_joint_successes",
+            "z_95",
+            "scan_limit",
+            "sample_limit",
+        ):
             assert getattr(resolved, name) == getattr(SHIPPED.resolved_thresholds, name), name
 
     def test_the_keyholder_inherits_when_unstated(self) -> None:
@@ -82,6 +89,18 @@ class TestTheOverlay:
         effective = mine.effective()
         assert [assertion.address for assertion in effective.labels] == ["bc1qexample"]
 
+    def test_a_stated_boundary_keeps_the_shipped_ones(self) -> None:
+        """*Per item* at the level of a set rather than of a scalar field.
+
+        A holder who moves one verbal boundary is not thereby restating the other three, which is
+        the reason the scale is a nested model and overlaid by the same code `[thresholds]` is
+        rather than by a second, section-level merge.
+        """
+        card = loads("schema_version = 1\n[verbal_scale]\nmoderately_strong = 800.0\n")
+        scale = card.resolved_verbal_scale
+        assert scale.moderately_strong == 800.0
+        assert (scale.slight, scale.moderate, scale.strong) == (10.0, 100.0, 10_000.0)
+
     def test_the_shipped_card_is_its_own_overlay(self) -> None:
         """Applying the baseline to itself changes nothing, which is what makes it a baseline
         rather than a special case in the merge."""
@@ -91,11 +110,12 @@ class TestTheOverlay:
         card = loads(
             "schema_version = 1\n[thresholds]\n"
             "hedge_tolerance = 0.2\nmin_joint_successes = 3\nz_95 = 2.0\n"
-            "scan_limit = 11\ntransfer_limit = 12\n"
+            "scan_limit = 11\ntransfer_limit = 12\nsample_limit = 13\n"
         )
         resolved = card.resolved_thresholds
         assert (resolved.hedge_tolerance, resolved.min_joint_successes) == (0.2, 3)
         assert (resolved.z_95, resolved.scan_limit, resolved.transfer_limit) == (2.0, 11, 12)
+        assert resolved.sample_limit == 13
 
 
 class TestTheRefusals:
@@ -123,6 +143,8 @@ class TestTheRefusals:
             loads("schema_version = 1\n[thresholds]\nscan_limit = 0\n")
         with pytest.raises(KeycardError):
             loads("schema_version = 1\n[thresholds]\nhedge_tolerance = 1.5\n")
+        with pytest.raises(KeycardError):
+            loads("schema_version = 1\n[thresholds]\nsample_limit = 0\n")
 
     def test_an_assertion_without_a_citation_is_refused(self) -> None:
         """The rule `presets/records.py::Preset` already applies to a preset's terms, and for the
@@ -136,6 +158,38 @@ class TestTheRefusals:
     def test_an_assertion_missing_a_field_is_refused(self) -> None:
         with pytest.raises(KeycardError):
             loads('schema_version = 1\n[[labels]]\naddress = "a"\nname = "n"\n')
+
+    def test_an_unknown_verbal_boundary_is_refused_by_name(self) -> None:
+        with pytest.raises(KeycardError, match="very_strong"):
+            loads("schema_version = 1\n[verbal_scale]\nvery_strong = 100000.0\n")
+
+    def test_a_boundary_outside_its_range_is_refused(self) -> None:
+        with pytest.raises(KeycardError):
+            loads("schema_version = 1\n[verbal_scale]\nslight = 0.5\n")
+
+    def test_a_valid_file_whose_merge_is_out_of_order_is_refused_when_resolved(self) -> None:
+        """**The one refusal only a merge can make**, and the reason the scale is different from
+        the six scalars.
+
+        The file is fine on its own: `strong = 5` is above 1, and a partial statement has nothing
+        to be out of order against. The *result* is not — inherited onto the shipped `slight` of
+        10, the boundaries descend. So the card loads and fails at the door a computation reaches
+        the scale through, which is where the merged value first exists.
+
+        `resolved_thresholds` cannot fail this way, and that asymmetry is deliberate rather than an
+        oversight: six independent numbers have no combination that is wrong, and a set of four
+        ordered boundaries has.
+        """
+        card = loads("schema_version = 1\n[verbal_scale]\nstrong = 5.0\n")
+        with pytest.raises(KeycardError, match="verbal scale"):
+            _ = card.resolved_verbal_scale
+
+    def test_the_merge_is_what_is_checked_not_the_files_own_order(self) -> None:
+        """The other half: a file that is internally inconsistent is still caught, at the same
+        door and by the same message, because there is one place the merged set is validated."""
+        card = loads("schema_version = 1\n[verbal_scale]\nslight = 50.0\nmoderate = 20.0\n")
+        with pytest.raises(KeycardError, match="verbal scale"):
+            _ = card.resolved_verbal_scale
 
     def test_something_that_is_not_toml_is_refused(self) -> None:
         with pytest.raises(KeycardError, match="not valid TOML"):
@@ -161,6 +215,20 @@ class TestTheNumbersHaveOneHome:
         assert Thresholds.model_fields["hedge_tolerance"] is not None
         assert SHIPPED.resolved_thresholds.hedge_tolerance == 0.05
         assert SHIPPED.resolved_thresholds.z_95 == pytest.approx(1.959963984540054)
+
+    def test_the_estimators_sample_limit_is_the_shipped_cards_entry(self) -> None:
+        """The same shape one module over: `DEFAULT_SAMPLE_LIMIT` was a second `2_000` beside the
+        card's `scan_limit`, bounding one walk from two places with nothing comparing them.
+
+        The assertion is nearly free — it compares a name to the expression that defines it — and
+        its point is the *shape*: a change that wrote the literal back would leave this reading
+        the same number and the test would still pass. What that change would break is the claim
+        the card makes, so what matters is that the constant is not a literal, which is true of
+        the source rather than of the value.
+        """
+        from chainlens.verify.estimators import DEFAULT_SAMPLE_LIMIT
+
+        assert SHIPPED.resolved_thresholds.sample_limit == DEFAULT_SAMPLE_LIMIT
 
     def test_the_shipped_card_states_every_threshold(self) -> None:
         """The baseline is what makes an unstated entry resolvable, so a gap in it would be a
@@ -213,6 +281,13 @@ class TestTheSchemaDoesNotDrift:
     def test_the_thresholds_are_the_models_fields(self) -> None:
         thresholds = self._schema()["properties"]["thresholds"]
         assert sorted(thresholds["properties"]) == sorted(Thresholds.model_fields)
+
+    def test_the_verbal_boundaries_are_the_models_fields(self) -> None:
+        """The same comparison one section over. A boundary added to `StatedVerbalScale` and not
+        to the schema is a card an editor accepts and the loader refuses, which is worse than no
+        schema: the failure arrives after the work."""
+        scale = self._schema()["properties"]["verbal_scale"]
+        assert sorted(scale["properties"]) == sorted(StatedVerbalScale.model_fields)
 
     def test_the_required_fields_are_the_models_required(self) -> None:
         """A field the model demands and the schema does not is a card an editor accepts and the

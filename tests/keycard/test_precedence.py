@@ -4,12 +4,11 @@ The tests in `test_absence.py` show that two cards *are* two values. This shows 
 **answers**: the same provider, the same claim, and a finding that differs because the card says
 so. A card that resolved correctly and changed nothing would pass every test in that file.
 
-**What a card reaches in this tranche, and what it does not.** It reaches the two limits the
-engine already parameterised — the scan limit and the transfer limit — and through
-`chainlens.keycard.SHIPPED` it is where all five numbers are now written down. It does *not* yet
-reach `parse_amount`'s hedge tolerance: that constant has one home now, but threading a card to
-it means a signature change through `parse_claim`, and half of a migration stated plainly is
-better than the same half left for a reader to infer.
+**What a card reaches.** The two limits the engine parameterised first — the scan limit and the
+transfer limit — the hedge tolerance, which shapes an amount's band and is asserted below, and,
+since it stopped being a second literal in `verify/estimators.py`, the coincidence estimator's
+sample cap (driven in `tests/verify/test_estimator.py`, where the estimator is built). Through
+`chainlens.keycard.SHIPPED` the card is also where every one of these numbers is now written down.
 """
 
 from __future__ import annotations
@@ -20,13 +19,21 @@ from pathlib import Path
 import pytest
 
 from chainlens.keycard import SHIPPED, load, loads
-from chainlens.models.enums import Chain, ClaimVerdict
+from chainlens.models.enums import Chain, ClaimVerdict, VerbalScale
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.testing.factories import btc_transaction, inp, out
 from chainlens.testing.in_memory import InMemoryProvider
 from chainlens.verify.engine import VerificationEngine
+from chainlens.verify.likelihood import (
+    ComponentEstimate,
+    EstimatorMethod,
+    NullModel,
+    wilson_interval,
+)
 from chainlens.verify.parsing import parse_amount
+from chainlens.verify.scale import DEFAULT_THRESHOLDS
 from chainlens.verify.schema import Claim, ClaimType, Extraction
+from chainlens.verify.verdicts import RateEstimate
 
 SENDER = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
 RECIPIENT = "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
@@ -215,3 +222,71 @@ def test_the_sentence_names_the_value_that_was_applied() -> None:
     assert "50%" in wide.tolerance_rule
     assert "5%" not in wide.tolerance_rule
     assert "5%" in shipped.tolerance_rule
+
+
+#: Every band boundary set far above any ratio this provider prices, so the card's scale puts the
+#: ratio in `SLIGHT` where the shipped one puts it somewhere higher. The boundaries only have to be
+#: increasing and above 1, and choosing them this way means the test does not depend on the exact
+#: ratio — which would be a test of the estimator rather than of the card.
+#:
+#: All four are stated, deliberately: stating the lower two and inheriting the shipped upper two
+#: would leave `moderately_strong` below `moderate`, and the card would be refused for it — the
+#: merge rule this tranche added, tripping over the fixture rather than the code.
+EVERYTHING_IS_SLIGHT = (
+    "schema_version = 1\n[verbal_scale]\n"
+    "slight = 1e9\nmoderate = 1e10\nmoderately_strong = 1e11\nstrong = 1e12\n"
+)
+
+
+class _FixedRate:
+    """A coincidence estimator that returns one rate, so a ratio reaches the finding.
+
+    The card's business here is the *scale a ratio is reported on*, not how the rate was drawn, so
+    the sample is stubbed rather than measured — the same move `tests/verify/test_verification.py`
+    makes, and for the same reason.
+    """
+
+    null_model = NullModel.WITHIN_SENDER
+
+    async def estimate(self, elements: object, *, provider: object) -> RateEstimate:
+        lower, upper = wilson_interval(3, 30_000)
+        return RateEstimate(
+            component=ComponentEstimate(
+                value=1e-4,
+                successes=3,
+                trials=30_000,
+                ci_lower=lower,
+                ci_upper=upper,
+                method=EstimatorMethod.EMPIRICAL_JOINT,
+                population="the sender's own out-of-window transfers",
+            ),
+            null_model=self.null_model,
+        )
+
+
+async def _verbal_band(**kwargs: object) -> VerbalScale | None:
+    engine = VerificationEngine(_provider(), estimator=_FixedRate(), **kwargs)  # type: ignore[arg-type]
+    report = await engine.verify_post(_post(), Extraction(claims=(_claim(),)))
+    likelihood = report.findings[0].likelihood
+    return None if likelihood is None else likelihood.verbal.scale
+
+
+@pytest.mark.anyio
+async def test_a_cards_verbal_scale_is_the_one_a_ratio_is_reported_on() -> None:
+    """The nested section driving a run, not merely resolving.
+
+    A ratio is *reported* on the verbal scale, so the boundaries are part of what an answer rests
+    on: two cards that agree about every number and disagree about the bands produce findings that
+    say different things about the same ratio. This is the arm that would fail if the section were
+    written into the card but never read by the run.
+    """
+    assert await _verbal_band(card=loads(EVERYTHING_IS_SLIGHT)) is VerbalScale.SLIGHT
+    assert await _verbal_band(card=SHIPPED) is not VerbalScale.SLIGHT
+
+
+@pytest.mark.anyio
+async def test_an_explicit_scale_wins_over_the_card() -> None:
+    """The same precedence as the limits, at a section rather than a field: `None` means the caller
+    did not say, so a caller who passes a scale gets it even under a card that states another."""
+    narrow = loads(EVERYTHING_IS_SLIGHT)
+    assert await _verbal_band(card=narrow, thresholds=DEFAULT_THRESHOLDS) is not VerbalScale.SLIGHT

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/PatrickMockridge/chainlens/specs/schema/keycard.schema.json",
   "title": "A keycard",
-  "description": "The data an answer rests on: the thresholds a finding is computed under, the attributions a holder asserts, and the terms of events they know about. A card is a citation and not a credential — an API key here would put a secret in a file whose purpose is to be shared. Nothing reads this file at run time: `chainlens.keycard.load` is the enforcement, and its refusals are what a holder meets. This is the declared shape, for a reader and for an editor that offers completion. Every field is optional, because a card states what it states and inherits the rest from the shipped baseline, per item: a card naming one threshold keeps the library's values for the other four, and a card naming one address keeps the shipped assertions about every other address.",
+  "description": "The data an answer rests on: the thresholds a finding is computed under, the attributions a holder asserts, and the terms of events they know about. A card is a citation and not a credential — an API key here would put a secret in a file whose purpose is to be shared. Nothing reads this file at run time: `chainlens.keycard.load` is the enforcement, and its refusals are what a holder meets. This is the declared shape, for a reader and for an editor that offers completion. Every field is optional, because a card states what it states and inherits the rest from the shipped baseline, per item: a card naming one threshold keeps the library's values for the other five, and a card naming one address keeps the shipped assertions about every other address.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -48,6 +48,38 @@
           "type": "integer",
           "minimum": 1,
           "description": "How many transfers one finding carries in its evidence. The cap is reported when it is hit: a partial list that looks complete is worse than a short one that says it is short."
+        },
+        "sample_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many of a sender's movements the coincidence estimator reads before giving up on the rest. A second bound on the same walk `scan_limit` bounds, and it moves the ratio, because the rate the coincidence is priced from is drawn over the movements it reaches. Unstated means inherited, like every other entry."
+        }
+      }
+    },
+    "verbal_scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The boundaries of the verbal bands a likelihood ratio is reported on. **A set rather than a scalar, so a section of its own — and derived from the same overlay as `thresholds`.** Unstated means inherited, per boundary: a holder who moves `strong` is not thereby restating the other three. **The merged result, not the file, is what must have strictly increasing boundaries** — a card stating only `strong = 5` is a valid file whose merge over the shipped three is out of order, and it is refused when the card is resolved rather than when it is read. ENFSI-aligned defaults; the guideline treats the scale as optional and jurisdiction-dependent, which is why a holder may move them.",
+      "properties": {
+        "slight": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "description": "Largest likelihood ratio still called slight support. ENFSI default 10."
+        },
+        "moderate": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "description": "ENFSI default 100."
+        },
+        "moderately_strong": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "description": "ENFSI default 1000."
+        },
+        "strong": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "description": "ENFSI default 10000; anything above is very strong."
         }
       }
     },

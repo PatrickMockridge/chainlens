@@ -34,6 +34,7 @@ Three further things are worth stating rather than discovering:
 
 from __future__ import annotations
 
+from chainlens.keycard import SHIPPED, Keycard
 from chainlens.models.calculation import UnboundKind
 from chainlens.models.primitives import AssetRef, Transfer
 from chainlens.providers.base import Provider
@@ -51,7 +52,13 @@ __all__ = ["DEFAULT_SAMPLE_LIMIT", "WindowCoincidenceEstimator", "estimator_for"
 
 #: How many of an address's movements to read before giving up on the rest. Bounds the requests a
 #: ratio costs, and the bound is *reported* rather than hidden — see the module docstring.
-DEFAULT_SAMPLE_LIMIT = 2_000
+#:
+#: **Read from the shipped keycard rather than written here.** The value is the same number; what
+#: changed is that it has one home. It was a literal beside the card's ``scan_limit`` — a second
+#: ``2_000`` bounding the same walk — and the two could disagree with nothing comparing them. A
+#: run reaches the carrier through :func:`estimator_for`, which takes a card; this name stays
+#: because a caller constructing the estimator directly should not be handed a bare literal either.
+DEFAULT_SAMPLE_LIMIT: int = SHIPPED.resolved_thresholds.sample_limit
 
 
 class WindowCoincidenceEstimator:
@@ -193,14 +200,30 @@ def _coincides(movement: Transfer, elements: ClaimElements) -> bool:
 
 
 def estimator_for(
-    provider: Provider, *, null_model: NullModel = NullModel.WITHIN_SENDER
+    provider: Provider,
+    *,
+    null_model: NullModel = NullModel.WITHIN_SENDER,
+    sample_limit: int | None = None,
+    card: Keycard = SHIPPED,
 ) -> CoincidenceEstimator | None:
     """An estimator when the provider can supply what one needs, and ``None`` when it cannot.
 
     ``None`` rather than an estimator that always refuses: the engine's "no coincidence estimator
     is configured" reason is the honest one when there is nothing to configure, and a refusal
     dressed as a data problem would send a reader looking for data that would not help.
+
+    **The sample cap comes from the card, at the same precedence the engine applies to its own
+    limits: an explicit argument wins, and ``None`` means "the caller did not say".** The value is
+    the data the ratio rests on — the rate the coincidence is priced from is drawn over the
+    movements the scan reaches — so a holder's card has to be able to move it, and a reader has to
+    be able to see whose value produced the number. Without this parameter a card could move the
+    checker's ``scan_limit`` and not the estimator's sample, which are two bounds on one walk.
     """
     if not provider.supports(Capability.WINDOW_TRANSFERS):
         return None
-    return WindowCoincidenceEstimator(null_model=null_model)
+    return WindowCoincidenceEstimator(
+        null_model=null_model,
+        sample_limit=(
+            sample_limit if sample_limit is not None else card.resolved_thresholds.sample_limit
+        ),
+    )

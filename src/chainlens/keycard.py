@@ -1,19 +1,20 @@
 """The keycard: the data an answer rests on, held as a value a run is handed.
 
 A card declares what its holder is entitled to use — the thresholds a finding is computed under,
-and the attribution a run may assert about an address. It is **not** where a credential lives: a
-credential is a secret and this is a citation, and the two are different things that both happen
-to be configured.
+the verbal bands it is reported on, and the attribution a run may assert about an address. It is
+**not** where a credential lives: a credential is a secret and this is a citation, and the two are
+different things that both happen to be configured.
 
 ## Why this exists at all
 
-Five numbers a finding depends on were module-level constants:
+Six numbers a finding depends on were module-level constants:
 
 | value | where it was written |
 |---|---|
 | ``HEDGE_TOLERANCE`` | ``verify/parsing.py`` |
 | ``MIN_JOINT_SUCCESSES``, ``_Z_95`` | ``verify/likelihood.py`` |
 | ``DEFAULT_SCAN_LIMIT``, ``DEFAULT_TRANSFER_LIMIT`` | ``verify/checks/base.py`` |
+| ``DEFAULT_SAMPLE_LIMIT`` | ``verify/estimators.py`` |
 
 A reader of a finding could not see which tolerance produced it, and two runs in one process could
 not be asked to differ. **A plausible value nobody chose is a wrong answer with no symptom**, and
@@ -53,6 +54,7 @@ from __future__ import annotations
 
 import tomllib
 from collections.abc import Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
@@ -61,7 +63,7 @@ from pydantic import Field, ValidationError, model_validator
 from chainlens._shipped_card import SHIPPED_PRESETS
 from chainlens.models.base import LensModel
 from chainlens.models.entities import Label
-from chainlens.models.enums import EntityKind, LabelSource
+from chainlens.models.enums import EntityKind, LabelSource, VerbalScale
 from chainlens.presets.records import Preset
 
 __all__ = [
@@ -71,7 +73,9 @@ __all__ = [
     "KeycardError",
     "LabelAssertion",
     "ResolvedThresholds",
+    "StatedVerbalScale",
     "Thresholds",
+    "VerbalThresholds",
     "load",
     "loads",
 ]
@@ -105,6 +109,12 @@ class Thresholds(LensModel):
         scan_limit: how many of a sender's transactions to walk before declaring the scan
             truncated.
         transfer_limit: how many transfers one finding carries in its evidence.
+        sample_limit: how many of a sender's movements the coincidence estimator reads before
+            giving up on the rest. **A second bound on the same walk `scan_limit` bounds** — the
+            checker's scan and the estimator's sample — and it moves the ratio, because the rate
+            the coincidence is priced from is drawn over the movements it reaches. It was
+            written down twice (``verify/estimators.py::DEFAULT_SAMPLE_LIMIT``) and reachable
+            through neither, which is why it is here.
     """
 
     hedge_tolerance: float | None = Field(default=None, gt=0.0, lt=1.0)
@@ -112,15 +122,16 @@ class Thresholds(LensModel):
     z_95: float | None = Field(default=None, gt=0.0)
     scan_limit: int | None = Field(default=None, ge=1)
     transfer_limit: int | None = Field(default=None, ge=1)
+    sample_limit: int | None = Field(default=None, ge=1)
 
 
 class ResolvedThresholds(LensModel):
-    """The five numbers with the overlay applied, so each one is present and typed.
+    """The six numbers with the overlay applied, so each one is present and typed.
 
     A separate type from :class:`Thresholds` because the two answer different questions. A card's
     own ``thresholds`` are *partial*, which is what makes an overlay per item possible; the values
     a computation actually runs under are *complete*, because the shipped baseline states all
-    five. Handing a computation the partial type would mean every call site handling a ``None``
+    six. Handing a computation the partial type would mean every call site handling a ``None``
     that the baseline already excludes — and the module constants below would carry a
     ``float | int`` union for a number that is neither.
 
@@ -134,6 +145,72 @@ class ResolvedThresholds(LensModel):
     z_95: float
     scan_limit: int
     transfer_limit: int
+    sample_limit: int
+
+
+class StatedVerbalScale(LensModel):
+    """The band boundaries a card *states*, each one optional in the same way a threshold is.
+
+    **Every field is optional, and that is what makes the overlay per item possible here too** — a
+    holder who moves one boundary is not thereby restating the other three. This type is
+    deliberately *unconstrained*: the boundaries must increase, but a partial statement cannot be
+    checked against itself, so a card saying only ``strong`` has nothing to compare it to yet. It
+    is checked where it can be — on the merged result, in :attr:`Keycard.resolved_verbal_scale`.
+
+    Attributes:
+        slight: largest likelihood ratio still called slight support. ENFSI default 10.
+        moderate: ENFSI default 100.
+        moderately_strong: ENFSI default 1000.
+        strong: ENFSI default 10000; anything above is very strong.
+    """
+
+    slight: float | None = Field(default=None, gt=1.0)
+    moderate: float | None = Field(default=None, gt=1.0)
+    moderately_strong: float | None = Field(default=None, gt=1.0)
+    strong: float | None = Field(default=None, gt=1.0)
+
+
+class VerbalThresholds(LensModel):
+    """Upper bound of each verbal band, as a likelihood ratio — the merged, complete form.
+
+    **This type lives here rather than in ``verify/scale.py`` because the card owns the data.** It
+    is the *complete* counterpart of :class:`StatedVerbalScale`, in the same relation
+    :class:`ResolvedThresholds` bears to :class:`Thresholds`, and it is the type the source of
+    truth for the numbers is written in — :data:`SHIPPED` states them, and
+    ``verify/scale.py::DEFAULT_THRESHOLDS`` reads them from there rather than restating them. The
+    import runs one way and has to: `verify/estimators.py` imports this module, so a module-level
+    import back would be a cycle, and a second home for the boundaries would be the defect this
+    layer is against. ``chainlens.verify.scale`` re-exports it.
+
+    **Strictly increasing, and each above 1**, since a ratio of 1 is "no support" and a band that
+    reached down to it would have no lower edge. The constraint is what makes the overlay
+    interesting: a card can be a valid *file* whose *merge* is out of order, which is the one
+    refusal only the merged card can make — see :attr:`Keycard.resolved_verbal_scale`.
+    """
+
+    slight: float = Field(default=10.0, gt=1.0)
+    moderate: float = Field(default=100.0, gt=1.0)
+    moderately_strong: float = Field(default=1_000.0, gt=1.0)
+    strong: float = Field(default=10_000.0, gt=1.0)
+
+    @model_validator(mode="after")
+    def _strictly_increasing(self) -> VerbalThresholds:
+        bounds = [self.slight, self.moderate, self.moderately_strong, self.strong]
+        if any(lower >= upper for lower, upper in pairwise(bounds)):
+            raise ValueError(f"verbal thresholds must be strictly increasing, got {bounds}")
+        return self
+
+    def band(self, ratio: float) -> VerbalScale:
+        """The band for a ratio of 1 or more."""
+        if ratio <= self.slight:
+            return VerbalScale.SLIGHT
+        if ratio <= self.moderate:
+            return VerbalScale.MODERATE
+        if ratio <= self.moderately_strong:
+            return VerbalScale.MODERATELY_STRONG
+        if ratio <= self.strong:
+            return VerbalScale.STRONG
+        return VerbalScale.VERY_STRONG
 
 
 class LabelAssertion(LensModel):
@@ -173,6 +250,9 @@ class Keycard(LensModel):
             it — it is here so that a card found in a directory says whose it is, which is the
             first question a reader of one asks.
         thresholds: the numbers a finding is computed under, unstated ones inherited.
+        verbal_scale: the boundaries of the verbal bands a ratio is reported on, unstated ones
+            inherited. A *set* rather than a scalar, so it is a section of its own; the overlay is
+            still per item, because a holder who moves one boundary is not restating the others.
         labels: the attributions the holder asserts, each with its citation.
         presets: the terms of events the holder knows about, in the *same type* the shipped
             data uses — so a preset's rules (a citable source, rate tiers that increase) apply to
@@ -182,6 +262,7 @@ class Keycard(LensModel):
     schema_version: int = SCHEMA_VERSION
     keyholder: str | None = None
     thresholds: Thresholds = Field(default_factory=Thresholds)
+    verbal_scale: StatedVerbalScale = Field(default_factory=StatedVerbalScale)
     labels: tuple[LabelAssertion, ...] = ()
     presets: tuple[Preset, ...] = ()
 
@@ -233,16 +314,26 @@ class Keycard(LensModel):
         """This card's stated entries over the shipped baseline, per item.
 
         **Per item and not per section**, which is the whole difference between an overlay and a
-        replacement: a card that names one threshold keeps the shipped ones for the others, and a
-        card that names one address keeps the shipped assertions about the rest. A section-level
-        merge would make "I know about this one address" mean "I know nothing about any other",
-        which is the opposite of what a holder is saying.
+        replacement: a card that names one threshold keeps the shipped ones for the others, a card
+        that names one verbal boundary keeps the shipped three, and a card that names one address
+        keeps the shipped assertions about the rest. A section-level merge would make "I know about
+        this one address" mean "I know nothing about any other", which is the opposite of what a
+        holder is saying.
+
+        **The verbal scale is merged but not validated here**, because `model_copy` skips
+        validation and the merged set is exactly the thing that can be invalid while the file was
+        not. That check is :attr:`resolved_verbal_scale`'s, made once, on the constructed result.
         """
         stated = self.thresholds.model_dump(exclude_none=True)
+        scale = self.verbal_scale.model_dump(exclude_none=True)
         return Keycard(
             schema_version=self.schema_version,
             keyholder=self.keyholder if self.keyholder is not None else SHIPPED.keyholder,
             thresholds=SHIPPED.thresholds.model_copy(update=stated),
+            # **Merged but not validated here.** `model_copy` skips validation, and the merged
+            # scale is exactly the thing that can be invalid while the file was not — so the check
+            # lives on the door a computation reaches the scale through, once, rather than twice.
+            verbal_scale=SHIPPED.verbal_scale.model_copy(update=scale),
             labels=self.labels + _labels_not_named(self.labels),
             presets=self.presets + _presets_not_named(self.presets),
         )
@@ -264,7 +355,39 @@ class Keycard(LensModel):
             z_95=_stated(merged.z_95, "z_95"),
             scan_limit=_stated(merged.scan_limit, "scan_limit"),
             transfer_limit=_stated(merged.transfer_limit, "transfer_limit"),
+            sample_limit=_stated(merged.sample_limit, "sample_limit"),
         )
+
+    @property
+    def resolved_verbal_scale(self) -> VerbalThresholds:
+        """The four band boundaries this card runs under, with every unstated one inherited.
+
+        **This is the one door that can refuse a card the file loader accepted**, and the overlay
+        is why. The boundaries must strictly increase, and a *partial* statement cannot violate
+        that on its own — but the merge can: a card saying only ``strong = 5`` is a valid file
+        whose result over the shipped three is ``(10, 100, 1000, 5)``.
+        :meth:`effective` merges with ``model_copy``, which does **not** validate, so the check is
+        made here, on the constructed result, and the failure is a :class:`KeycardError` naming the
+        invariant rather than a pydantic traceback surfacing wherever the scale was first used.
+
+        A deliberate difference from :attr:`resolved_thresholds`, which cannot fail: six
+        independent numbers have no combination that is wrong, and a set of four boundaries has.
+        """
+        merged = self.effective().verbal_scale
+        try:
+            return VerbalThresholds(
+                slight=_stated(merged.slight, "verbal_scale.slight"),
+                moderate=_stated(merged.moderate, "verbal_scale.moderate"),
+                moderately_strong=_stated(
+                    merged.moderately_strong, "verbal_scale.moderately_strong"
+                ),
+                strong=_stated(merged.strong, "verbal_scale.strong"),
+            )
+        except ValidationError as exc:
+            raise KeycardError(
+                "this card's verbal scale is not usable once the shipped boundaries it does not "
+                f"state are inherited: {exc}"
+            ) from exc
 
     def entries_used(self, *names: str) -> tuple[str, ...]:
         """Which named entries an answer rested on, for a finding's disclosure.
@@ -324,6 +447,13 @@ SHIPPED: Final[Keycard] = Keycard(
         z_95=1.959963984540054,
         scan_limit=2_000,
         transfer_limit=50,
+        sample_limit=2_000,
+    ),
+    verbal_scale=StatedVerbalScale(
+        slight=10.0,
+        moderate=100.0,
+        moderately_strong=1_000.0,
+        strong=10_000.0,
     ),
     labels=(),
     presets=SHIPPED_PRESETS,
@@ -331,7 +461,13 @@ SHIPPED: Final[Keycard] = Keycard(
 
 #: The sections a card may carry. Closed, so that a section nothing reads is refused rather than
 #: carried: *a value nothing reads is data that looks in use and is not.*
-SECTIONS: Final[tuple[str, ...]] = ("keyholder", "thresholds", "labels", "presets")
+SECTIONS: Final[tuple[str, ...]] = (
+    "keyholder",
+    "thresholds",
+    "verbal_scale",
+    "labels",
+    "presets",
+)
 
 
 def loads(text: str, *, where: str = "<card>") -> Keycard:
@@ -358,6 +494,7 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
         raise KeycardError(f"{where}: keyholder must be a string, not {type(keyholder).__name__}")
 
     thresholds = payload.pop("thresholds", {})
+    verbal_scale = payload.pop("verbal_scale", {})
     labels = payload.pop("labels", [])
     presets = payload.pop("presets", [])
 
@@ -367,6 +504,8 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
         )
     if not isinstance(thresholds, dict):
         raise KeycardError(f"{where}: [thresholds] must be a table")
+    if not isinstance(verbal_scale, dict):
+        raise KeycardError(f"{where}: [verbal_scale] must be a table")
     if not isinstance(labels, list):
         raise KeycardError(f"{where}: [[labels]] must be an array of tables")
     if not isinstance(presets, list):
@@ -377,6 +516,7 @@ def loads(text: str, *, where: str = "<card>") -> Keycard:
             schema_version=SCHEMA_VERSION,
             keyholder=keyholder,
             thresholds=Thresholds(**thresholds),
+            verbal_scale=StatedVerbalScale(**verbal_scale),
             labels=tuple(LabelAssertion(**entry) for entry in labels),
             presets=tuple(Preset.model_validate(entry) for entry in presets),
         )

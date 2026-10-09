@@ -29,57 +29,24 @@ Two things about it are load-bearing and easy to miss:
 from __future__ import annotations
 
 import math
-from itertools import pairwise
-from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
+from chainlens.keycard import SHIPPED, VerbalThresholds
 from chainlens.models.base import LensModel
 from chainlens.models.enums import Proposition, VerbalScale
 
 __all__ = ["DEFAULT_THRESHOLDS", "VerbalBand", "VerbalThresholds", "band_for"]
 
 
-class VerbalThresholds(LensModel):
-    """Upper bound of each verbal band, as a likelihood ratio.
-
-    Strictly increasing, and each above 1, since an LR of 1 is "no support" and a
-    band that reached down to it would have no lower edge.
-
-    Attributes:
-        slight: largest LR still called slight support. ENFSI default 10.
-        moderate: ENFSI default 100.
-        moderately_strong: ENFSI default 1000.
-        strong: ENFSI default 10000; anything above is very strong.
-    """
-
-    slight: float = Field(default=10.0, gt=1.0)
-    moderate: float = Field(default=100.0, gt=1.0)
-    moderately_strong: float = Field(default=1_000.0, gt=1.0)
-    strong: float = Field(default=10_000.0, gt=1.0)
-
-    @model_validator(mode="after")
-    def _strictly_increasing(self) -> Self:
-        bounds = [self.slight, self.moderate, self.moderately_strong, self.strong]
-        if any(lower >= upper for lower, upper in pairwise(bounds)):
-            raise ValueError(f"verbal thresholds must be strictly increasing, got {bounds}")
-        return self
-
-    def band(self, ratio: float) -> VerbalScale:
-        """The band for a ratio of 1 or more."""
-        if ratio <= self.slight:
-            return VerbalScale.SLIGHT
-        if ratio <= self.moderate:
-            return VerbalScale.MODERATE
-        if ratio <= self.moderately_strong:
-            return VerbalScale.MODERATELY_STRONG
-        if ratio <= self.strong:
-            return VerbalScale.STRONG
-        return VerbalScale.VERY_STRONG
-
-
 #: The ENFSI appendix boundaries. Override per institution if yours differ.
-DEFAULT_THRESHOLDS = VerbalThresholds()
+#:
+#: **Read from the shipped keycard rather than written here.** `VerbalThresholds` moved beside the
+#: card, which is where the numbers it holds have one home, and this is the library's default
+#: reached through the same overlay a holder's card is — so "the shipped baseline is itself a card"
+#: holds for this section too. The value is the same four numbers; what changed is that they are
+#: stated in one place and a run can be asked to run under another's.
+DEFAULT_THRESHOLDS: VerbalThresholds = SHIPPED.resolved_verbal_scale
 
 
 class VerbalBand(LensModel):

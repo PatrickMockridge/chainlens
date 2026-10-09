@@ -57,7 +57,7 @@ estimate(elements: ClaimElements, *, provider: Provider) -> RateEstimate | Unpri
 ## `estimator_for`
 
 ```python
-estimator_for(provider: Provider, *, null_model: NullModel = NullModel.WITHIN_SENDER) -> CoincidenceEstimator | None
+estimator_for(provider: Provider, *, null_model: NullModel = NullModel.WITHIN_SENDER, sample_limit: int | None = None, card: Keycard = SHIPPED) -> CoincidenceEstimator | None
 ```
 
 An estimator when the provider can supply what one needs, and ``None`` when it cannot.
@@ -65,3 +65,10 @@ An estimator when the provider can supply what one needs, and ``None`` when it c
 ``None`` rather than an estimator that always refuses: the engine's "no coincidence estimator
 is configured" reason is the honest one when there is nothing to configure, and a refusal
 dressed as a data problem would send a reader looking for data that would not help.
+
+**The sample cap comes from the card, at the same precedence the engine applies to its own
+limits: an explicit argument wins, and ``None`` means "the caller did not say".** The value is
+the data the ratio rests on — the rate the coincidence is priced from is drawn over the
+movements the scan reaches — so a holder's card has to be able to move it, and a reader has to
+be able to see whose value produced the number. Without this parameter a card could move the
+checker's ``scan_limit`` and not the estimator's sample, which are two bounds on one walk.

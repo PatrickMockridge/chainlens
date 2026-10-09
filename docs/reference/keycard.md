@@ -3,19 +3,20 @@
 The keycard: the data an answer rests on, held as a value a run is handed.
 
 A card declares what its holder is entitled to use — the thresholds a finding is computed under,
-and the attribution a run may assert about an address. It is **not** where a credential lives: a
-credential is a secret and this is a citation, and the two are different things that both happen
-to be configured.
+the verbal bands it is reported on, and the attribution a run may assert about an address. It is
+**not** where a credential lives: a credential is a secret and this is a citation, and the two are
+different things that both happen to be configured.
 
 ## Why this exists at all
 
-Five numbers a finding depends on were module-level constants:
+Six numbers a finding depends on were module-level constants:
 
 | value | where it was written |
 |---|---|
 | ``HEDGE_TOLERANCE`` | ``verify/parsing.py`` |
 | ``MIN_JOINT_SUCCESSES``, ``_Z_95`` | ``verify/likelihood.py`` |
 | ``DEFAULT_SCAN_LIMIT``, ``DEFAULT_TRANSFER_LIMIT`` | ``verify/checks/base.py`` |
+| ``DEFAULT_SAMPLE_LIMIT`` | ``verify/estimators.py`` |
 
 A reader of a finding could not see which tolerance produced it, and two runs in one process could
 not be asked to differ. **A plausible value nobody chose is a wrong answer with no symptom**, and
@@ -59,6 +60,7 @@ What a run is entitled to rest an answer on.
 - `schema_version` `int` — the card shape. A loader refuses one it does not know.
 - `keyholder` `str | None` — who is asserting the right to use these values. Nothing in this library reads it — it is here so that a card found in a directory says whose it is, which is the first question a reader of one asks.
 - `thresholds` `Thresholds` — the numbers a finding is computed under, unstated ones inherited.
+- `verbal_scale` `StatedVerbalScale` — the boundaries of the verbal bands a ratio is reported on, unstated ones inherited. A *set* rather than a scalar, so it is a section of its own; the overlay is still per item, because a holder who moves one boundary is not restating the others.
 - `labels` `tuple[LabelAssertion, ...]` — the attributions the holder asserts, each with its citation.
 - `presets` `tuple[Preset, ...]` — the terms of events the holder knows about, in the *same type* the shipped data uses — so a preset's rules (a citable source, rate tiers that increase) apply to a holder's as well, rather than a second and weaker shape existing for users.
 
@@ -67,6 +69,7 @@ What a run is entitled to rest an answer on.
 - `schema_version` = SCHEMA_VERSION
 - `keyholder` = None
 - `thresholds` = Field(default_factory=Thresholds)
+- `verbal_scale` = Field(default_factory=StatedVerbalScale)
 - `labels` = ()
 - `presets` = ()
 
@@ -111,10 +114,15 @@ effective() -> Keycard
 This card's stated entries over the shipped baseline, per item.
 
 **Per item and not per section**, which is the whole difference between an overlay and a
-replacement: a card that names one threshold keeps the shipped ones for the others, and a
-card that names one address keeps the shipped assertions about the rest. A section-level
-merge would make "I know about this one address" mean "I know nothing about any other",
-which is the opposite of what a holder is saying.
+replacement: a card that names one threshold keeps the shipped ones for the others, a card
+that names one verbal boundary keeps the shipped three, and a card that names one address
+keeps the shipped assertions about the rest. A section-level merge would make "I know about
+this one address" mean "I know nothing about any other", which is the opposite of what a
+holder is saying.
+
+**The verbal scale is merged but not validated here**, because `model_copy` skips
+validation and the merged set is exactly the thing that can be invalid while the file was
+not. That check is `resolved_verbal_scale`'s, made once, on the constructed result.
 
 ### `resolved_thresholds`
 
@@ -125,6 +133,21 @@ site handles a ``None`` the shipped baseline already excludes. The assertions ho
 `SHIPPED` states all five and `effective` overlays onto it — the same
 argument the model's docstring makes, and one that a test would not be able to make for a
 card the library did not control.
+
+### `resolved_verbal_scale`
+
+The four band boundaries this card runs under, with every unstated one inherited.
+
+**This is the one door that can refuse a card the file loader accepted**, and the overlay
+is why. The boundaries must strictly increase, and a *partial* statement cannot violate
+that on its own — but the merge can: a card saying only ``strong = 5`` is a valid file
+whose result over the shipped three is ``(10, 100, 1000, 5)``.
+`effective` merges with ``model_copy``, which does **not** validate, so the check is
+made here, on the constructed result, and the failure is a `KeycardError` naming the
+invariant rather than a pydantic traceback surfacing wherever the scale was first used.
+
+A deliberate difference from `resolved_thresholds`, which cannot fail: six
+independent numbers have no combination that is wrong, and a set of four boundaries has.
 
 ### `entries_used`
 
@@ -166,12 +189,12 @@ anyway, teaches people to fill it in rather than to know the answer.
 
 ## `ResolvedThresholds`
 
-The five numbers with the overlay applied, so each one is present and typed.
+The six numbers with the overlay applied, so each one is present and typed.
 
 A separate type from `Thresholds` because the two answer different questions. A card's
 own ``thresholds`` are *partial*, which is what makes an overlay per item possible; the values
 a computation actually runs under are *complete*, because the shipped baseline states all
-five. Handing a computation the partial type would mean every call site handling a ``None``
+six. Handing a computation the partial type would mean every call site handling a ``None``
 that the baseline already excludes — and the module constants below would carry a
 ``float | int`` union for a number that is neither.
 
@@ -186,6 +209,31 @@ and it is `SHIPPED`.
 - `z_95`
 - `scan_limit`
 - `transfer_limit`
+- `sample_limit`
+
+## `StatedVerbalScale`
+
+The band boundaries a card *states*, each one optional in the same way a threshold is.
+
+**Every field is optional, and that is what makes the overlay per item possible here too** — a
+holder who moves one boundary is not thereby restating the other three. This type is
+deliberately *unconstrained*: the boundaries must increase, but a partial statement cannot be
+checked against itself, so a card saying only ``strong`` has nothing to compare it to yet. It
+is checked where it can be — on the merged result, in `Keycard.resolved_verbal_scale`.
+
+**Attributes**
+
+- `slight` `float | None` — largest likelihood ratio still called slight support. ENFSI default 10.
+- `moderate` `float | None` — ENFSI default 100.
+- `moderately_strong` `float | None` — ENFSI default 1000.
+- `strong` `float | None` — ENFSI default 10000; anything above is very strong.
+
+**Members**
+
+- `slight` = Field(default=None, gt=1.0)
+- `moderate` = Field(default=None, gt=1.0)
+- `moderately_strong` = Field(default=None, gt=1.0)
+- `strong` = Field(default=None, gt=1.0)
 
 ## `Thresholds`
 
@@ -204,6 +252,7 @@ through `Keycard.effective`.
 - `z_95` `float | None` — the normal quantile for a 95% interval.
 - `scan_limit` `int | None` — how many of a sender's transactions to walk before declaring the scan truncated.
 - `transfer_limit` `int | None` — how many transfers one finding carries in its evidence.
+- `sample_limit` `int | None` — how many of a sender's movements the coincidence estimator reads before giving up on the rest. **A second bound on the same walk `scan_limit` bounds** — the checker's scan and the estimator's sample — and it moves the ratio, because the rate the coincidence is priced from is drawn over the movements it reaches. It was written down twice (``verify/estimators.py::DEFAULT_SAMPLE_LIMIT``) and reachable through neither, which is why it is here.
 
 **Members**
 
@@ -212,6 +261,40 @@ through `Keycard.effective`.
 - `z_95` = Field(default=None, gt=0.0)
 - `scan_limit` = Field(default=None, ge=1)
 - `transfer_limit` = Field(default=None, ge=1)
+- `sample_limit` = Field(default=None, ge=1)
+
+## `VerbalThresholds`
+
+Upper bound of each verbal band, as a likelihood ratio — the merged, complete form.
+
+**This type lives here rather than in ``verify/scale.py`` because the card owns the data.** It
+is the *complete* counterpart of `StatedVerbalScale`, in the same relation
+`ResolvedThresholds` bears to `Thresholds`, and it is the type the source of
+truth for the numbers is written in — `SHIPPED` states them, and
+``verify/scale.py::DEFAULT_THRESHOLDS`` reads them from there rather than restating them. The
+import runs one way and has to: `verify/estimators.py` imports this module, so a module-level
+import back would be a cycle, and a second home for the boundaries would be the defect this
+layer is against. ``chainlens.verify.scale`` re-exports it.
+
+**Strictly increasing, and each above 1**, since a ratio of 1 is "no support" and a band that
+reached down to it would have no lower edge. The constraint is what makes the overlay
+interesting: a card can be a valid *file* whose *merge* is out of order, which is the one
+refusal only the merged card can make — see `Keycard.resolved_verbal_scale`.
+
+**Members**
+
+- `slight` = Field(default=10.0, gt=1.0)
+- `moderate` = Field(default=100.0, gt=1.0)
+- `moderately_strong` = Field(default=1000.0, gt=1.0)
+- `strong` = Field(default=10000.0, gt=1.0)
+
+### `band`
+
+```python
+band(ratio: float) -> VerbalScale
+```
+
+The band for a ratio of 1 or more.
 
 ## `SCHEMA_VERSION`
 

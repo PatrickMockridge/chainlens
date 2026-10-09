@@ -34,7 +34,7 @@ no estimator", and they want three different things from a reader.
 ## `VerificationEngine`
 
 ```python
-VerificationEngine(provider: Provider, *, estimator: CoincidenceEstimator | None = None, registry: CheckerRegistry | None = None, scan_limit: int | None = None, transfer_limit: int | None = None, card: Keycard = SHIPPED, thresholds: VerbalThresholds = DEFAULT_THRESHOLDS, estimate_requested: bool = True, selection: SelectionDisclosure | None = None)
+VerificationEngine(provider: Provider, *, estimator: CoincidenceEstimator | None = None, registry: CheckerRegistry | None = None, scan_limit: int | None = None, transfer_limit: int | None = None, card: Keycard = SHIPPED, thresholds: VerbalThresholds | None = None, estimate_requested: bool = True, selection: SelectionDisclosure | None = None)
 ```
 
 Adjudicates claims from one post against one provider.
@@ -46,8 +46,8 @@ Adjudicates claims from one post against one provider.
 - `registry` `CheckerRegistry | None`, default `None` — the claim-type to checker mapping. Defaults to the shipped checkers; pass a copy to add one for a single run.
 - `scan_limit` `int | None`, default `None` — how many transactions to walk before declaring a scan truncated.
 - `transfer_limit` `int | None`, default `None` — how many transfers to carry into a finding's evidence.
-- `thresholds` `VerbalThresholds`, default `DEFAULT_THRESHOLDS` — the verbal-scale boundaries. ENFSI-aligned by default, and configurable because the guideline treats the scale as jurisdiction-dependent.
-- `card` `Keycard`, default `SHIPPED` — the data this run is entitled to rest an answer on. The two limits above default to the card's entries; a card is a *value a caller holds* and never a global this reads, so two engines in one process can be run under two different cards.
+- `thresholds` `VerbalThresholds | None`, default `None` — the verbal-scale boundaries. ``None`` — the caller did not say — takes the card's, which is ENFSI-aligned by default and configurable because the guideline treats the scale as jurisdiction-dependent. An explicit scale wins over the card, like the two limits above.
+- `card` `Keycard`, default `SHIPPED` — the data this run is entitled to rest an answer on. The two limits and the verbal scale default to the card's entries; a card is a *value a caller holds* and never a global this reads, so two engines in one process can be run under two different cards.
 - `estimate_requested` `bool`, default `True` — whether anybody wanted a coincidence priced. Says nothing about whether one *could* be: with no estimator, this field is the difference between a caller who decided against it and a setup that never had one, and the two read differently on an artifact because they are fixed differently.
 
 ### `provider`

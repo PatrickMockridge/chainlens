@@ -6,14 +6,16 @@ implementation is `src/chainlens/keycard.py`, and `keycard.example.toml` is a ca
 
 ## What it fixes
 
-Authority a run *holds* rather than a global it *reads*. Five numbers a finding depends on were
-module-level constants:
+Authority a run *holds* rather than a global it *reads*. Six numbers a finding depends on were
+module-level constants, and a set of four band boundaries was a module-level default:
 
 | value | where it was written |
 |---|---|
 | `HEDGE_TOLERANCE` | `src/chainlens/verify/parsing.py` |
 | `MIN_JOINT_SUCCESSES`, `_Z_95` | `src/chainlens/verify/likelihood.py` |
 | `DEFAULT_SCAN_LIMIT`, `DEFAULT_TRANSFER_LIMIT` | `src/chainlens/verify/checks/base.py` |
+| `DEFAULT_SAMPLE_LIMIT` | `src/chainlens/verify/estimators.py` |
+| `DEFAULT_THRESHOLDS` (the ENFSI bands) | `src/chainlens/verify/scale.py` |
 
 A reader of a finding could not see which tolerance produced it, and two runs in one process could
 not be asked to differ. **A plausible value nobody chose is a wrong answer with no symptom**, and
@@ -145,6 +147,51 @@ and report another. That is the same defect as a decimals count written down twi
 and it is the reason this was a trap rather than a formality: the sentence used to format the
 module constant directly.
 
+**And the sample cap is the sixth number, and it was a second `2_000`.** `scan_limit` and
+`estimators.py::DEFAULT_SAMPLE_LIMIT` bound the same walk — the checker's scan and the estimator's
+sample — from two places, and they carried the same value with nothing comparing them. It was
+reachable from neither: `estimator_for` hardcoded the cap and the engine never threaded one, so a
+holder's card could move the scan and not the sample the coincidence rate is drawn over, which is
+the number the ratio actually moves with. `DEFAULT_SAMPLE_LIMIT` reads `SHIPPED` now, and
+`estimator_for(provider, *, card=...)` carries a holder's value with an explicit argument winning
+over it — the precedence the engine already applies to its own two limits. **One value written in
+two places is one place too many, even when the two agree**, and the two agreeing is exactly why
+nothing found it.
+
+**And the verbal scale is a section, because a set is not six scalars.** The ENFSI band boundaries
+were `verify/scale.py::DEFAULT_THRESHOLDS` — overridable through function arguments, invisible to a
+card — and a ratio is *reported* on them, so a reader is as entitled to know which boundaries
+produced "strongly supports" as which tolerance produced the number beside it. They are a set of
+four ordered numbers, which `[thresholds]` cannot hold, so they are `[verbal_scale]`, overlaid per
+boundary by the same merge.
+
+**And this is the first refusal only the *merged* card can make.** The boundaries must strictly
+increase; a *partial* statement cannot violate that alone, but the merge can — a card saying only
+`strong = 5` is a valid file whose result over the shipped `slight = 10` descends. `effective`
+merges with `model_copy`, which **does not validate**, so the check is on the door a computation
+reaches the scale through, `Keycard.resolved_verbal_scale`, and the failure is a `KeycardError`
+naming the boundaries rather than a pydantic traceback surfacing wherever the scale was first used.
+`resolved_thresholds` cannot fail this way and the asymmetry is deliberate: six independent numbers
+have no combination that is wrong, and a set of four ordered boundaries has. **It is also why
+`VerbalThresholds` moved beside the card** — the import runs one way, and a second home for the
+boundaries would be the defect this layer is against.
+
+**And `engine.py::_TOLERANCE_VARIANTS` is *not* an entry, which is the measurement again.** The
+sensitivity sweep — `{1.0, 0.5, 2.0, 10.0}` times the claim's own tolerance — looked like the same
+kind of set. It is not: it does not change any number a finding asserts, it changes the robustness
+*sweep attached* to the number, which exists to show how the finding moves rather than to be it.
+Card material is what an answer rests on, and a disclosure about an answer is not the answer. So
+the sweep stays a module constant and this page says why, rather than a third section existing
+because a plan predicted one.
+
+**And `MAX_TRANSACTIONS_PER_ADDRESS` is *not* an entry, which is the measurement winning.** The
+walk's per-address cap (`ledger/walk.py`) was the other candidate, and it is the same kind of bound
+on paper. It already has a home: `LedgerPolicy` is the walk's "limits and pruning" object, the walk
+already takes one, and the limit is applied inside `_Walk`. An entry on the card would be a second
+limits object for one walk, which is the defect this layer exists against rather than an instance of
+it — so the fix is a policy field and nothing here. **A plan is a hypothesis about what a repository
+needs**, and this is the second tranche where the measurement disagreed with it.
+
 **Presets are in the card, in the type the shipped data already uses.** `tools/gen_shipped_data.py`
 renders `presets/data/*.yaml` into `src/chainlens/_shipped_card.py`, `SHIPPED.presets` holds the
 result, and a card's own terms overlay per event name. A card's preset *is* a
@@ -169,6 +216,48 @@ single existing caller.
 
 **Checked, not just described:** `tests/keycard/test_shipped.py::test_the_shipped_render_is_lossless`
 asserts the preset render loses nothing, which is the half of the asymmetry the code can check.
+
+## What the card does not yet reach, measured
+
+**The criterion, sharpened by applying it.** The defect this layer was built against is not "a
+number is a module-level constant". It is **a number read at a call site that no caller can
+vary** — the five original constants were read from inside the functions that used them, so a
+caller could not say otherwise and a reader could not see which value applied. A constant used as
+a *default parameter* is a different thing: it is in the signature, it is overridable per call,
+and a reader meets it where they meet the function.
+
+So the classification of `src/`'s module-level constants, measured rather than assumed, is:
+
+| where a number lives | verdict |
+|---|---|
+| a default parameter (`MAX_MEDIA_BYTES`, `IMAGE_CONCURRENCY`, `DEFAULT_MAX_TOKENS`, `DEFAULT_MODEL`, `DEFAULT_DEADLINE_SECONDS`, the media and corpus limits) | **not the defect.** Visible in the signature, overridable, and the model name reaches a corpus run's provenance. |
+| a protocol fact (`BECH32M_CONST`, the `_OP_*` opcodes, keccak's `_RATE`/`_ROUNDS`, `_TOPIC_HEX_DIGITS`) | **the vocabulary table's business**, and already read from it where it is a chain fact. |
+| a format version (`SCHEMA_VERSION` in `keycard`, `verify/records`, the vocabulary compiler) | three different shapes, deliberately three constants; not one value in two places. |
+| a registration or a prompt (`METHOD`, `CHECKER`, `SYSTEM_PROMPT`) | the method, pinned by a version that travels with the output. |
+| a reported display cap (`ledger/annotate.py::_MAX_UNJOINED`) | unreachable, and **the number is named in the sentence that reports the truncation**, which is the half that matters. |
+| **the clustering heuristics' confidence model** | **the one remaining instance of the defect.** |
+
+**And the guard the plan proposed for this — a snapshot of every module-level constant — is a
+check this page would warn about.** It would fire on an added opcode, a new prompt, a new
+`METHOD`, none of which is a number a caller needed to vary; an allowlist that must be extended
+for every legitimate constant is a check nobody maintains, and a check nobody maintains appears to
+hold a property no machine reads. **What is checkable is done per home instead**: the card-backed
+constants are held to `SHIPPED` by `tests/keycard/test_card.py::TestTheNumbersHaveOneHome` (and
+one more was added for `DEFAULT_SAMPLE_LIMIT`), the vocabulary's by `tests/vocabulary/`, and the
+wire's by `make contract`.
+
+**The one that is left, named so it is not rediscovered.** `analysis/heuristics/` reads its
+confidences and thresholds from module globals *inside the functions that use them*:
+`common_input.py`'s `_BASE_CONFIDENCE = 0.95`, `_PER_EXTRA_INPUT_PENALTY = 0.05`,
+`_MIN_CONFIDENCE = 0.5` and the CoinJoin shape test, `change_address.py`'s `_THRESHOLD` and
+`_WEIGHTS`, `address_reuse.py`'s two confidences. No caller can vary them, and the value computed
+from them lands on every `Merge`, hence on a cluster's confidence, hence on a finding — which is
+the definition this layer uses. **They are not moved here because a set of parameters for a
+pluggable heuristic is a design question and not a relocation**: heuristics are third-party
+extensible through an entry point, so where their parameters live — the card, a policy object
+like `LedgerPolicy`, or the heuristic's own constructor — decides what a third-party heuristic
+may vary, and that is a page to write before a tranche to build. This one is deliberately left
+for it.
 
 ## What it is about in the tree
 
