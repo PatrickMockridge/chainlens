@@ -13,11 +13,16 @@ exactly why it took reading the type to find them.
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from decimal import Decimal
+from typing import ClassVar
 
 import pytest
 from pydantic import ValidationError
 
+import chainlens.models as models_package
+from chainlens.models.base import LensModel
 from chainlens.models.enums import (
     AMOUNT_STATUS_SPELLINGS,
     AmountTag,
@@ -135,6 +140,84 @@ class TestTheTag:
 
     def test_a_transfer_converts_through_its_own_accessor(self) -> None:
         assert _transfer(ambiguous=True).to_amount().tag is AmountTag.APPORTIONED
+
+
+class TestTheTagHasExactlyTwoSpellings:
+    """**The measurement that dissolved "T7", turned into something a machine reads.**
+
+    `docs/calculus/exactness.md` carried a pending task — fold the apportionment tag's *four*
+    spellings into the vocabulary table. Measured, two of the four were not spellings at all (a
+    confidence and a share mapping), the table is not row-shaped, and nothing about the tag reaches
+    the wire. What *is* true is that **two models spell the fact**, and this class is where that
+    claim stops being a sentence on a page.
+
+    **The detection is by field name, and that is the limit worth stating.** A third spelling named
+    for the fact — `apportioned`, `ambiguous` — fails here until it is reconciled or recorded; a
+    synonym nobody would guess does not. The walk is the `models` package, where the types that
+    carry the fact live; a projection (`report/builder.py::FlowRow`) or an export key is a
+    *rendering* of it and not a second statement of the fact.
+    """
+
+    #: The whole of the tag's model-level spellings. A third is the defect this test exists for.
+    SPELLINGS: ClassVar[frozenset[tuple[str, str]]] = frozenset(
+        {("Transfer", "ambiguous"), ("ValueFlow", "apportioned")}
+    )
+
+    def test_only_two_models_carry_the_flag(self) -> None:
+        found = {
+            (model.__name__, name)
+            for model in _model_classes()
+            for name, field in model.model_fields.items()
+            if name in ("apportioned", "ambiguous") and field.annotation is bool
+        }
+        assert found == self.SPELLINGS, (
+            "an apportionment flag appeared, moved or was renamed; reconcile it into "
+            f"AmountTag (see docs/calculus/exactness.md) and update this set: {found}"
+        )
+
+    def test_the_walk_reaches_the_models(self) -> None:
+        """A walk that visited nothing would pass the assertion above vacuously."""
+        names = {model.__name__ for model in _model_classes()}
+        assert {"Transfer", "ValueFlow", "Balance", "Amount"} <= names, sorted(names)
+
+    def test_each_spelling_reconciles_to_the_one_tag(self) -> None:
+        """The two flags reach one enum through the two named adapters, which is what makes the two
+        words one fact rather than two that happen to agree."""
+        assert Amount.of(_transfer(ambiguous=True)).tag is AmountTag.APPORTIONED
+        assert Amount.of(_transfer()).tag is AmountTag.RECORDED
+        assert Amount.of_flow(_flow(apportioned=True)).tag is AmountTag.APPORTIONED
+        assert Amount.of_flow(_flow()).tag is AmountTag.RECORDED
+
+
+def _model_classes() -> list[type[LensModel]]:
+    """Every model class in the `models` package, discovered rather than listed.
+
+    Discovered so a model added tomorrow is examined the day it is added — a hand-written list
+    would let the next spelling in, which is the failure this guard is for.
+    """
+    found: list[type[LensModel]] = []
+    for info in pkgutil.iter_modules(models_package.__path__):
+        module = importlib.import_module(f"{models_package.__name__}.{info.name}")
+        found.extend(
+            value
+            for value in vars(module).values()
+            if isinstance(value, type) and issubclass(value, LensModel) and value is not LensModel
+        )
+    return found
+
+
+def _flow(**overrides: object) -> ValueFlow:
+    node = AddressRef(chain=Chain.BITCOIN, address="a")
+    fields: dict[str, object] = {
+        "chain": Chain.BITCOIN,
+        "src": node,
+        "dst": node,
+        "asset": BTC,
+        "amount": 100,
+        "direction": FlowDirection.OUT,
+    }
+    fields.update(overrides)
+    return ValueFlow(**fields)  # type: ignore[arg-type]
 
 
 class TestTheSum:

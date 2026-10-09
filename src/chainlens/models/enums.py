@@ -87,9 +87,18 @@ class AmountTag(StrEnum):
     """How an amount was arrived at, as distinct from what it is an amount *of*.
 
     ``(chain, asset)`` says a number is a quantity of something; the tag says where the number
-    came from, and the two are independent. This library already draws the distinction and
-    spells it three ways — ``Transfer.ambiguous``, ``ValueFlow``'s ``APPORTIONED_CONFIDENCE``,
-    and the ``apportioned_shares`` mapping on a verdict — which is what a tag is for.
+    came from, and the two are independent. **Two models spell the distinction, and this enum is
+    where they meet**: a ``Transfer`` says ``ambiguous`` (its sender attribution is this library's
+    convention rather than a reading) and a ``ValueFlow`` says ``apportioned`` (the same, on an
+    aggregated edge). The three adapters — ``Amount.of``, ``Amount.of_flow``, ``Amount.of_balance``
+    — reconcile them once rather than at each call site, and a test holds the set of spellings to
+    exactly these two.
+
+    **Other things share the word without being the tag, and the difference is worth stating.**
+    ``APPORTIONED_CONFIDENCE`` is the *confidence* a flow's flag renders to, derived from it one
+    way; ``apportioned_shares`` on a verdict is the *magnitudes* the inference would attribute,
+    where a tag has no magnitude; and the derivation's ``"apportioned (inferred)"`` is a display
+    string. None of them is a second place this value lives.
 
     **A recorded figure and an apportioned one are different kinds even when their dimension
     is the same**, and they are added together only by someone who has decided the inference is

@@ -57,6 +57,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **The pending task `T7` is resolved by measurement, and there was nothing to build.** It was
+  recorded as "fold the apportionment tag's four spellings into the vocabulary table, because the
+  tag reaches the wire". Measured before building, all three of its claims are false: no committed
+  schema carries the tag as a field (the tags' models are outside
+  `ledger/schema.py::DOCUMENTS`, and the derivation's `amount_basis` is a free-form `DetailEntry`,
+  not schema — so **no `make contract` and no `schema_version` bump**); the vocabulary table is not
+  row-shaped for a tag (a row is one native asset per chain, and the generator refuses a second and
+  any unknown field); and the "four spellings" are not four spellings of one value — two are a
+  derived confidence and a share mapping, and the flag itself is derived end-to-end from
+  `Transfer.ambiguous`, so the copies cannot drift. The tag's home already existed,
+  `models/enums.py::AmountTag`, reached through three named adapters. **The change is a correction,
+  not a build**: the claims are fixed in `docs/calculus/exactness.md` (the section rewritten around
+  the measurement), `docs/calculus/vocabulary.md` and `docs/calculus/index.md`, and `AmountTag`'s
+  own docstring — which had named a *confidence* among its spellings. A guard,
+  `tests/models/test_amount.py::TestTheTagHasExactlyTwoSpellings`, now holds the tag to exactly two
+  model-level spellings so a third fails rather than being rediscovered.
 - A clustering heuristic's **confidences and thresholds are now parameters**, not
   module globals read inside the function that used them. That was the last instance
   of the defect the keycard was built against — *a number read at a call site no
