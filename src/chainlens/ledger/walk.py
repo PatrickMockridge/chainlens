@@ -75,7 +75,6 @@ __all__ = [
     "BUDGET_NODES",
     "BUDGET_TIME",
     "FRONTIER_DEFERRED",
-    "MAX_TRANSACTIONS_PER_ADDRESS",
     "NO_HISTORY",
     "PER_ADDRESS_LIMIT",
     "POLICY_COINBASE",
@@ -94,17 +93,14 @@ FRONTIER_DEFERRED = "frontier_deferred"
 POLICY_MIN_VALUE = "policy_min_value"
 POLICY_MAX_FAN_OUT = "policy_max_fan_out"
 
-#: An address had more transactions than the walk will read.
+#: An address had more transactions than the walk will read. How many that is lives on
+#: :class:`~chainlens.models.ledger.LedgerPolicy::max_transactions_per_address`, with the other
+#: limits — it was a module constant here, and it is a policy rather than a fact about the chain.
 PER_ADDRESS_LIMIT = "per_address_limit"
 
 #: A minting transaction excluded by policy. Counted because a dropped transaction is
 #: the one omission a reader cannot see from the graph itself.
 POLICY_COINBASE = "policy_coinbase"
-
-#: How many transactions one address may contribute. A busy address has hundreds of
-#: thousands; the point of this view is a slice, and reading a whole exchange hot wallet
-#: to draw three hundred nodes is pure waste.
-MAX_TRANSACTIONS_PER_ADDRESS = 200
 
 _ASSET_VIA: dict[AssetKind, FlowVia] = {
     AssetKind.ERC20: FlowVia.ERC20,
@@ -457,14 +453,16 @@ async def _fetch(walk: _Walk, provider: Provider, address: str) -> tuple[Transac
         walk.refuse(BUDGET_NODES)
         return ()
 
-    limit = min(walk.nodes_remaining() + 1, MAX_TRANSACTIONS_PER_ADDRESS)
+    limit = min(walk.nodes_remaining() + 1, walk.policy.max_transactions_per_address)
     collected: list[Transaction] = []
     stream: AsyncIterator[Transaction] = provider.get_address_transactions(address, limit=limit)
     try:
         async for transaction in stream:
             if len(collected) >= limit - 1:
                 walk.refuse(
-                    PER_ADDRESS_LIMIT if limit == MAX_TRANSACTIONS_PER_ADDRESS else BUDGET_NODES
+                    PER_ADDRESS_LIMIT
+                    if limit == walk.policy.max_transactions_per_address
+                    else BUDGET_NODES
                 )
                 break
             collected.append(transaction)
@@ -741,14 +739,16 @@ async def _fetch_tokens(walk: _Walk, provider: Provider, address: str) -> tuple[
         walk.refuse(BUDGET_NODES)
         return ()
 
-    limit = min(remaining + 1, MAX_TRANSACTIONS_PER_ADDRESS)
+    limit = min(remaining + 1, walk.policy.max_transactions_per_address)
     collected: list[Transfer] = []
     stream = provider.get_token_transfers(address, limit=limit)
     try:
         async for movement in stream:
             if len(collected) >= limit - 1:
                 walk.refuse(
-                    PER_ADDRESS_LIMIT if limit == MAX_TRANSACTIONS_PER_ADDRESS else BUDGET_NODES
+                    PER_ADDRESS_LIMIT
+                    if limit == walk.policy.max_transactions_per_address
+                    else BUDGET_NODES
                 )
                 break
             collected.append(movement)

@@ -120,6 +120,10 @@ class LedgerPolicy(LensModel):
         max_edges: edges to admit.
         time_budget: wall-clock seconds, or ``None`` for no limit.
         max_concurrency: provider requests in flight at once.
+        max_transactions_per_address: how many of one address's transactions the walk will read
+            before moving on. A busy address has hundreds of thousands and the point of this view
+            is a slice; when it bites, the reason recorded is ``per_address_limit`` rather than
+            ``budget_nodes``, so a reader can tell a cap on *this address* from a cap on the walk.
         min_value: ignore movements below this, in base units. Applies to *edges*, so a
             transaction all of whose edges fall below it disappears — the transaction is
             not itself dust, but there is nothing left to draw.
@@ -143,6 +147,7 @@ class LedgerPolicy(LensModel):
     max_edges: int = Field(default=600, ge=1)
     time_budget: float | None = Field(default=60.0, gt=0)
     max_concurrency: int = Field(default=8, ge=1)
+    max_transactions_per_address: int = Field(default=200, ge=1)
 
     min_value: int | None = Field(default=None, ge=0)
     dust_ratio: float | None = Field(default=None, gt=0.0, lt=1.0)

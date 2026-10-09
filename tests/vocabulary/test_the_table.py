@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import gen_vocabulary
 import pytest
@@ -31,6 +32,62 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: in the table with no module behind it would be a claim about a chain dressed as a capability
 #: of this library — which is why the set is closed in the schema and checked here.
 FAMILY_MODULES = {"base58check": "base58", "bech32": "bech32", "eip55": "eth_address"}
+
+
+class TestTheSchemaDoesNotDrift:
+    """`specs/schema/vocabulary.schema.json` is a second description of a shape Python owns.
+
+    It is worth having — a reader of the table meets the shape before meeting the generator — but a
+    second description is a second place a value lives, and the only safe version of that is one
+    something compares. **This file was already wrong when these tests were written**: it listed
+    the required fields and the two enums but had no entry for `base58check_versions` or
+    `bech32_hrp`, the two fields the page says the table had to grow so that a family could
+    identify a chain. Nothing noticed, because nothing compared the two — which is the same defect
+    the keycard's schema had, one layer down, and the reason the comparison is here now.
+    """
+
+    def _schema(self) -> dict[str, Any]:
+        """The committed schema, as plain data.
+
+        `Any` on purpose, exactly as the keycard's own drift test does it: the assertions below
+        index into a JSON document whose shape is the thing being checked, so a precise type here
+        would be a third description of it.
+        """
+        loaded: dict[str, Any] = json.loads(
+            (REPO_ROOT / "specs" / "schema" / "vocabulary.schema.json").read_text(encoding="utf-8")
+        )
+        return loaded
+
+    def _row(self) -> dict[str, Any]:
+        row: dict[str, Any] = self._schema()["$defs"]["asset"]
+        return row
+
+    def test_the_row_fields_are_the_generators(self) -> None:
+        """Every field the generator reads, and no field it does not.
+
+        A field the schema offers and the generator ignores is a table an editor accepts and the
+        generator refuses — worse than no schema, because the failure arrives after the work. The
+        generator's `REQUIRED`/`OPTIONAL` are what it actually reads, so they are the comparison.
+        """
+        assert sorted(self._row()["properties"]) == sorted(
+            gen_vocabulary.REQUIRED + gen_vocabulary.OPTIONAL
+        )
+
+    def test_the_required_fields_are_the_generators(self) -> None:
+        assert sorted(self._row()["required"]) == sorted(gen_vocabulary.REQUIRED)
+
+    def test_the_chain_enum_is_the_enum(self) -> None:
+        assert self._row()["properties"]["chain"]["enum"] == [chain.value for chain in Chain]
+
+    def test_the_family_enum_is_the_generators(self) -> None:
+        """The closed set of families, held to the one the generator refuses against — a family
+        nothing implements would be a claim about a chain dressed as a capability of ours."""
+        assert self._row()["properties"]["families"]["items"]["enum"] == list(
+            gen_vocabulary.FAMILIES
+        )
+
+    def test_the_sections_are_the_tables(self) -> None:
+        assert sorted(self._schema()["properties"]) == ["assets", "schema_version"]
 
 
 class TestTheTableItself:

@@ -204,6 +204,42 @@ class TestChoosingOne:
     def test_an_estimator_when_the_provider_can_supply_a_sample(self) -> None:
         assert estimator_for(_provider()) is not None
 
+    @pytest.mark.anyio
+    async def test_a_cards_sample_limit_reaches_the_estimator(self) -> None:
+        """The card's sixth threshold, driven end to end rather than only resolved.
+
+        `DEFAULT_SAMPLE_LIMIT` was a literal in this module and the factory hardcoded it, so a
+        card could move the checker's `scan_limit` and not the estimator's sample — two bounds on
+        one walk, one of them unreachable. This is the arm that says the reach is real: the same
+        provider, two cards, and a bounded sample that says it is bounded.
+        """
+        from chainlens.keycard import loads
+
+        provider = _provider(*[_payment(f"tx{n}", when=JUNE, sats=500) for n in range(5)])
+        card = loads("schema_version = 1\n[thresholds]\nsample_limit = 3\n")
+        estimator = estimator_for(provider, card=card)
+        assert estimator is not None
+
+        priced = await estimator.estimate(_elements(), provider=provider)
+        assert isinstance(priced, RateEstimate)
+        assert priced.component.trials == 3
+        assert "most recent 3 movements" in priced.component.population
+
+    @pytest.mark.anyio
+    async def test_an_explicit_sample_limit_wins_over_the_card(self) -> None:
+        """The precedence the engine applies to its own limits, applied here: an explicit argument
+        wins, and the card is what a caller who said nothing gets."""
+        from chainlens.keycard import loads
+
+        provider = _provider(*[_payment(f"tx{n}", when=JUNE, sats=500) for n in range(5)])
+        card = loads("schema_version = 1\n[thresholds]\nsample_limit = 2\n")
+        estimator = estimator_for(provider, card=card, sample_limit=4)
+        assert estimator is not None
+
+        priced = await estimator.estimate(_elements(), provider=provider)
+        assert isinstance(priced, RateEstimate)
+        assert priced.component.trials == 4
+
 
 class TestWhatTheEngineDoesWithIt:
     @pytest.mark.anyio

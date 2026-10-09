@@ -44,9 +44,10 @@ from __future__ import annotations
 from typing import Any
 
 from chainlens.adapters._etherscan_api import EtherscanCompatProvider
+from chainlens.adapters._evm import parse_decimal_int
+from chainlens.adapters._payload import ProviderPayload, read_payload
 from chainlens.codec.eth_address import normalize_address
 from chainlens.config import Settings
-from chainlens.exceptions import SchemaError
 from chainlens.models.enums import Chain
 from chainlens.models.primitives import Address
 from chainlens.providers.capabilities import Capability, provides
@@ -64,6 +65,20 @@ _BASE_URL = "https://eth.blockscout.com/"
 #: other unauthenticated caller of the same instance — which is not the situation a rate limit
 #: normally describes, where the budget is yours to spend.
 _RATE_LIMIT = RateLimit(requests=3, per=1.0, burst=5)
+
+
+class _BlockscoutAddress(ProviderPayload):
+    """A Blockscout v2 address object — the two fields this library reads from it.
+
+    A model for two fields, for the same reason the other three families have one: the shape
+    belongs beside theirs rather than as string keys in a method body. It also removes the only
+    place in the package that insisted on ``dict`` where every other adapter accepts any
+    ``Mapping`` — a distinction nobody intended, and one with nothing to act on: a payload that
+    was a mapping but not a dict was refused here and accepted everywhere else.
+    """
+
+    coin_balance: Any = None
+    is_contract: Any = None
 
 
 class BlockscoutProvider(EtherscanCompatProvider):
@@ -120,31 +135,12 @@ class BlockscoutProvider(EtherscanCompatProvider):
         """
         normalized = normalize_address(address)
         payload = await self._transport.get_json(f"api/v2/addresses/{normalized}")
-        if not isinstance(payload, dict):
-            raise SchemaError(
-                self.name, f"expected an address object, got {type(payload).__name__}"
-            )
+        entry = read_payload(_BlockscoutAddress, payload, provider=self.name, what="address")
         return Address(
             chain=self.chain,
             address=normalized,
             # A decimal string, not hex — the v2 API renders wei as a decimal number.
-            balance=_decimal(payload.get("coin_balance")),
-            is_contract=bool(payload.get("is_contract")),
+            balance=parse_decimal_int(entry.coin_balance),
+            is_contract=bool(entry.is_contract),
             provenance=self._provenance("address"),
         )
-
-
-def _decimal(value: Any) -> int | None:
-    """A wei amount rendered as a decimal string, or ``None``.
-
-    Separate from ``parse_decimal_int`` because that one is built for the flat API's hex and
-    decimal mix; this endpoint renders everything as decimal, and a hex parse would read
-    ``"67405741441939559062"`` correctly by accident and ``"0x…"`` not at all. One function per
-    shape, so neither has to guess which it was given.
-    """
-    if value is None:
-        return None
-    try:
-        return int(str(value))
-    except ValueError:
-        return None

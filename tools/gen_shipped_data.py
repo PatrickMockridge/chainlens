@@ -35,25 +35,39 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+
+from chainlens.presets.records import Preset  # noqa: E402  (needs the sys.path line above)
 
 PRESET_DIR = ROOT / "src" / "chainlens" / "presets" / "data"
 ARTEFACT = ROOT / "src" / "chainlens" / "_shipped_card.py"
 
 
 def _presets() -> list[dict[str, Any]]:
-    """Every shipped preset, in a stable order, as plain data.
+    """Every shipped preset, in a stable order, validated as the type the artefact holds.
 
     Sorted by name rather than by filename so that a rename is a change to one place rather than a
     reordering of the artefact — the same reason the vocabulary table's order is stated.
+
+    **Validated here, and that is not belt-and-braces.** `render` copies the keys it knows and
+    drops the rest, so before this a mistyped key in a preset YAML was **silently discarded** — the
+    artefact came out looking right and holding less, and only the losslessness test downstream
+    would notice. Running the same `Preset` the artefact constructs is what makes the generator the
+    thing that refuses, and it refuses by naming the file. A generator that accepts a shape it does
+    not validate is the shape's second, weaker description.
     """
     out: list[dict[str, Any]] = []
     for path in sorted(PRESET_DIR.glob("*.yaml")):
         loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(loaded, dict):
             raise SystemExit(f"{path}: expected a mapping, got {type(loaded).__name__}")
+        try:
+            Preset.model_validate(loaded)
+        except ValidationError as exc:
+            raise SystemExit(f"{path.name}: not a preset this library accepts:\n{exc}") from exc
         out.append(loaded)
     return sorted(out, key=lambda entry: entry["name"])
 

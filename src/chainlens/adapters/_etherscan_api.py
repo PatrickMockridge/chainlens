@@ -30,13 +30,17 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from chainlens.adapters._evm import (
     address_or_none,
     from_unix_seconds,
+    method_id_from,
     parse_decimal_int,
 )
+from chainlens.adapters._payload import ProviderPayload, read_payload
 from chainlens.codec.eth_address import normalize_address
 from chainlens.exceptions import (
     ConfigurationError,
@@ -59,6 +63,42 @@ _MAX_PAGE_SIZE = 1_000
 
 #: ``status: "0"`` messages that mean "nothing here", not "something broke".
 _EMPTY_RESULT_MARKERS = ("no transactions found", "no records found", "no data found")
+
+
+class _EtherscanRow(ProviderPayload):
+    """One flat-API row — a ``txlist`` entry or a ``tokentx`` one.
+
+    **One shape for both, because they are the same record with a few extra keys.** A `tokentx`
+    row adds `tokenSymbol`/`tokenDecimal`; a `txlist` row adds `isError`/`txreceipt_status`. Two
+    models would be two places the dozen keys they share can drift, and a host that renamed one on
+    one endpoint and not the other would keep working on half of them.
+
+    Quantities are `Any`, exactly as in the JSON-RPC shapes: :func:`parse_decimal_int` is tolerant,
+    and declaring `int | None` here would move that tolerance into validation, where one odd
+    spelling refuses the row instead of leaving that field absent. What this declares is **which
+    keys are read** — the half that drifts — with the provider's own spelling as the alias.
+    """
+
+    hash: Any = None
+    block_hash: Annotated[Any, Field(default=None, alias="blockHash")]
+    block_number: Annotated[Any, Field(default=None, alias="blockNumber")]
+    timestamp: Annotated[Any, Field(default=None, alias="timeStamp")]
+    confirmations: Any = None
+    sender: Annotated[Any, Field(default=None, alias="from")]
+    to: Any = None
+    value: Any = None
+    nonce: Any = None
+    gas: Any = None
+    gas_used: Annotated[Any, Field(default=None, alias="gasUsed")]
+    gas_price: Annotated[Any, Field(default=None, alias="gasPrice")]
+    is_error: Annotated[Any, Field(default=None, alias="isError")]
+    receipt_status: Annotated[Any, Field(default=None, alias="txreceipt_status")]
+    contract_address: Annotated[Any, Field(default=None, alias="contractAddress")]
+    method_id: Annotated[Any, Field(default=None, alias="methodId")]
+    function_name: Annotated[Any, Field(default=None, alias="functionName")]
+    token_symbol: Annotated[Any, Field(default=None, alias="tokenSymbol")]
+    token_decimal: Annotated[Any, Field(default=None, alias="tokenDecimal")]
+    transaction_index: Annotated[Any, Field(default=None, alias="transactionIndex")]
 
 
 def unwrap(payload: Any, provider: str) -> Any:
@@ -164,14 +204,15 @@ class EtherscanCompatProvider(BaseProvider):
         Shared across every host that serves one, because the field names are the protocol and two
         parsers would eventually disagree about a transaction that is the same on both.
         """
-        txid = str(raw.get("hash", ""))
-        gas_used = parse_decimal_int(raw.get("gasUsed"))
-        gas_price = parse_decimal_int(raw.get("gasPrice"))
+        entry = read_payload(_EtherscanRow, raw, provider=self.name, what="txlist row")
+        txid = entry.hash or ""
+        gas_used = parse_decimal_int(entry.gas_used)
+        gas_price = parse_decimal_int(entry.gas_price)
         fee = gas_used * gas_price if gas_used is not None and gas_price is not None else None
-        confirmations = parse_decimal_int(raw.get("confirmations")) or 0
+        confirmations = parse_decimal_int(entry.confirmations) or 0
 
         # The failure of a transaction is reported two ways depending on the endpoint.
-        failed = raw.get("isError") == "1" or raw.get("txreceipt_status") == "0"
+        failed = entry.is_error == "1" or entry.receipt_status == "0"
         if failed:
             status = TxStatus.FAILED
         elif confirmations > 0:
@@ -179,25 +220,24 @@ class EtherscanCompatProvider(BaseProvider):
         else:
             status = TxStatus.PENDING
 
-        method_id = str(raw.get("methodId") or "")
         return Transaction(
             chain=self.chain,
             txid=txid,
             status=status,
-            block_hash=raw.get("blockHash") or None,
-            block_height=parse_decimal_int(raw.get("blockNumber")),
-            block_time=from_unix_seconds(raw.get("timeStamp")),
+            block_hash=entry.block_hash or None,
+            block_height=parse_decimal_int(entry.block_number),
+            block_time=from_unix_seconds(entry.timestamp),
             confirmations=confirmations,
-            from_address=address_or_none(raw.get("from")),
-            to_address=address_or_none(raw.get("to")),
-            value=parse_decimal_int(raw.get("value")),
-            nonce=parse_decimal_int(raw.get("nonce")),
-            gas_limit=parse_decimal_int(raw.get("gas")),
+            from_address=address_or_none(entry.sender),
+            to_address=address_or_none(entry.to),
+            value=parse_decimal_int(entry.value),
+            nonce=parse_decimal_int(entry.nonce),
+            gas_limit=parse_decimal_int(entry.gas),
             gas_used=gas_used,
             gas_price=gas_price,
-            contract_address=address_or_none(raw.get("contractAddress")),
-            method_id=method_id if len(method_id) >= 10 and method_id != "0x" else None,
-            method_name=str(raw.get("functionName") or "") or None,
+            contract_address=address_or_none(entry.contract_address),
+            method_id=method_id_from(entry.method_id),
+            method_name=str(entry.function_name or "") or None,
             fee=fee,
             fee_asset=self._native_asset(),
             provenance=self._provenance("txlist"),
@@ -205,22 +245,23 @@ class EtherscanCompatProvider(BaseProvider):
 
     def _parse_token_transfer(self, raw: Mapping[str, Any]) -> Transfer:
         """Parse one entry from ``tokentx`` (ERC-20 transfers)."""
+        entry = read_payload(_EtherscanRow, raw, provider=self.name, what="tokentx row")
         return Transfer(
             chain=self.chain,
             asset=AssetRef(
                 chain=self.chain,
                 kind=AssetKind.ERC20,
-                symbol=str(raw.get("tokenSymbol") or "") or None,
-                decimals=parse_decimal_int(raw.get("tokenDecimal")),
-                contract=address_or_none(raw.get("contractAddress")),
+                symbol=str(entry.token_symbol or "") or None,
+                decimals=parse_decimal_int(entry.token_decimal),
+                contract=address_or_none(entry.contract_address),
             ),
-            amount=parse_decimal_int(raw.get("value")) or 0,
-            txid=str(raw.get("hash", "")),
-            src=address_or_none(raw.get("from")),
-            dst=address_or_none(raw.get("to")),
-            index=parse_decimal_int(raw.get("transactionIndex")),
-            block_height=parse_decimal_int(raw.get("blockNumber")),
-            timestamp=from_unix_seconds(raw.get("timeStamp")),
+            amount=parse_decimal_int(entry.value) or 0,
+            txid=entry.hash or "",
+            src=address_or_none(entry.sender),
+            dst=address_or_none(entry.to),
+            index=parse_decimal_int(entry.transaction_index),
+            block_height=parse_decimal_int(entry.block_number),
+            timestamp=from_unix_seconds(entry.timestamp),
             via=FlowVia.ERC20,
             provenance=self._provenance("tokentx"),
         )
@@ -232,16 +273,17 @@ class EtherscanCompatProvider(BaseProvider):
         separate endpoint and arrive as their own movements, so counting the value here and the logs
         there is what keeps the totals from doubling.
         """
+        entry = read_payload(_EtherscanRow, raw, provider=self.name, what="txlist row")
         return Transfer(
             chain=self.chain,
             asset=self._native_asset(),
-            amount=parse_decimal_int(raw.get("value")) or 0,
-            txid=str(raw.get("hash", "")),
-            src=address_or_none(raw.get("from")),
-            dst=address_or_none(raw.get("to")),
-            index=parse_decimal_int(raw.get("transactionIndex")),
-            block_height=parse_decimal_int(raw.get("blockNumber")),
-            timestamp=from_unix_seconds(raw.get("timeStamp")),
+            amount=parse_decimal_int(entry.value) or 0,
+            txid=entry.hash or "",
+            src=address_or_none(entry.sender),
+            dst=address_or_none(entry.to),
+            index=parse_decimal_int(entry.transaction_index),
+            block_height=parse_decimal_int(entry.block_number),
+            timestamp=from_unix_seconds(entry.timestamp),
             via=FlowVia.NATIVE,
             provenance=self._provenance("txlist"),
         )
@@ -281,27 +323,13 @@ class EtherscanCompatProvider(BaseProvider):
         exactly like an address with a short history. A caller that needs to know must count what it
         got; the ledger walk's own per-address limit is what keeps its reported reason honest.
         """
-        page = int(cursor) if cursor else 1
+        if limit is not None and limit <= 0:
+            return
         page_size = min(limit or _DEFAULT_PAGE_SIZE, _MAX_PAGE_SIZE)
         yielded = 0
 
-        while True:
-            if limit is not None and yielded >= limit:
-                return
-            result = await self._account(
-                "txlist",
-                address,
-                page=page,
-                offset=page_size,
-                sort="desc",
-                startblock=0,
-                endblock=99999999,
-            )
-            if not isinstance(result, list) or not result:
-                return
-            for raw in result:
-                if not isinstance(raw, Mapping):
-                    continue
+        async for page_rows in self._pages("txlist", address, cursor=cursor, page_size=page_size):
+            for raw in page_rows:
                 transaction = self._parse_account_transaction(raw)
                 if (
                     since is not None
@@ -320,6 +348,49 @@ class EtherscanCompatProvider(BaseProvider):
                     return
                 yielded += 1
                 yield transaction
+            if limit is not None and yielded >= limit:
+                return
+
+    async def _pages(
+        self,
+        action: str,
+        address: str,
+        *,
+        cursor: str | None,
+        page_size: int,
+    ) -> AsyncIterator[tuple[Mapping[str, Any], ...]]:
+        """One endpoint's rows for an address, a page at a time, newest first.
+
+        **The pagination rule was written out three times** — once per endpoint that pages by
+        number — and a change landing in two of the three is a walk that stops early on one
+        endpoint and not another, which reads as a short history rather than as a bug. So the page
+        index, the page size, the short page that ends the walk, and the block range every page
+        must carry live here; each caller keeps only what it does with a row.
+
+        **A page at a time rather than a row at a time, and that is the caller's stop condition.**
+        A caller that has its answer checks between pages, so a walk filling its limit exactly
+        costs one request and not two — the caller's `return` cannot reach back through a
+        row-by-row generator, because the generator has already gone on to fetch the next page
+        before the caller's body resumes. Yielding the whole page puts the check where the
+        original three loops had it.
+
+        The block range is the API's full span, sent because these endpoints take one and this
+        walk wants every block; it was the same two literals in all three copies.
+        """
+        page = int(cursor) if cursor else 1
+        while True:
+            result = await self._account(
+                action,
+                address,
+                page=page,
+                offset=page_size,
+                sort="desc",
+                startblock=0,
+                endblock=99999999,
+            )
+            if not isinstance(result, list) or not result:
+                return
+            yield tuple(raw for raw in result if isinstance(raw, Mapping))
             if len(result) < page_size:
                 return
             page += 1
@@ -338,34 +409,19 @@ class EtherscanCompatProvider(BaseProvider):
         (``tokennfttx``, ``token1155tx``) which this does not read, and they are not silently merged
         in — a reader counting movements would otherwise be counting a mixture.
         """
-        page = int(cursor) if cursor else 1
+        if limit is not None and limit <= 0:
+            return
         page_size = min(limit or _DEFAULT_PAGE_SIZE, _MAX_PAGE_SIZE)
         yielded = 0
 
-        while True:
-            if limit is not None and yielded >= limit:
-                return
-            result = await self._account(
-                "tokentx",
-                address,
-                page=page,
-                offset=page_size,
-                sort="desc",
-                startblock=0,
-                endblock=99999999,
-            )
-            if not isinstance(result, list) or not result:
-                return
-            for raw in result:
-                if not isinstance(raw, Mapping):
-                    continue
+        async for page_rows in self._pages("tokentx", address, cursor=cursor, page_size=page_size):
+            for raw in page_rows:
                 if limit is not None and yielded >= limit:
                     return
                 yielded += 1
                 yield self._parse_token_transfer(raw)
-            if len(result) < page_size:
+            if limit is not None and yielded >= limit:
                 return
-            page += 1
 
     @provides(Capability.WINDOW_TRANSFERS)
     async def get_window_transfers(
@@ -436,27 +492,13 @@ class EtherscanCompatProvider(BaseProvider):
         rather than one loop with two exits — the shape :meth:`get_address_transactions` already
         uses, and the reason its bounds behave.
         """
-        page = int(cursor) if cursor else 1
+        if limit is not None and limit <= 0:
+            return
         page_size = min(limit or _DEFAULT_PAGE_SIZE, _MAX_PAGE_SIZE)
         yielded = 0
 
-        while True:
-            if limit is not None and yielded >= limit:
-                return
-            result = await self._account(
-                action,
-                address,
-                page=page,
-                offset=page_size,
-                sort="desc",
-                startblock=0,
-                endblock=99999999,
-            )
-            if not isinstance(result, list) or not result:
-                return
-            for raw in result:
-                if not isinstance(raw, Mapping):
-                    continue
+        async for page_rows in self._pages(action, address, cursor=cursor, page_size=page_size):
+            for raw in page_rows:
                 movement = parse(raw)
                 if (
                     since is not None
@@ -475,9 +517,8 @@ class EtherscanCompatProvider(BaseProvider):
                     return
                 yielded += 1
                 yield movement
-            if len(result) < page_size:
+            if limit is not None and yielded >= limit:
                 return
-            page += 1
 
     async def aclose(self) -> None:
         await self._transport.aclose()

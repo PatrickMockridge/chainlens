@@ -21,7 +21,7 @@ from chainlens.adapters.blockstream import BlockstreamProvider
 from chainlens.adapters.esplora import EsploraProvider
 from chainlens.adapters.mempool_space import MempoolSpaceProvider
 from chainlens.config import Settings
-from chainlens.exceptions import NotFoundError
+from chainlens.exceptions import NotFoundError, SchemaError
 from chainlens.models.enums import Chain, ChainModel, ScriptType, TxStatus
 from chainlens.providers.registry import ProviderRegistry
 from chainlens.providers.transport import Transport
@@ -129,6 +129,43 @@ async def test_transaction_parses_the_essentials() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_payload_with_no_txid_is_refused_by_name() -> None:
+    """The one field the shape requires, and the reason it is required.
+
+    `_parse_transaction` used to read the id with a bare subscript — `payload["txid"]` — so a
+    payload without one raised `KeyError: 'txid'` from inside a dictionary: a message naming no
+    provider and no shape, on a path where every *other* absence was deliberately tolerated. The
+    declared shape makes it a `SchemaError` naming the field and the provider, which is what an
+    adapter already raises when a payload does not hold what the shape says it holds.
+    """
+    provider = _provider(_serving({"vin": [], "vout": [], "status": {"confirmed": True}}))
+    with pytest.raises(SchemaError, match="txid"):
+        await provider.get_transaction("aa" * 32)
+    await provider.aclose()
+
+
+@pytest.mark.anyio
+async def test_the_providers_own_record_is_kept_beside_the_canonical_view() -> None:
+    """`TxInput.raw` / `TxOutput.raw`: the bytes the canonical view was made from.
+
+    **Nothing in this library reads these**, which is why the promise needs a test rather than a
+    reader: the fields are here so a caller can go back to what the provider actually said, and a
+    promise nothing can break is a comment. This one breaks the moment a parser stops passing the
+    payload through — which is exactly what `Transaction.raw` did, declared the same way, never
+    written by anybody, and removed for it.
+    """
+    payload = _tx_payload()
+    provider = _provider(_serving(payload))
+    tx = await provider.get_transaction("aa" * 32)
+    await provider.aclose()
+
+    assert tx.inputs[0].raw["txid"] == payload["vin"][0]["txid"]
+    assert tx.outputs[0].raw["scriptpubkey"] == payload["vout"][0]["scriptpubkey"]
+    # And it is the *provider's* record, not the canonical view rendered back out.
+    assert tx.outputs[0].raw["value"] == payload["vout"][0]["value"]
+
+
+@pytest.mark.anyio
 async def test_input_value_comes_from_prevout_not_vin() -> None:
     """``vin[].value`` does not exist in Esplora's schema."""
     provider = _provider(_serving(_tx_payload()))
@@ -156,6 +193,12 @@ async def test_a_null_prevout_leaves_the_value_unknown() -> None:
     assert tx.inputs[0].value is None
     assert tx.inputs[0].asset is None
     assert tx.total_input_value == 0
+    # And the script type is left unstated rather than derived from a script that is not there:
+    # "there is no prevout" and "here is an empty prevout" are different facts, and the declared
+    # shape keeps them so — an absent object becomes `{}`, but the parser still asks whether the
+    # provider *gave* one before it reads a script out of it.
+    assert tx.inputs[0].script_type is None
+    assert tx.inputs[0].raw["prevout"] is None
 
 
 @pytest.mark.anyio

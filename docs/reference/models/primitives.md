@@ -305,7 +305,6 @@ the fields that family guarantees.
 - `logs` = ()
 - `internal_transfers` = ()
 - `provenance` = None
-- `raw` = Field(default_factory=dict)
 
 ### `chain_model`
 

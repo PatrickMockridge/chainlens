@@ -245,7 +245,7 @@ Attributes:
     block_time: block timestamp, when known.
     spent: whether a UTXO output has been spent, when the provider said.
     spent_by_txid: what spent it, when the provider said.
-    annotation_ids: user-declared annotations targeting this edge.`),tS=Rb({dust_ratio:$([X().gt(0).lt(1),Z()]).default(null),include_change:Ab().default(!0),include_coinbase:Ab().default(!0),include_self:Ab().default(!1),include_tokens:Ab().default(!0),max_concurrency:X().int().gte(1).default(8),max_depth:X().int().gte(1).default(1),max_edges:X().int().gte(1).default(600),max_fan_out:$([X().int().gt(0),Z()]).default(40),max_nodes:X().int().gte(1).default(300),min_value:$([X().int().gte(0),Z()]).default(null),time_budget:$([X().gt(0),Z()]).default(60)}).strict().describe(`The limits and pruning a ledger walk ran under.
+    annotation_ids: user-declared annotations targeting this edge.`),tS=Rb({dust_ratio:$([X().gt(0).lt(1),Z()]).default(null),include_change:Ab().default(!0),include_coinbase:Ab().default(!0),include_self:Ab().default(!1),include_tokens:Ab().default(!0),max_concurrency:X().int().gte(1).default(8),max_depth:X().int().gte(1).default(1),max_edges:X().int().gte(1).default(600),max_fan_out:$([X().int().gt(0),Z()]).default(40),max_nodes:X().int().gte(1).default(300),max_transactions_per_address:X().int().gte(1).default(200),min_value:$([X().int().gte(0),Z()]).default(null),time_budget:$([X().gt(0),Z()]).default(60)}).strict().describe(`The limits and pruning a ledger walk ran under.
 
 Carried on the document rather than passed alongside it, so a committed
 \`\`graph.json\`\` describes itself: a reader can see exactly what produced this slice
@@ -265,6 +265,10 @@ Attributes:
     max_edges: edges to admit.
     time_budget: wall-clock seconds, or \`\`None\`\` for no limit.
     max_concurrency: provider requests in flight at once.
+    max_transactions_per_address: how many of one address's transactions the walk will read
+        before moving on. A busy address has hundreds of thousands and the point of this view
+        is a slice; when it bites, the reason recorded is \`\`per_address_limit\`\` rather than
+        \`\`budget_nodes\`\`, so a reader can tell a cap on *this address* from a cap on the walk.
     min_value: ignore movements below this, in base units. Applies to *edges*, so a
         transaction all of whose edges fall below it disappears — the transaction is
         not itself dust, but there is nothing left to draw.

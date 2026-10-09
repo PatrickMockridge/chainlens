@@ -61,7 +61,7 @@ from chainlens.verify.checks.base import CheckOutcome, no_method_exists, not_rea
 from chainlens.verify.claims import ClaimElements
 from chainlens.verify.likelihood import LikelihoodRatio, evaluate_likelihood, formula_for
 from chainlens.verify.parsing import ParsedClaim, parse_claim
-from chainlens.verify.scale import DEFAULT_THRESHOLDS, VerbalThresholds
+from chainlens.verify.scale import VerbalThresholds
 from chainlens.verify.schema import Claim, Extraction, validate_quotes
 from chainlens.verify.verdicts import (
     STANDARD_VERIFICATION_LIMITATIONS,
@@ -217,12 +217,13 @@ class VerificationEngine:
             checkers; pass a copy to add one for a single run.
         scan_limit: how many transactions to walk before declaring a scan truncated.
         transfer_limit: how many transfers to carry into a finding's evidence.
-        thresholds: the verbal-scale boundaries. ENFSI-aligned by default, and
-            configurable because the guideline treats the scale as
-            jurisdiction-dependent.
-        card: the data this run is entitled to rest an answer on. The two limits above default to
-            the card's entries; a card is a *value a caller holds* and never a global this reads,
-            so two engines in one process can be run under two different cards.
+        thresholds: the verbal-scale boundaries. ``None`` — the caller did not say — takes the
+            card's, which is ENFSI-aligned by default and configurable because the guideline
+            treats the scale as jurisdiction-dependent. An explicit scale wins over the card,
+            like the two limits above.
+        card: the data this run is entitled to rest an answer on. The two limits and the verbal
+            scale default to the card's entries; a card is a *value a caller holds* and never a
+            global this reads, so two engines in one process can be run under two different cards.
         estimate_requested: whether anybody wanted a coincidence priced. Says nothing about
             whether one *could* be: with no estimator, this field is the difference between a
             caller who decided against it and a setup that never had one, and the two read
@@ -238,7 +239,7 @@ class VerificationEngine:
         scan_limit: int | None = None,
         transfer_limit: int | None = None,
         card: Keycard = SHIPPED,
-        thresholds: VerbalThresholds = DEFAULT_THRESHOLDS,
+        thresholds: VerbalThresholds | None = None,
         estimate_requested: bool = True,
         selection: SelectionDisclosure | None = None,
     ) -> None:
@@ -265,7 +266,12 @@ class VerificationEngine:
             if transfer_limit is not None
             else card.resolved_thresholds.transfer_limit
         )
-        self._thresholds = thresholds
+        # The verbal boundaries reach the run the same way the two limits do, and for the same
+        # reason: the bands a ratio is *reported* on are part of what an answer rests on, so a
+        # holder may move them and a reader has to be able to see whose produced the words. `None`
+        # again means "the caller did not say", so an explicit scale wins over the card and the
+        # shipped one is what a caller who said nothing gets.
+        self._thresholds = thresholds if thresholds is not None else card.resolved_verbal_scale
         #: How the claims reached this engine, when a chooser picked them. Stamped on every
         #: finding and added to its caveats, because the alternative — carrying it on the batch —
         #: lets a finding travel on its own with a ratio that reads as pre-registered.

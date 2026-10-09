@@ -82,6 +82,30 @@ def test_a_card_supplies_its_own_terms_and_the_shipped_ones_are_kept() -> None:
     assert load_named("ethereum-ico", card=loads("schema_version = 1\n")).name == "ethereum-ico"
 
 
+def test_the_generator_refuses_a_preset_key_it_does_not_know(tmp_path: Path) -> None:
+    """**The half that was missing, and it was missing silently.**
+
+    `render` copies the keys it knows and drops the rest, so a mistyped key in a preset YAML used
+    to be discarded on the way into the artefact: the shipped card came out looking right and
+    holding less. Only `test_the_shipped_render_is_lossless` downstream noticed, which is a test
+    catching a generator's job. Running the same `Preset` the artefact constructs makes the
+    generator the thing that refuses — and it names the file, because "invalid" without a path is
+    a dead end for whoever is looking at a directory of them.
+    """
+    (tmp_path / "typo.yaml").write_text(
+        "name: typo\ndescription: d\nchain: bitcoin\nsource: https://example.invalid/x\n"
+        "allocatoin_dataset: a mistyped key\n",
+        encoding="utf-8",
+    )
+    original = gen_shipped_data.PRESET_DIR
+    gen_shipped_data.PRESET_DIR = tmp_path
+    try:
+        with pytest.raises(SystemExit, match=r"typo\.yaml"):
+            gen_shipped_data._presets()
+    finally:
+        gen_shipped_data.PRESET_DIR = original
+
+
 def test_a_preset_nobody_has_is_refused_by_name() -> None:
     """A message that lists what is available, because "no such preset" without a list is a dead
     end for whoever typed the name."""

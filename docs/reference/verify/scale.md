@@ -49,35 +49,6 @@ A likelihood ratio placed on the verbal scale.
 
 Whether the evidence distinguishes the propositions at all.
 
-## `VerbalThresholds`
-
-Upper bound of each verbal band, as a likelihood ratio.
-
-Strictly increasing, and each above 1, since an LR of 1 is "no support" and a
-band that reached down to it would have no lower edge.
-
-**Attributes**
-
-- `slight` `float` — largest LR still called slight support. ENFSI default 10.
-- `moderate` `float` — ENFSI default 100.
-- `moderately_strong` `float` — ENFSI default 1000.
-- `strong` `float` — ENFSI default 10000; anything above is very strong.
-
-**Members**
-
-- `slight` = Field(default=10.0, gt=1.0)
-- `moderate` = Field(default=100.0, gt=1.0)
-- `moderately_strong` = Field(default=1000.0, gt=1.0)
-- `strong` = Field(default=10000.0, gt=1.0)
-
-### `band`
-
-```python
-band(ratio: float) -> VerbalScale
-```
-
-The band for a ratio of 1 or more.
-
 ## `DEFAULT_THRESHOLDS`
 
 ## `band_for`

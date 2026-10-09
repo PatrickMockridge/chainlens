@@ -13,6 +13,8 @@ from chainlens.adapters._evm import (
     erc20_transfer_from_log,
     from_hex_seconds,
     from_unix_seconds,
+    has_code,
+    method_id_from,
     parse_decimal_int,
     parse_hex_int,
     parse_log,
@@ -112,6 +114,49 @@ def test_address_topic_padding() -> None:
 def test_topic_to_address_rejects_short_topics() -> None:
     assert topic_to_address("0x1234") is None
     assert topic_to_address(None) is None
+
+
+@pytest.mark.parametrize(
+    ("selector", "expected"),
+    [
+        ("0xa9059cbb" + "00" * 32, "0xa9059cbb"),
+        ("0xa9059cbb", "0xa9059cbb"),
+        ("0x", None),
+        ("0x1234", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_method_id_is_the_selector_or_nothing(selector: object, expected: str | None) -> None:
+    """The rule that was written twice, once per API's spelling of the same thing.
+
+    A short call is not a method call, and returning the short string would put something in
+    `method_id` that reads as a selector no ABI can resolve. The Etherscan copy carried an extra
+    `!= "0x"` test that the length check already covered, which is the kind of redundant clause
+    one copy of a rule grows and the other does not.
+    """
+    assert method_id_from(selector) == expected
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("0x6080604052", True),
+        ("0x0", True),
+        ("0x", False),
+        ("", False),
+        (None, False),
+        (123, False),
+    ],
+)
+def test_has_code_reads_the_two_spellings_of_nothing_deployed(code: object, expected: bool) -> None:
+    """`eth_getCode` answers `"0x"` or `""` for an address with no code, depending on the node.
+
+    Reading either as code reports an ordinary wallet as a contract, which is a claim about what
+    an address *is* — the kind a reader acts on. The check lived in two adapters, which is how two
+    copies come to disagree about one of the spellings.
+    """
+    assert has_code(code) == expected
 
 
 # --------------------------------------------------------------------------- #

@@ -55,6 +55,29 @@ So this layer is **characterised**: the claim describes what the layer does, not
 repository can do would violate it, and proving a re-stated version of it would add a theorem
 nobody consults to a gate whose value comes from every entry in it being one a change could break.
 
+## The shape on this side of the boundary is now written down
+
+The conversion this page is about has two halves, and only one of them was ever described. The
+canonical view is `models/primitives.py`, typed and enforced. The **input** — what each provider
+actually sends — was string literals inside parser bodies: `raw.get("scriptValue")`, `raw.get(
+"effectiveGasPrice")`, the same twelve keys read in three places. A provider that renamed a key
+therefore cost a value with nothing saying so, because `.get` answers `None` and the model field is
+optional: a missing fee and a genuine absence are the same run.
+
+`adapters/_payload.py` declares those shapes now, one per family, and the parsers read attributes
+off them. **What is declared is the keys rather than the types**, and that is a measurement rather
+than a shortcut: the quantity parsers are tolerant by design — `parse_hex_int` answers `None` for
+anything it cannot read — so typing a field `int | None` would move that tolerance into validation
+and turn "one quantity was spelled oddly" into "the whole transaction is refused". A shape that made
+the boundary *less* forgiving is a shape that changes what the library does. Two fields are required
+because the code always needed them and used to read them with a bare subscript, so their absence
+was a `KeyError` from inside a dictionary rather than a refusal naming a field.
+
+**And they are deliberately not `LensModel`s.** `extra="forbid"` is the right rule for a value this
+library owns — `models/base.py` says so — and the wrong one for a value the provider owns: a node
+that adds a field to its JSON is not an error, and a library that refused it would break the day
+somebody upgraded a node. The two types differ by exactly which side of this page they are on.
+
 ## What it is about in the tree
 
 | The claim's subject | The tree |
@@ -62,6 +85,7 @@ nobody consults to a gate whose value comes from every entry in it being one a c
 | the value-preserving normalisation | `src/chainlens/models/primitives.py::Transaction._ensure_utxo_view`, guarded by the property tests in `tests/models/test_primitives.py` |
 | the address boundary | `src/chainlens/codec/base58.py`, `src/chainlens/codec/bech32.py`, `src/chainlens/codec/eth_address.py`, guarded by the round trips in `tests/codec/` |
 | the type the canonical view feeds | `src/chainlens/models/primitives.py::Amount` — see [Amount identity](./dimensions.md) |
+| the shape on the provider's side | `src/chainlens/adapters/_payload.py`, and the four families' shapes in `esplora.py`, `_evm.py`, `_etherscan_api.py` and `blockscout.py`, guarded by `tests/adapters/` |
 
 ## The defect this layer is the aftermath of
 
