@@ -96,10 +96,48 @@ than it is, and the ordering is exercised where it is implemented, by
 | `Chainlens.Exactness.split_sum` | the conservation invariant that function's docstring claims |
 | the refusal of an empty weight list | the `ValueError` in the same function, deliberately not modelled — see above |
 
-## What else the tranche took
+## The apportionment tag, and why folding it into a table was never the work
 
-The apportionment tag is spelled four ways in the tree — `Edge.apportioned` in
-`src/chainlens/models/flows.py`, `apportioned_shares` in `src/chainlens/verify/verdicts.py`, the
-`"apportioned"` key in `src/chainlens/graph/export.py`, and `APPORTIONED_CONFIDENCE` in the
-models. Folding those into [the vocabulary table](./vocabulary.md) is **T7** rather than this
-tranche, because the tag reaches the wire and the wire contract is bumped there and nowhere else.
+This page used to end by deferring **T7**: fold the apportionment tag's "four spellings" into [the
+vocabulary table](./vocabulary.md), "because the tag reaches the wire and the wire contract is
+bumped there and nowhere else". It was carried forward twice and pointed at from
+[the parameters page](./parameters.md). **Measured before building, all three of its claims are
+false** — and the tree already says so about itself in three other places.
+
+**The tag does not reach the wire.** No committed schema carries it as a field: `AmountTag`,
+`Amount`, `ValueFlow`, `Transfer` and `ClaimEvidence` are all outside
+`chainlens.ledger.schema::DOCUMENTS`, so `model_json_schema` never serializes the tag — the only
+occurrence of the word in `web/schema/` is inside `AmountStatus`'s docstring prose, quoted into
+`ledger.schema.json`. The one wire-visible spelling is the derivation's `DetailEntry` values
+(`amount_basis`, `apportioned_share`, built in `ledger/derive.py`), and a `DetailEntry`'s key is an
+open string, so those are *data* and not schema. **So there is no bump, and the reason for deferring
+does not hold.** [Barbs](./barbs.md) reached the same conclusion and recorded it as a decision
+rather than a deferral.
+
+**The table is the wrong shape for a tag, and would refuse one.** A row is one native asset on one
+chain — `id`, `chain`, `symbol`, `decimals`, `families`, the addressing parameters, one `note` — and
+`tools/gen_vocabulary.py` refuses a second row on a chain and refuses any field it does not read.
+The tag is the axis *beside* `(chain, asset)`; this enum's own first sentence says the two are
+independent. Folding it in would mean a second row shape, a second kind of row in the generator and
+a Lean theorem per member, to store a constant repeated on every row — the duplication the table
+exists to prevent. **Its home already exists, and the constant that sits beside it says so**:
+`models/enums.py::AMOUNT_STATUS_SPELLINGS`' own comment reads *"each spelled in the enum that owns
+it, which is their one home."*
+
+**And they are not four spellings of one value.** Classified by the criterion — a second place the
+same fact lives:
+
+| named as a spelling | what it is | a second spelling? |
+|---|---|---|
+| `ValueFlow.apportioned` | the flag on an *aggregated* edge, derived through the tracer from `Transfer.ambiguous` | no — the copies cannot drift |
+| `apportioned_shares` | the **magnitudes** the inference would attribute, keyed by edge | no — a flag has no magnitude |
+| the `"apportioned"` key in `graph/export.py` | the *serialization* of the flag | a key name, not a value |
+| `APPORTIONED_CONFIDENCE` | a **confidence**, derived from the flag one way | no — *"a convention and not a measurement"* |
+
+The fact itself is `Transfer.ambiguous`, set once where a UTXO transaction is split across its
+senders. The reconciliation already exists — three named adapters and one enum — and
+`tests/models/test_amount.py` holds it. [Amount identity](./dimensions.md) is the page that records
+this, and it was right all along.
+
+**What remains true is the forward note.** The tag ships as a constrained vocabulary when `Amount`
+becomes a document field, which is [Barbs](./barbs.md)' decision and not a task waiting here.

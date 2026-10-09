@@ -106,8 +106,7 @@ is a separate question, not built, and not needed for the defect to be gone.
 - **`models/flows.py`'s `DIRECT_CONFIDENCE` / `APPORTIONED_CONFIDENCE`.** They are read inside the
   `ValueFlow.confidence` *property*, and the docstring there calls the value *"a convention and not
   a measurement"* — the derived tag of an apportioned edge. It is a rendering convention, not a
-  number an answer is computed *under*. (`APPORTIONED_CONFIDENCE` is separately recorded as
-  [Exactness](./exactness.md)'s **T7**.)
+  number an answer is computed *under*.
 - **`models/enums.py`'s `Confidence.from_score` cut-offs.** A **reporting band** — the single place a
   number becomes the word "high" — fixed on purpose so two renderers agree. It is the family the
   capability page already lists as a *reported display cap*. **The tension is recorded rather than

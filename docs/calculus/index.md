@@ -158,8 +158,10 @@ written in a second place is a number that can disagree with the first, and the 
 the scar to prove it: a hand-typed `1.0e-3` for a millimetre disagreed with everything around it, by
 a factor of a thousand, squared by an orifice diameter.
 
-The same rule disposes of the bare `"BTC"` and `"ETH"` literals and of the three separate spellings
-the apportionment tag currently has. See [The vocabulary table](./vocabulary.md).
+The same rule disposes of the bare `"BTC"` and `"ETH"` literals and of the strings an amount's
+provenance is spelled with, which have one home in `models/enums.py::AmountTag`. See [The
+vocabulary table](./vocabulary.md), and [Exactness](./exactness.md) for why the tag is not a row in
+it.
 
 ## The rule that keeps a proof from being about the wrong thing
 

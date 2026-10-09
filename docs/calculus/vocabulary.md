@@ -33,8 +33,10 @@ unit table spelling `"BTC", 8` four times and `"ETH", 18` five times. Every one 
 table now.
 
 The same rule disposes of the bare `"BTC"` and `"ETH"` literals — which the `AssetRef.of_native`
-constructor removed from three adapters — and of the several spellings the apportionment tag
-currently has, which [Exactness](./exactness.md) records as T7's to fold in.
+constructor removed from three adapters — and of the **strings** an amount's provenance is spelled
+with, which have one home in `models/enums.py::AmountTag` and the constant beside it. That is the
+*rule*, and not this table: an amount tag is not row-shaped and never belonged here, which
+[Exactness](./exactness.md) now records as a measurement rather than a task.
 
 ## Which chains the table covers, and why that is not a choice
 
