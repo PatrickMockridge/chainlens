@@ -22,6 +22,11 @@ which is why no ratio is reported for an absence at all.
 there was no opportunity for a coincidence, so the ratio has no meaning; the
 verdict stands on its own and the engine refuses the number.
 
+**And a claim can be about a total, in which case it says so and is added up.**
+`_outcome_for_a_total` sums the window's movements instead of matching them one at a time,
+because a filing's *"sent approximately 2,138.4 BTC between July and September"* is true of 262
+movements and of none of them individually. It reports no ratio and gives its reason.
+
 ## `CHECKER`
 
 ## `METHOD`

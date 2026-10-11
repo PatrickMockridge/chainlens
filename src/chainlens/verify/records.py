@@ -43,7 +43,7 @@ from pydantic import AwareDatetime
 
 from chainlens.exceptions import ChainlensError
 from chainlens.models.base import utcnow
-from chainlens.models.enums import ClaimVerdict
+from chainlens.models.enums import ClaimVerdict, Direction
 from chainlens.models.selection import SelectionDisclosure
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
 from chainlens.verify.claims import ActivityWindow
@@ -229,6 +229,13 @@ def load_record(path: Path, *, corpus_dir: Path | None = None) -> ClaimRecord:
             addresses=tuple(claim_raw.get("addresses", ())),
             txid=claim_raw.get("txid"),
             amount_text=claim_raw.get("amount_text"),
+            # **Read back, which it was not.** The writer has emitted `direction` since the field
+            # existed and this constructor silently dropped it, so a receipt recorded as
+            # `direction = "in"` loaded as a claim about the address's *spending* — the same wrong
+            # side of the transaction the check itself used to take. A field a record writes and
+            # does not read is a field that is not in the format.
+            direction=_direction(claim_raw.get("direction")),
+            total=bool(claim_raw.get("total", False)),
             window=_window(claim_raw.get("window")),
             media_indexes=tuple(claim_raw.get("media_indexes", ())),
         )
@@ -329,6 +336,11 @@ def record_for_claim(
     )
 
 
+def _direction(value: object) -> Direction | None:
+    """The claim's direction, when the record states one."""
+    return Direction(str(value)) if value else None
+
+
 def dump_record(record: ClaimRecord) -> str:
     """A record as JSON, with the same keys the TOML form uses.
 
@@ -342,6 +354,7 @@ def dump_record(record: ClaimRecord) -> str:
         "txid": record.claim.txid,
         "amount_text": record.claim.amount_text,
         "direction": record.claim.direction.value if record.claim.direction else None,
+        "total": record.claim.total or None,
         "asserted_label": record.claim.asserted_label,
     }
     claim: dict[str, Any] = {

@@ -81,6 +81,11 @@ class Claim(LensModel):
         txid: the transaction id, when the claim names one.
         amount_text: the amount **as written**, exactly as it appeared.
         direction: which way the subject moved value, when the claim says.
+        total: whether the amount is what the subject moved **in total** over the window,
+            rather than the size of one movement. Stated, never inferred from the wording:
+            *"sent approximately 2,138 BTC between July and September"* reads exactly like a
+            single payment and is, on chain, 262 of them — and which it was cannot be recovered
+            from the sentence.
         window: the period the claim refers to, when it names one and the model
             could resolve it. The verbatim wording stays in ``quote``.
         asserted_label: the attribution claimed, for :attr:`ClaimType.LABEL`.
@@ -99,6 +104,7 @@ class Claim(LensModel):
     txid: str | None = None
     amount_text: str | None = None
     direction: Direction | None = None
+    total: bool = False
     window: ActivityWindow | None = None
     asserted_label: str | None = None
 

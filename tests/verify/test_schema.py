@@ -31,6 +31,7 @@ def test_the_claim_schema_is_exactly_this() -> None:
         "txid",
         "amount_text",
         "direction",
+        "total",
         "window",
         "asserted_label",
         "media_indexes",

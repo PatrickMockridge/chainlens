@@ -33,6 +33,7 @@ One assertion read out of a post, in the post's own words.
 - `txid` `str | None` — the transaction id, when the claim names one.
 - `amount_text` `str | None` — the amount **as written**, exactly as it appeared.
 - `direction` `Direction | None` — which way the subject moved value, when the claim says.
+- `total` `bool` — whether the amount is what the subject moved **in total** over the window, rather than the size of one movement. Stated, never inferred from the wording: *"sent approximately 2,138 BTC between July and September"* reads exactly like a single payment and is, on chain, 262 of them — and which it was cannot be recovered from the sentence.
 - `window` `ActivityWindow | None` — the period the claim refers to, when it names one and the model could resolve it. The verbatim wording stays in ``quote``.
 - `asserted_label` `str | None` — the attribution claimed, for `ClaimType.LABEL`.
 - `media_indexes` `tuple[int, ...]` — which attachments the claim was read from, by position, so a claim drawn from an image is traceable to the image.
@@ -46,6 +47,7 @@ One assertion read out of a post, in the post's own words.
 - `txid` = None
 - `amount_text` = None
 - `direction` = None
+- `total` = False
 - `window` = None
 - `asserted_label` = None
 - `media_indexes` = ()

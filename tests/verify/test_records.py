@@ -16,8 +16,16 @@ from pathlib import Path
 
 import pytest
 
-from chainlens.verify.records import ClaimRecord, RecordError, load_record, load_records
-from chainlens.verify.schema import ClaimType
+from chainlens.models.enums import Direction
+from chainlens.verify.records import (
+    ClaimRecord,
+    RecordError,
+    dump_record,
+    load_record,
+    load_records,
+    record_for_claim,
+)
+from chainlens.verify.schema import Claim, ClaimType
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE / "fixtures"
@@ -213,3 +221,57 @@ class TestLoadingADirectory:
 
     def test_an_empty_directory_is_not_an_error(self, tmp_path: Path) -> None:
         assert load_records(tmp_path) == ()
+
+
+class TestTheFieldsTheFormatCarries:
+    """A key the writer emits and the reader drops is a key that is not in the format.
+
+    **This is the defect the case study found, not a hypothetical.** `dump_record` has always
+    written `direction`, and the constructor that reads a record back has never restored it — so a
+    receipt recorded as `direction = "in"` loaded as a claim about the address's *spending*, which
+    is the wrong side of the transaction and the same mistake the check itself used to make.
+    """
+
+    def test_a_direction_survives_the_round_trip(self, tmp_path: Path) -> None:
+        body = f"""
+schema_version = 1
+quote = "1,605 BTC were sent to {ALICE}"
+
+[claim]
+type = "transfer"
+addresses = ["{ALICE}"]
+amount_text = "1,605 BTC"
+direction = "in"
+total = true
+"""
+        record = load_record(_write(tmp_path, body))
+        assert record.claim.direction is Direction.IN
+        assert record.claim.total is True
+
+    def test_a_claim_that_states_neither_still_loads(self, tmp_path: Path) -> None:
+        """Both are optional, and absent means what the format says it means."""
+        record = load_record(_write(tmp_path, _minimal()))
+        assert record.claim.direction is None
+        assert record.claim.total is False
+
+    def test_the_written_record_is_the_one_that_comes_back(self, tmp_path: Path) -> None:
+        """The whole round trip, in the direction a tool uses it.
+
+        `dump_record` then `load_record`, on a claim stating both fields — which is what a build
+        does and what a reader's record goes through. The reader-only test above would pass on a
+        writer that dropped the fields entirely.
+        """
+        claim = Claim(
+            type=ClaimType.TRANSFER,
+            quote="1,605 BTC were sent to " + ALICE,
+            addresses=(ALICE,),
+            amount_text="1,605 BTC",
+            direction=Direction.IN,
+            total=True,
+        )
+        record = record_for_claim(claim, record_id="0007", post_text=claim.quote)
+        written = tmp_path / "0007-round-trip.json"
+        written.write_text(dump_record(record), encoding="utf-8")
+        reloaded = load_record(written)
+        assert reloaded.claim.direction is Direction.IN
+        assert reloaded.claim.total is True

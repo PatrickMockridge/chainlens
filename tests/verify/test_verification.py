@@ -34,7 +34,7 @@ from chainlens.models.calculation import (
     UnboundKind,
 )
 from chainlens.models.entities import Label
-from chainlens.models.enums import Chain, ClaimVerdict, EntityKind, LabelSource
+from chainlens.models.enums import Chain, ClaimVerdict, Direction, EntityKind, LabelSource
 from chainlens.models.primitives import Transaction
 from chainlens.providers.capabilities import Capability, provides
 from chainlens.social.models import Post, ProvenanceStrength, SourceRef
@@ -196,6 +196,56 @@ async def test_the_hedge_tolerance_can_absorb_a_small_difference() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_claim_about_a_total_is_supported_by_the_sum() -> None:
+    """**The reading this was written from, and the sentence that forced it.**
+
+    A forfeiture complaint says *"the 3QL Wallet sent approximately 2,138.4 BTC between July 18 and
+    September 30"*. On chain that is **262** movements and their sum — and the address's largest
+    single movement ever is 260 BTC — so the check that reads movements one at a time refutes a
+    claim that is true. Read as a total, it holds.
+    """
+    provider = _provider(*[_tx(n, sender=A, recipient=B, sats=10 * BTC) for n in range(1, 4)])
+    claim = _claim(addresses=(A,), amount_text="30 BTC", total=True)
+    finding = await _finding(provider, claim)
+    assert finding.verdict is ClaimVerdict.SUPPORTED
+    assert finding.evidence.detail["observed_total"] == 30 * BTC
+    assert finding.evidence.detail["movements_in_window"] == 3
+
+
+@pytest.mark.anyio
+async def test_the_same_sentence_read_as_one_payment_is_contradicted() -> None:
+    """Which is why the reading is stated and never inferred from the wording.
+
+    The identical sentence, with `total` unset, is refuted — and it *should* be, because as a claim
+    about one payment it is false. The two readings differ only by what the record says, which is
+    the whole reason the format carries the field.
+    """
+    provider = _provider(*[_tx(n, sender=A, recipient=B, sats=10 * BTC) for n in range(1, 4)])
+    finding = await _finding(provider, _claim(addresses=(A,), amount_text="30 BTC"))
+    assert finding.verdict is ClaimVerdict.CONTRADICTED
+
+
+@pytest.mark.anyio
+async def test_a_total_carries_no_likelihood_ratio() -> None:
+    """A matching sum is not the event the coincidence model prices, and it says so."""
+    provider = _provider(*[_tx(n, sender=A, recipient=B, sats=10 * BTC) for n in range(1, 4)])
+    finding = await _finding(provider, _claim(addresses=(A,), amount_text="30 BTC", total=True))
+    assert finding.verdict is ClaimVerdict.SUPPORTED
+    assert finding.likelihood is None
+    assert any("sum" in assumption for assumption in finding.assumptions) or any(
+        "sum" in caveat for caveat in finding.caveats
+    )
+
+
+@pytest.mark.anyio
+async def test_a_total_outside_the_band_is_contradicted_by_the_sum() -> None:
+    provider = _provider(*[_tx(n, sender=A, recipient=B, sats=10 * BTC) for n in range(1, 4)])
+    finding = await _finding(provider, _claim(addresses=(A,), amount_text="99 BTC", total=True))
+    assert finding.verdict is ClaimVerdict.CONTRADICTED
+    assert "30" in (finding.reason or "") or "total" in (finding.reason or "")
+
+
+@pytest.mark.anyio
 async def test_a_transfer_outside_the_window_is_not_a_match() -> None:
     provider = _provider(_tx(1, sender=A, recipient=B, sats=40_000 * BTC, when=JANUARY))
     window = ActivityWindow(start=SEPTEMBER, end=SEPTEMBER + timedelta(days=1))
@@ -347,6 +397,44 @@ async def test_a_transaction_claim_with_no_identifier_is_short_of_data() -> None
 # Balances
 # --------------------------------------------------------------------------- #
 @pytest.mark.anyio
+async def test_a_claim_that_names_only_the_recipient_is_checked_on_what_arrived() -> None:
+    """**The wrong verdict this was written from, on the commonest shape of claim there is.**
+
+    *"N BTC was sent to address X"* names one address and says the value came in. Every filing in
+    the corpus this was found in uses that phrasing, and every one of them was adjudicated against
+    X's **spending** — because the first address was taken for the sender, so a receipt was
+    refuted with the wrong side of the transaction. Here B has received and never sent: read as a
+    sender, B's history is empty and the claim is contradicted; read as the destination, the
+    payment is there.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+    finding = await _finding(
+        provider,
+        _claim(addresses=(B,), amount_text="40 BTC", direction=Direction.IN),
+    )
+    assert finding.verdict is ClaimVerdict.SUPPORTED
+    assert [movement.dst for movement in finding.evidence.transfers] == [B]
+
+
+@pytest.mark.anyio
+async def test_a_receipt_carries_no_likelihood_ratio() -> None:
+    """The null model is *within sender*, and a receipt has no sender to sample.
+
+    The rate this engine draws is the movements of the address value went **from**; a claim about
+    value arriving names none. Counting the subject's incoming movements as opportunities would
+    price a coincidence against a distribution nobody measured, so the verdict stands alone.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+    finding = await _finding(
+        provider,
+        _claim(addresses=(B,), amount_text="40 BTC", direction=Direction.IN),
+    )
+    assert finding.verdict is ClaimVerdict.SUPPORTED
+    assert finding.likelihood is None
+    assert finding.attempt is not None, "the calculation is still shown, with its hole named"
+
+
+@pytest.mark.anyio
 async def test_a_matching_balance_is_supported() -> None:
     provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
     finding = await _finding(
@@ -374,6 +462,41 @@ async def test_a_balance_claim_with_no_amount_is_short_of_data() -> None:
     provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
     finding = await _finding(provider, _claim(type=ClaimType.BALANCE, addresses=(B,)))
     assert finding.verdict is ClaimVerdict.UNRESOLVED
+
+
+@pytest.mark.anyio
+async def test_a_holding_claim_about_a_past_period_is_not_answered_by_the_present() -> None:
+    """**The failure this guard was written from, and it was a wrong verdict rather than a gap.**
+
+    A forfeiture schedule asserts *"20,452.85228 BTC at address 3Pja5…"*. The coins were seized, so
+    the address holds nothing today — and reading that present balance refuted the schedule, which
+    says nothing about what it held when it was filed. The two are answers to different questions,
+    and the honest outcome is the gap: nothing configured can report a holding as of a height.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+    past = ActivityWindow(start=JANUARY, end=SEPTEMBER)
+    finding = await _finding(
+        provider, _claim(type=ClaimType.BALANCE, addresses=(B,), amount_text="40 BTC", window=past)
+    )
+    assert finding.verdict is ClaimVerdict.UNRESOLVED
+    assert finding.gap is not None
+    assert finding.gap.kind is UnboundKind.NO_DATA
+    assert "present balance" in (finding.reason or "")
+
+
+@pytest.mark.anyio
+async def test_a_holding_claim_about_a_live_period_is_still_checked() -> None:
+    """The guard is about a period that has **ended**, not about any window at all.
+
+    A claim whose window is still open is a claim about now, which is what this check reads — so
+    the guard must not swallow it.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=40 * BTC))
+    live = ActivityWindow(start=SEPTEMBER, end=datetime(2099, 1, 1, tzinfo=UTC))
+    finding = await _finding(
+        provider, _claim(type=ClaimType.BALANCE, addresses=(B,), amount_text="40 BTC", window=live)
+    )
+    assert finding.verdict is ClaimVerdict.SUPPORTED
 
 
 # --------------------------------------------------------------------------- #

@@ -113,10 +113,14 @@ class ClaimElements(LensModel):
     Attributes:
         chain: which chain the claim is about.
         asset: the asset being moved.
-        sender: the address the claim attributes the transfer to.
+        sender: the subject address — the one the claim is *about*. It is the sender unless
+            :attr:`received`, which is the case worth reading twice.
         recipient: the address claimed to receive, when the claim names one.
         band: the claimed amount and tolerance, when the claim names one.
         window: the claimed period, when the claim names one.
+        received: whether ``sender`` is the address the value came **to**.
+        total: whether ``band`` bounds what the subject moved **in total** over the window
+            rather than the size of one movement.
     """
 
     chain: Chain
@@ -125,6 +129,28 @@ class ClaimElements(LensModel):
     recipient: str | None = None
     band: AmountBand | None = None
     window: ActivityWindow | None = None
+
+    #: Whether ``sender`` is the address the claim says value **came to** rather than went from.
+    #:
+    #: **The field is named ``received`` and not ``direction``** because it is the one bit the
+    #: checkers need, read out of :class:`~chainlens.verify.schema.Claim`'s three-valued
+    #: ``direction`` by whoever reduces a claim. `both` is not `received`, and neither is a claim
+    #: that names two addresses: with two, the first is the sender and the second the recipient, as
+    #: it has always been, and the field stays ``False``.
+    #:
+    #: **It exists because the library was answering a question nobody asked.** A claim reading
+    #: *"N BTC was sent to address X"* names one address, and every filing in the corpus this was
+    #: written from uses that phrasing — X was taken for the sender and the check walked X's
+    #: *spending*. A wrong verdict, produced silently, on the commonest shape of claim there is.
+    received: bool = False
+
+    #: Whether ``band`` bounds a **total** over the window rather than one movement.
+    #:
+    #: A filing's *"the 3QL Wallet sent approximately 2,138.4 BTC between July 18 and September 30"*
+    #: is true of 262 movements and false of every one of them, so the check that reads movements
+    #: one at a time refutes it. With this set, the checker adds them up instead. It is stated on
+    #: the record and never inferred from the wording, because the sentence is identical either way.
+    total: bool = False
 
     @model_validator(mode="after")
     def _something_to_price(self) -> Self:
