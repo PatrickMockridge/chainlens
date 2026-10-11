@@ -1,0 +1,29 @@
+schema_version = 1
+id = "0002"
+assertion = "an amount moved to or from 0x3039; unresolved, which is not a statement that it is false"
+falsifier = "no transfer of that size to that recipient appears among the sender's movements"
+quote = "FTX Drainer 0.2C 0x3039 Annemie.eth +219.96 eth"
+
+[source]
+capture = "0027-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "transfer"
+addresses = ["0x3039"]
+txid = "0x0225435e306e2ddaa4f1be89420bfa6116bb2d3827e564e29cc0569ff613763a5"
+amount_text = "+219.96 eth"
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

@@ -35,6 +35,7 @@ against.
 
 from __future__ import annotations
 
+import itertools
 import re
 from collections.abc import Iterator
 
@@ -50,6 +51,7 @@ __all__ = [
     "chains_for",
     "implausible_addresses",
     "plausible_addresses",
+    "recover_address",
     "truncated_addresses",
 ]
 
@@ -232,6 +234,71 @@ def chains_for(token: str) -> tuple[Chain, ...]:
     except (ValueError, TypeError):
         return ()
     return tuple(Chain(row.chain) for row in BY_BASE58CHECK_VERSION.get(version, ()))
+
+
+def _base58_valid(token: str) -> bool:
+    """Whether the string decodes as base58check on a chain this library knows."""
+    try:
+        version, _ = b58check_decode_versioned(token)
+    except (ValueError, TypeError):
+        return False
+    return version in BY_BASE58CHECK_VERSION
+
+
+def _substituted(token: str, positions: tuple[int, ...], letters: tuple[str, ...]) -> str:
+    """``token`` with a character replaced at each position."""
+    characters = list(token)
+    for position, letter in zip(positions, letters, strict=True):
+        characters[position] = letter
+    return "".join(characters)
+
+
+def recover_address(token: str, *, max_edits: int = 2) -> tuple[str, ...]:
+    """Every base58check address ``max_edits`` substitutions from ``token``, by its own checksum.
+
+    A vision model transposes and substitutes characters when it transcribes an address, and an
+    address is built to catch exactly that: the last four bytes of a base58check string are a
+    checksum over the rest. Searching the neighbourhood of a string a model produced therefore does
+    not guess — it asks the checksum.
+
+    **It answers with one candidate or none, and that is measured rather than hoped.** Run over the
+    ten mangled addresses in the corpus this was written for, a two-substitution search returned a
+    single candidate for four of them and nothing for the other six; and the one the repository had
+    already recorded the truth for — the transposed ``36PrZ1KHY``**``Pm``**``q…`` in
+    `docs/notes/index.md` — came back as the single answer, which is the true
+    ``36PrZ1KHY``**``Mp``**``q…``. A four-byte checksum is what makes "one, or none" the expected
+    answer rather than a lucky one.
+
+    **Two edits is the default because three is a different cost.** Two substitutions over a
+    thirty-four character string is about 1.9 million decodes, eighteen seconds in Python; three is
+    nearer ten to the nine, which is not a search but a wait. The images are still there for the
+    rest, and this is the acceptance test for whatever a better re-read returns.
+
+    **EVM addresses return nothing, and that is the honest answer rather than a gap.** EIP-55's
+    checksum lives in the capitalisation, so it can catch a rewritten letter — but an all-lowercase
+    ``0x`` string carries no checksum at all, every substitution in it validates, and a search would
+    return the whole neighbourhood. A repair that returns a thousand candidates is a repair that
+    guesses.
+
+    Returns:
+        The candidates, in the order found, deduplicated. Empty when no address within that
+        distance carries this string's shape — which is an answer and not a failure.
+    """
+    if token[:2].lower() == "0x" or not set(token) <= set(_BASE58):
+        return ()
+    found: list[str] = []
+    for count in range(1, max_edits + 1):
+        for positions in itertools.combinations(range(len(token)), count):
+            for letters in itertools.product(_BASE58, repeat=count):
+                # A substitution that substitutes a character for itself is the token unchanged,
+                # and a search that can return its own input as a repair is a search that would
+                # report a valid address as one that was fixed.
+                if any(letters[at] == token[position] for at, position in enumerate(positions)):
+                    continue
+                candidate = _substituted(token, positions, letters)
+                if candidate not in found and _base58_valid(candidate):
+                    found.append(candidate)
+    return tuple(found)
 
 
 def chain_for(token: str) -> Chain | None:

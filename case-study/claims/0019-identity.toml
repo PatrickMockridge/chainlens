@@ -1,0 +1,27 @@
+schema_version = 1
+id = "0019"
+assertion = "the material attaches a name to 0x957cd4ff9b3894fc78b5134a8dc72b032ffbc464; unresolved, which is not a statement that it is false"
+falsifier = "a citable source attaches a different entity to that address"
+quote = "Blockchain Bandit 0x95bc"
+
+[source]
+capture = "0039-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "identity"
+addresses = ["0x957cd4ff9b3894fc78b5134a8dc72b032ffbc464"]
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

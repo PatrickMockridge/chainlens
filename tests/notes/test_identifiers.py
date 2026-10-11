@@ -15,6 +15,7 @@ from chainlens.notes.identifiers import (
     chains_for,
     implausible_addresses,
     plausible_addresses,
+    recover_address,
     truncated_addresses,
 )
 from chainlens.vocabulary import ASSETS
@@ -347,3 +348,67 @@ class TestTheTwoMatchersOverOneToken:
         still pass while covering less, and this would fail instead."""
         families = {family for row in ASSETS for family in row.families}
         assert families == {"base58check", "bech32", "eip55"}
+
+
+#: The pair the module's own docstring records: what ``qwen2.5vl:7b`` returned for the Ethereum
+#: crowdsale address, and the address that is really in the image. Two substitutions in the middle,
+#: same length, every character valid base58.
+TRANSPOSED = "36PrZ1KHYPmqSyAQXSG8VwbUiq2EogxLo2"
+CROWDSALE = "36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2"
+
+
+class TestRecoveringAnAddressTheChecksumCanFind:
+    """A mangled address is a search problem with an exact answer, and this is where it is asked.
+
+    The checksum is four bytes, so a candidate within an edit or two is not a shortlist — it is
+    the address, or there is none. Every assertion here is therefore about *cardinality* as much
+    as about the value: a repair that returned several candidates would be a repair that guessed.
+    """
+
+    def test_the_documented_transposition_comes_back_as_the_one_answer(self) -> None:
+        """The case this repository had already recorded, found by the checksum alone."""
+        assert recover_address(TRANSPOSED) == (CROWDSALE,)
+
+    def test_a_single_substitution_is_found_within_one_edit(self) -> None:
+        """The other shape a reader produces, built here rather than quoted.
+
+        `CROWDSALE` with one character changed, so the assertion is about the search rather than
+        about a string somebody typed: the answer must be the address it was changed from.
+        """
+        altered = CROWDSALE[:-1] + ("k" if CROWDSALE[-1] != "k" else "K")
+        assert altered != CROWDSALE
+        assert recover_address(altered, max_edits=1) == (CROWDSALE,)
+
+    def test_a_valid_address_has_nothing_to_recover(self) -> None:
+        """It repairs nothing rather than returning its own input as a candidate.
+
+        The first version did exactly that — a substitution of a character for itself is the
+        token unchanged — so a caller could not tell an address that needed no repair from one it
+        had repaired.
+        """
+        assert recover_address(CROWDSALE) == ()
+        assert recover_address(SILK) == ()
+
+    def test_an_evm_address_is_not_searched(self) -> None:
+        """No checksum to search, so the honest answer is nothing rather than the neighbourhood.
+
+        EIP-55's checksum lives in the capitalisation, and these strings carry none. Every
+        substitution in a lowercase ``0x`` string validates, which would make the "repair" every
+        address in the alphabet.
+        """
+        assert recover_address(MINER) == ()
+        assert recover_address(GARBLED) == ()
+
+    def test_a_string_that_is_not_address_shaped_is_not_searched(self) -> None:
+        """`Binance` is base58 alphabet and is not an address; searching it finds nothing anyway."""
+        assert recover_address("Binance") == ()
+        assert recover_address("wikileaksshop.eth") == ()
+
+    def test_two_edits_reaches_further_than_one(self) -> None:
+        """The default is a cost decision, and the cost is what it buys.
+
+        One edit does not reach a transposition two characters apart; two does. Three is nearer
+        ten to the ninth candidates and is deliberately not the default.
+        """
+        assert recover_address(TRANSPOSED, max_edits=1) == ()
+        assert recover_address(TRANSPOSED) == (CROWDSALE,)

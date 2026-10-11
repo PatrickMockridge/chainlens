@@ -120,6 +120,43 @@ should not depend on which one a screenshot happened to render.
 
 - `` `tuple[str, ...]` — The usable addresses, deduplicated, in the order they appear in the text.
 
+## `recover_address`
+
+```python
+recover_address(token: str, *, max_edits: int = 2) -> tuple[str, ...]
+```
+
+Every base58check address ``max_edits`` substitutions from ``token``, by its own checksum.
+
+A vision model transposes and substitutes characters when it transcribes an address, and an
+address is built to catch exactly that: the last four bytes of a base58check string are a
+checksum over the rest. Searching the neighbourhood of a string a model produced therefore does
+not guess — it asks the checksum.
+
+**It answers with one candidate or none, and that is measured rather than hoped.** Run over the
+ten mangled addresses in the corpus this was written for, a two-substitution search returned a
+single candidate for four of them and nothing for the other six; and the one the repository had
+already recorded the truth for — the transposed ``36PrZ1KHY``**``Pm``**``q…`` in
+`docs/notes/index.md` — came back as the single answer, which is the true
+``36PrZ1KHY``**``Mp``**``q…``. A four-byte checksum is what makes "one, or none" the expected
+answer rather than a lucky one.
+
+**Two edits is the default because three is a different cost.** Two substitutions over a
+thirty-four character string is about 1.9 million decodes, eighteen seconds in Python; three is
+nearer ten to the nine, which is not a search but a wait. The images are still there for the
+rest, and this is the acceptance test for whatever a better re-read returns.
+
+**EVM addresses return nothing, and that is the honest answer rather than a gap.** EIP-55's
+checksum lives in the capitalisation, so it can catch a rewritten letter — but an all-lowercase
+``0x`` string carries no checksum at all, every substitution in it validates, and a search would
+return the whole neighbourhood. A repair that returns a thousand candidates is a repair that
+guesses.
+
+**Returns**
+
+- `` `str` — The candidates, in the order found, deduplicated. Empty when no address within that
+- `` `...` — distance carries this string's shape — which is an answer and not a failure.
+
 ## `truncated_addresses`
 
 ```python
