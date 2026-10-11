@@ -99,6 +99,19 @@ nothing sets, in an enum whose docstring gives the absence of that member as its
 two. **A plan is a hypothesis about what a repository needs; this is the tranche where the
 measurement disagreed with it and won.**
 
+**And that is not an anecdote — it is a group, and naming the group is what makes it a rule.**
+Five times now a change has been planned from a reading of the tree and the measurement taken before
+writing it dissolved the plan: [Barbs](./barbs.md)'s wire change; the walk's per-address cap that
+[the capability page](./capability.md) found already had a home in `LedgerPolicy`; **T7**, whose
+"four spellings" were two spellings and two other things entirely; and the two candidates
+[the parameters page](./parameters.md) left open — a reporting band nothing renders and a roundness
+threshold that is already a tenth of the native unit on every chain in the table. **The rule is
+stated here because three of those are still recorded as separate rows above, and the point is that
+they are one move**: *measure before building, and let the measurement win.* No theorem above states
+it and no test enforces it; what enforces it is that each of these left a page saying what it
+measured, which is the only mechanism this repository has for a rule about judgement — and the
+reason it is written down rather than trusted.
+
 **And the honest size of this.** This development follows the one in a sibling project, `azoth`,
 whose calculus of thermodynamic dimensionality is larger and whose proofs carry more weight — because
 *units multiply* there and the exponent algebra is load-bearing. chainlens's amounts are never
