@@ -57,6 +57,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
+- **Two recorded candidates were measured rather than built, and both dissolved.** The
+  `models/enums.py::Confidence.from_score` band (`0.8`/`0.5`) is not the verbal scale's case: it
+  bands a *heuristic's* `[0, 1]` confidence rather than a likelihood ratio, and nothing ever renders
+  a banded word — `from_score` is called nowhere in `src/`, so no reader is shown a "high" those
+  cut-offs produced. `change_address.py`'s `round_unit` presumes eight decimals, which is exactly a
+  tenth of the native unit on **every** UTXO chain the vocabulary table holds, so nothing is wrong;
+  it is now **pinned** by a test asserting the invariant for every UTXO chain, so adding one with a
+  different decimals count fails rather than the assumption rotting. Neither moved into the table.
+  `docs/calculus/index.md` now names the pattern those two share with Barbs' wire change, the
+  per-address cap and T7 — *measure before building, and let the measurement win* — as one rule
+  rather than five anecdotes, and the `### Known issues` httpx entry is corrected: the
+  `BaseTransport` error it quoted is `respx`'s, this library's own is `AsyncBaseTransport`, and the
+  real blocker is `hishel`.
+- **A mangled address can be repaired by its own checksum.** A vision model transposes and
+  substitutes characters when it transcribes an identifier, and `notes/identifiers.py` already
+  reported which strings failed — but reporting is where it stopped. `recover_address` now searches
+  the neighbourhood of such a string for the one within an edit or two that validates, and returns
+  **one candidate or none**. Measured on the corpus it was written for: four of ten corrupted
+  addresses repaired, each with a single candidate, and the one this repository had already
+  recorded the truth for — the transposed `36PrZ1KHY`**`Pm`**`q…` in `docs/notes/index.md` — came
+  back as the true `…HY`**`Mp`**`q…`. EVM addresses return nothing on purpose: an all-lowercase
+  `0x` string carries no checksum, so every substitution validates and a "repair" would be a guess.
 - **The pending task `T7` is resolved by measurement, and there was nothing to build.** It was
   recorded as "fold the apportionment tag's four spellings into the vocabulary table, because the
   tag reaches the wire". Measured before building, all three of its claims are false: no committed
@@ -192,13 +214,16 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Known issues
 
-- **httpx 1.0 will be breaking, and we have measured how.** A CI job installs the
-  prerelease to find out early; against 1.0.dev6 it fails with
-  `AttributeError: module 'httpx' has no attribute 'BaseTransport'`. The transport
-  base classes are removed or renamed, and `providers/transport.py` uses one for
-  `_OfflineBackend` and for its injected-transport annotation. The
-  `httpx>=0.28,<1.0` pin means no user is affected. The failing job is deliberate:
-  it is the migration reminder, and it goes green when the migration happens.
+- **httpx 1.0 will be breaking, and we have measured how — and it is blocked upstream, not on
+  us.** A CI job installs the prerelease to find out early. Against 1.0.dev6 exactly one of the
+  three breakages is ours: `providers/transport.py` subclasses `httpx.AsyncBaseTransport`, which
+  1.0 renamed to `Transport` — a rename at three sites, and no reimplementation. The other two
+  are dependencies this project does not control: **`hishel`, a *core* dependency, fails at
+  import** (`ImportError: cannot import name 'RequestNotRead'`), and `respx` (dev-only) fails too
+  with `AttributeError: ... 'BaseTransport'` — which is the error this entry used to quote as
+  ours. So the migration cannot be validated end to end even if it were written, and the
+  `httpx>=0.28,<1.0` pin means no user is affected. The failing job is deliberate: it is the
+  reminder, and it goes green when `hishel` ships an httpx-1.x release.
 
 ### Notes
 

@@ -12,12 +12,14 @@ import pytest
 from chainlens.analysis.heuristics.base import HeuristicContext
 from chainlens.analysis.heuristics.change_address import (
     ChangeAddressDetector,
+    ChangeAddressParams,
     flag_change_outputs,
     is_round,
 )
-from chainlens.models.enums import Chain, ScriptType
+from chainlens.models.enums import Chain, ChainModel, ScriptType
 from chainlens.models.primitives import Transaction, TxInput, TxOutput
 from chainlens.testing.factories import btc_transaction, inp, out
+from chainlens.vocabulary import decimals_for
 
 ALICE, MERCHANT, CHANGE = "alice", "merchant", "alice-change"
 ROUND = 60_000_000  # 0.6 BTC
@@ -44,6 +46,25 @@ def test_round_values(value: int) -> None:
 @pytest.mark.parametrize("value", [0, 1, 39_990_000, 12_345_678])
 def test_non_round_values(value: int) -> None:
     assert not is_round(value)
+
+
+def test_the_roundness_policy_is_a_tenth_of_every_utxo_chains_unit() -> None:
+    """**The presumption behind `round_unit`, pinned rather than left in a docstring.**
+
+    The default is `10_000_000` base units — `0.1 BTC` — and it is a tenth of the native unit only
+    because every UTXO chain happens to carry eight decimals. The integer conflates two owners: the
+    *decimals*, which are the vocabulary table's, and the *tenth*, which is this heuristic's policy
+    and belongs where it is. Asserted as that invariant rather than as "all decimals are 8", so the
+    day a UTXO chain with a different decimals count is added this fails and names the fix: keep the
+    fraction as the policy and derive the divisor from `decimals_for(transaction.chain)`, which
+    `flag_change_outputs` already has in hand.
+    """
+    unit = ChangeAddressParams().round_unit
+    for chain in (candidate for candidate in Chain if candidate.chain_model is ChainModel.UTXO):
+        assert unit == 10 ** decimals_for(chain) // 10, (
+            f"round_unit is {unit}, which is not a tenth of {chain.value}'s native unit "
+            f"({decimals_for(chain)} decimals); see docs/calculus/parameters.md"
+        )
 
 
 # --------------------------------------------------------------------------- #

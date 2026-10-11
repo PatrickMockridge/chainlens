@@ -1,0 +1,27 @@
+schema_version = 1
+id = "0032"
+assertion = "the material attaches a name to 42e6; unresolved, which is not a statement that it is false"
+falsifier = "a citable source attaches a different entity to that address"
+quote = "MB 4627_1 0x42e6 Wan...g EF"
+
+[source]
+capture = "0044-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "identity"
+addresses = ["42e6"]
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

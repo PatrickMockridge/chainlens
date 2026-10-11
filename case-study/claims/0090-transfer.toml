@@ -1,0 +1,28 @@
+schema_version = 1
+id = "0090"
+assertion = "an amount moved to or from 0x5974e295...47F174029; unresolved, which is not a statement that it is false"
+falsifier = "no transfer of that size to that recipient appears among the sender's movements"
+quote = "0x5974e295...47F174029"
+
+[source]
+capture = "0048-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "transfer"
+addresses = ["0x5974e295...47F174029"]
+amount_text = "0 ETH"
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

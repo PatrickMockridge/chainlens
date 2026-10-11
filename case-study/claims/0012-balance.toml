@@ -1,0 +1,28 @@
+schema_version = 1
+id = "0012"
+assertion = "an address holds an amount (0x510e, 0x4daa_b1a0, 0x3d01_0ed6, 0x8c51_8bd4, 0x5ed8, 0x1db30, 0xf2b5, 0xe2388, 0x036b); unresolved, which is not a statement that it is false"
+falsifier = "the holder's balance at the record's time falls outside the stated band"
+quote = "0.055 ETH ($87 USD)"
+
+[source]
+capture = "0036-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "balance"
+addresses = ["0x510e", "0x4daa_b1a0", "0x3d01_0ed6", "0x8c51_8bd4", "0x5ed8", "0x1db30", "0xf2b5", "0xe2388", "0x036b"]
+amount_text = "0.055 ETH"
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

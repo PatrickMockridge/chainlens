@@ -73,16 +73,18 @@ no transcription for one, so a claim resting on a screenshot needs a hand-writte
 
 | path | committed | what it is |
 |---|---|---|
-| `SELECTION.md` | **not yet** | the pre-registered rule: window, keyword predicate, no-exclusions clause. **Not written yet, and that is the state the method requires**: it must be committed *before* the first claim is authored, because its commit timestamp *is* the pre-registration evidence, and a rule written after the corpus is not a pre-registration |
+| `SELECTION.md` | yes | the rule the corpus was collected under: the directory, the predicate, the no-exclusions clause, and the read time it was written after |
 | `AMENDMENTS.md` | yes | append-only: post edits and deletions, provider revisions, schema changes |
 | `corpus.manifest.yaml` | yes | filename → sha256, redacted URL, capture time, form |
 | `inbox/` | **no** | where posts are dropped for `make ingest` |
 | `corpus/` | **no** | the captures and their extracted text. Gitignored — see below |
 | `claims/NNNN-*.toml` | yes | one claim each: the engine's inputs, the verdict, and a falsifier |
-| `results/` | **not yet** | the generated report and the coverage split. Nothing writes it yet — no target and no tool mentions the directory, so the row describes what the study will produce rather than something committed |
+| `results/report.md` | yes | the generated report and the coverage split, written by `tools/report.py` from the records. Counts, never a rate — a proportion over a convenience sample would describe the sample |
 | `tools/ingest.py` | yes | digests the inbox into the corpus |
 | `tools/capture.py` | yes | one post at a time, from the command line |
 | `tools/verify.py` | yes | re-runs the engine per record; fails if a committed verdict does not reproduce |
+| `tools/from_notes.py` | yes | builds the corpus and the records from a `chainlens notes --claims-out` directory |
+| `tools/report.py` | yes | renders `results/report.md` from the records; reads nothing else and runs nothing |
 
 ## Why the post text is not here
 

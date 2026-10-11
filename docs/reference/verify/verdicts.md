@@ -157,7 +157,7 @@ One claim, adjudicated, with everything a reader needs to disagree.
 - `claim` `Claim` — the claim as extracted, unchanged.
 - `verdict` `ClaimVerdict` — the categorical finding.
 - `method` `str` — which checker produced it, so a reader can go and read that method.
-- `reason` `str | None` — the machine-readable explanation, always present when no ratio is reported and always present for the two unanswerable verdicts. **Being retired**: it is derived from `attempt` while the derivation builder is migrated, and disappears when nothing reads it.
+- `reason` `str | None` — the machine-readable explanation, always present when no ratio is reported and always present for the two unanswerable verdicts. **Being retired**: it is derived from `attempt` rather than filled in twice, and it goes when nothing reads it. **Two things still do, and they are what a retirement has to answer rather than delete**: the derivation's ``because`` node (`ledger/derive.py`), which renders this text *verbatim* for a finding with no attempt at all — no arithmetic to draw, and a paraphrase would lose the distinction between the refusal reasons — and that module's refusal to render an unresolved verdict without one at all, which is what stops a verdict with nothing behind it reading as an accusation.
 - `elements` `ClaimElements | None` — what was priced, when the claim reduced to something priceable.
 - `evidence` `ClaimEvidence` — what the chain showed.
 - `likelihood` `LikelihoodRatio | None` — the weight of the evidence, when it could be priced at all.

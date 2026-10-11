@@ -16,7 +16,9 @@ not use, and forbidding them there would make the policy unsayable.
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -373,3 +375,29 @@ def test_the_readme_does_not_claim_a_committed_path_that_is_absent() -> None:
             f"case-study/README.md lists {path_text!r} as committed and it is not there; either "
             "add it, or mark the row prospective"
         )
+
+
+def test_the_report_matches_the_records() -> None:
+    """The report is generated, so something has to fail when it drifts from its source.
+
+    `results/report.md` is rendering, not authorship, and a generated file that nothing compares
+    is a file that silently disagrees with what it describes. The comparison is the guard;
+    `make case-study-report` is the convenience, exactly as the vocabulary table's `--check` is.
+
+    It runs with no network and no corpus: the tool reads the records and nothing else, which is
+    why it can be checked here at all.
+    """
+    report_path = CASE_STUDY / "tools" / "report.py"
+    spec = importlib.util.spec_from_file_location("case_study_report", report_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["case_study_report"] = module
+    spec.loader.exec_module(module)
+
+    entries = yaml.safe_load((CASE_STUDY / "corpus.manifest.yaml").read_text(encoding="utf-8"))
+    rendered = module._render(
+        module._rows(), captures=len(entries["entries"]), images=module.IMAGES_READ
+    )
+    committed = (CASE_STUDY / "results" / "report.md").read_text(encoding="utf-8")
+    assert committed == rendered, "run `make case-study-report` and commit the result"

@@ -1,0 +1,28 @@
+schema_version = 1
+id = "0005"
+assertion = "an amount moved to or from 36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2, 0x36Pr, 14MDds8jsHcaLtX9yvsMeGvPo22dF3aPkT, 0x1b3cb81e51011b549d78bf720b0d924ac763a7c2, 1ABw7BDK14ymrQ2vWNY7g3e5Ty9Wyxmap, 0xc35b95a2a3737cb8f0f596b34524872bd30da234, 1DTDcS6H1i3itZUKF3b5g8c3saS7WpnzB, 0xbf09d77048e270b662330e9486b38b43cd781495, 1CPR732xr88AhHcyGBtoiScXrdRUzj9Zbd, 0x7d04d2edc058a1afc761d9c99ae4fc5c85d4c8a6, 164DkTMX1ZTsvPFniuu5YsqeUKk8F2T7N2, 0x2b241f037337eb4acc61849bd272ac133f7cdf4b, 1FV85vVMaw9KmjqgRq2gd1R3n9Prb8e2tv, 0x9d2bfc36106f038250c01801685785b16c86c60d, 1JrEptorq6E12eKmEW2Mpg2gcGRGg51gm8, 0xbf86ed8a3153ec933786a02ac090301855e576b, 1BbCzZKqcSgetwMytobR8sZm61f7VsYGU, 0x51f9c432a4e59ac86282d6adab4c2eb8919160eb, 19XXGJVRA5B7j1gyJwFbw4GvKoygm8s4XZ, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1296o5WQV2RfAfahBArF8wzRFRZMsbi2f4, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 195fFbW4nBjzlwrwG6U2FNL1zCYbu9EBF, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1C7zkvwEXkDHRKVCM5bsH7ZgGijy9QcV2, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1DeHrpa6eo75eY797NJ0RCaYHhwqbPuPn, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1DFY1mNRejEyAx7VBpfFQ5wi78DpjKSja, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1KZGWoBHVDttuwD2j2XM7J494TZ8N5TNdo, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1MvAz66qRWkLYy64ofojg5EnTuAw2QNnxH, 0x37ab66083a4fa23848b886f9e66d79cdc150cc70, 1AGafYY3BHFMZJRXCkWNSfTrnNypZGTufm, 0xdde670d01639667576a22dd05d3246d61f06e083; unresolved, which is not a statement that it is false"
+falsifier = "no transfer of that size to that recipient appears among the sender's movements"
+quote = "BTC Address ETH Address TruthLabs Insights Label BTC Paid ETH Received"
+repaired = ["36PrZ1KHYPmqSyAQXSG8VwbUiq2EogxLo2 -> 36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2", "14MDds8jsHcaLtx9yvsMeGvPo22dF3aPkt -> 14MDds8jsHcaLtX9yvsMeGvPo22dF3aPkT", "164DkTMX1ZtsvPFniuu5YsqeUKk8F2T7N2 -> 164DkTMX1ZTsvPFniuu5YsqeUKk8F2T7N2", "1KZGWoBHVDTtuwD2j2XMTJ494TZ8N5TNdo -> 1KZGWoBHVDttuwD2j2XM7J494TZ8N5TNdo"]
+
+[source]
+capture = "0030-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "transfer"
+addresses = ["36PrZ1KHYMpqSyAQXSG8VwbUiq2EogxLo2", "0x36Pr", "14MDds8jsHcaLtX9yvsMeGvPo22dF3aPkT", "0x1b3cb81e51011b549d78bf720b0d924ac763a7c2", "1ABw7BDK14ymrQ2vWNY7g3e5Ty9Wyxmap", "0xc35b95a2a3737cb8f0f596b34524872bd30da234", "1DTDcS6H1i3itZUKF3b5g8c3saS7WpnzB", "0xbf09d77048e270b662330e9486b38b43cd781495", "1CPR732xr88AhHcyGBtoiScXrdRUzj9Zbd", "0x7d04d2edc058a1afc761d9c99ae4fc5c85d4c8a6", "164DkTMX1ZTsvPFniuu5YsqeUKk8F2T7N2", "0x2b241f037337eb4acc61849bd272ac133f7cdf4b", "1FV85vVMaw9KmjqgRq2gd1R3n9Prb8e2tv", "0x9d2bfc36106f038250c01801685785b16c86c60d", "1JrEptorq6E12eKmEW2Mpg2gcGRGg51gm8", "0xbf86ed8a3153ec933786a02ac090301855e576b", "1BbCzZKqcSgetwMytobR8sZm61f7VsYGU", "0x51f9c432a4e59ac86282d6adab4c2eb8919160eb", "19XXGJVRA5B7j1gyJwFbw4GvKoygm8s4XZ", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1296o5WQV2RfAfahBArF8wzRFRZMsbi2f4", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "195fFbW4nBjzlwrwG6U2FNL1zCYbu9EBF", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1C7zkvwEXkDHRKVCM5bsH7ZgGijy9QcV2", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1DeHrpa6eo75eY797NJ0RCaYHhwqbPuPn", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1DFY1mNRejEyAx7VBpfFQ5wi78DpjKSja", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1KZGWoBHVDttuwD2j2XM7J494TZ8N5TNdo", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1MvAz66qRWkLYy64ofojg5EnTuAw2QNnxH", "0x37ab66083a4fa23848b886f9e66d79cdc150cc70", "1AGafYY3BHFMZJRXCkWNSfTrnNypZGTufm", "0xdde670d01639667576a22dd05d3246d61f06e083"]
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

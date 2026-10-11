@@ -1,0 +1,27 @@
+schema_version = 1
+id = "0051"
+assertion = "the material attaches a name to 9e63; unresolved, which is not a statement that it is false"
+falsifier = "a citable source attaches a different entity to that address"
+quote = "Shapeshift 2 0x9e63"
+
+[source]
+capture = "0044-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "identity"
+addresses = ["9e63"]
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

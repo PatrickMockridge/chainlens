@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import importlib.util
 import io
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -116,7 +115,20 @@ def sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "case-study"
     (root / "inbox").mkdir(parents=True)
     (root / "corpus").mkdir()
-    shutil.copy(CASE_STUDY / "corpus.manifest.yaml", root / "corpus.manifest.yaml")
+    # The manifest is copied for its **header comments**, which an ingest must preserve, and its
+    # *entries are reset*. Every test below starts from an empty corpus and asserts what one
+    # ingest added; copying the real entries in would make these depend on how many captures the
+    # repository happens to hold, which is a property of the study and not of the inbox.
+    #
+    # The boundary is ``"\nentries:"`` and not ``"entries:"``: the header's own prose contains the
+    # word, so the shorter needle cuts the comment block in half — which is the same rule
+    # ``capture._write_manifest`` follows when it re-attaches the header.
+    original = (CASE_STUDY / "corpus.manifest.yaml").read_text(encoding="utf-8")
+    cut = original.find("\nentries:")
+    preamble = original[: cut + 1] if cut != -1 else ""
+    (root / "corpus.manifest.yaml").write_text(
+        f"{preamble}entries: {{}}\nschema_version: 1\n", encoding="utf-8"
+    )
 
     monkeypatch.setattr(capture_tool, "CORPUS", root / "corpus")
     monkeypatch.setattr(capture_tool, "MANIFEST", root / "corpus.manifest.yaml")

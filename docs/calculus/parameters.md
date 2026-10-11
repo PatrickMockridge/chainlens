@@ -109,19 +109,29 @@ is a separate question, not built, and not needed for the defect to be gone.
   number an answer is computed *under*.
 - **`models/enums.py`'s `Confidence.from_score` cut-offs.** A **reporting band** — the single place a
   number becomes the word "high" — fixed on purpose so two renderers agree. It is the family the
-  capability page already lists as a *reported display cap*. **The tension is recorded rather than
-  hidden**: the verbal scale *was* moved onto the card on the argument that "a ratio is *reported*
-  on them, so a reader is entitled to know which boundaries produced 'strongly supports'". A
-  reader may think this band is the same. It is not *decided* here; it is marked a candidate for a
-  later measurement, because deciding it by analogy is how a page becomes a claim about the wrong
-  thing.
+  capability page already lists as a *reported display cap*.
+  **Measured, and it is not the verbal scale's case.** This band maps a *heuristic's* `[0, 1]`
+  confidence; the verbal scale maps a *likelihood ratio*. Different quantities — and the analogy's
+  premise fails on its own besides: **nothing ever renders a banded word**. `from_score` is called
+  nowhere in `src/` — not by a report, not by a document, not by a branch — so no reader is shown a
+  "high" these cut-offs produced, where a reader *is* shown "strongly supports". It stays what it is:
+  a vocabulary offered to a renderer, with its own test and no consumer in the tree.
 - **Numbers already in a signature.** `Clusterer.fold_change_outputs(confidence=0.7)`,
   `Clusterer.entities(minimum_size=2)` and the engine's transaction/round budgets are default
   parameters — a caller can vary each, so by the criterion they are the *other* case. Listed so the
   criterion is applied consistently rather than to whichever names look like constants.
-- **`change_address.py`'s `_ROUND_UNIT`** is in scope to make a parameter, but it is **chain-relative
+- **`change_address.py`'s `round_unit`** is in scope to make a parameter, and it is **chain-relative
   in disguise**: `0.1 BTC` presumes eight decimals, which is the [vocabulary table](./vocabulary.md)'s
-  relationship. Recorded as a candidate for a later measurement; not resolved here.
+  relationship. **Measured, and it is latent, and a conflation.** All five UTXO chains carry
+  `decimals = 8`, so the default is exactly a tenth of the native unit on every chain the detector
+  runs on — nothing is wrong today. But the integer conflates two owners: the *decimals* are the
+  table's, and the **`0.1` is this heuristic's policy** about what a round payment looks like, which
+  is rightly in `ChangeAddressParams` and is not a row the table could hold. So it is not moved into
+  the table; it is **pinned** — `tests/analysis/test_change_address.py` asserts that for every UTXO
+  chain the default is `10 ** decimals_for(chain) // 10`, so the day a chain with a different
+  decimals count is added the *test* fails rather than the assumption rotting silently. The fix when
+  it fires is the decomposition the integer conceals: keep the fraction as the policy and derive the
+  divisor from `decimals_for(transaction.chain)`, which `flag_change_outputs` already has in hand.
 
 ## What the measurements found, before any code
 

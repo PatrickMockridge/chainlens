@@ -1,0 +1,26 @@
+schema_version = 1
+id = "0091"
+assertion = "a transaction exists (no id extracted)"
+falsifier = "no transaction with that id exists on the chain"
+quote = "Advanced A total of 1,381 internal transactions found"
+
+[source]
+capture = "0049-text-20261007T172521Z.txt"
+strength = "screenshot"
+captured_at = "2026-10-07T17:25:21.138482+00:00"
+
+[claim]
+type = "tx_exists"
+addresses = ["0x0fe82b76fb82551350ed3d759f1e64a8fd3ad"]
+
+[selection]
+proposed_by = "nobody"
+prompt_version = 0
+corpus = "notes"
+corpus_read_by = "ollama:qwen2.5vl:7b"
+corpus_read_at = "2026-10-07T17:25:21.138482Z"
+transcribed = true
+selected = false
+
+[expected]
+verdict = "contradicted"

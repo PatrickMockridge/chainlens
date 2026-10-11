@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-from-notes case-study-report case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -127,8 +127,23 @@ verify:  ## Re-run every case-study claim record and check the verdicts reproduc
 	$(refuse_stray_goals)
 	uv run python case-study/tools/verify.py $(ARGS)
 
+case-study-from-notes:  ## Build the case-study corpus and records from a notes run
+	# Never part of `check`: it reads `notes-claims/` (gitignored) and reaches the network for
+	# every verdict. The corpus it writes is gitignored too; the records and the manifest are
+	# committed. See case-study/tools/from_notes.py for what a capture is and is not.
+	$(refuse_stray_goals)
+	uv run python case-study/tools/from_notes.py $(ARGS)
+
+case-study-report:  ## Render case-study/results/report.md from the records
+	# Reads the records and runs nothing, so it is reproducible without the network — which is
+	# the point: a report generated from a live run disagreed with the committed verdicts the
+	# moment a provider answered differently.
+	$(refuse_stray_goals)
+	uv run python case-study/tools/report.py $(ARGS)
+
 case-study-check:  ## The case study's static guardrails, no network needed
 	uv run pytest tests/case_study -q
+	uv run python case-study/tools/report.py --check
 
 shipped-card:  ## Render the package's own presets into the shipped keycard
 	# The YAML under `presets/data/` is the hand-edited source; this renders it into

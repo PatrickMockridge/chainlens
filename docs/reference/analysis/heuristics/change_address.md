@@ -49,7 +49,7 @@ numbers are written down.
 
 **Attributes**
 
-- `round_unit` `int` — a value divisible by this is "round" — a payment someone chose, rather than the remainder of one. 0.1 BTC by default, which presumes eight decimals; see the page for why that makes it chain-relative in disguise.
+- `round_unit` `int` — a value divisible by this is "round" — a payment someone chose, rather than the remainder of one. `0.1 BTC` by default, which is a tenth of the native unit on every UTXO chain because they all carry eight decimals — an assumption `tests/analysis/test_change_address.py` holds against the vocabulary table, and `docs/calculus/parameters.md` records as this policy sharing one integer with the chain's decimals count.
 - `weights` `Mapping[str, float]` — each signal's contribution. They sum to more than 1 on purpose; the total is clipped, so a transaction firing every signal scores 1.0 rather than 1.15.
 - `threshold` `float` — below this the detector says nothing.
 
