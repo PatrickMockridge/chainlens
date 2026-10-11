@@ -98,10 +98,12 @@ The parts of a claim that an analysis can be run against.
 
 - `chain` `Chain` — which chain the claim is about.
 - `asset` `AssetRef` — the asset being moved.
-- `sender` `str` — the address the claim attributes the transfer to.
+- `sender` `str` — the subject address — the one the claim is *about*. It is the sender unless `received`, which is the case worth reading twice.
 - `recipient` `str | None` — the address claimed to receive, when the claim names one.
 - `band` `AmountBand | None` — the claimed amount and tolerance, when the claim names one.
 - `window` `ActivityWindow | None` — the claimed period, when the claim names one.
+- `received` `bool` — whether ``sender`` is the address the value came **to**.
+- `total` `bool` — whether ``band`` bounds what the subject moved **in total** over the window rather than the size of one movement.
 
 **Members**
 
@@ -111,6 +113,8 @@ The parts of a claim that an analysis can be run against.
 - `recipient` = None
 - `band` = None
 - `window` = None
+- `received` = False
+- `total` = False
 
 ### `priced_elements`
 

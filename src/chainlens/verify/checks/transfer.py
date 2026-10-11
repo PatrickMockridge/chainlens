@@ -19,6 +19,11 @@ which is why no ratio is reported for an absence at all.
 **A sender with no transfers in the window cannot be priced.** ``k = 0`` means
 there was no opportunity for a coincidence, so the ratio has no meaning; the
 verdict stands on its own and the engine refuses the number.
+
+**And a claim can be about a total, in which case it says so and is added up.**
+:func:`_outcome_for_a_total` sums the window's movements instead of matching them one at a time,
+because a filing's *"sent approximately 2,138.4 BTC between July and September"* is true of 262
+movements and of none of them individually. It reports no ratio and gives its reason.
 """
 
 from __future__ import annotations
@@ -75,6 +80,104 @@ def _matching(transfers: tuple[Transfer, ...], context: CheckContext) -> tuple[T
             continue
         found.append(transfer)
     return tuple(found)
+
+
+def _outcome_for_a_total(
+    context: CheckContext, movements: tuple[Transfer, ...], *, truncated: bool
+) -> CheckOutcome:
+    """A claim about what a subject moved **in total** over its window.
+
+    A filing's *"the 3QL Wallet sent approximately 2,138.4 BTC between July 18 and September 30"* is
+    true of 262 movements and false of every one of them, so the check that reads movements one at
+    a time refutes it — with a reason that is accurate about the reading and wrong about the claim.
+
+    **It reports no likelihood ratio, and that is the point rather than an omission.** The
+    coincidence this library prices is *one movement of a claimed size*; `k` counts the
+    opportunities for that, and `p` is the rate at which one arises. A total that matches is a much
+    weaker thing — many combinations of movements reach one figure, and this check cannot tell
+    which combination the claim meant — so there is no event here for the ratio to be about.
+    Leaving `candidates_considered` unset makes the engine withhold the number through the path it
+    already has for a count it does not have, and the finding says so in `assumptions`.
+
+    The movements themselves are still carried, in the evidence, uncapped by `transfer_limit`
+    arithmetic: a reader has to be able to add them up and disagree.
+    """
+    elements = context.needs
+    # **Only the movements the claim is about.** `_movements` returns every movement out of the
+    # subject, and the recipient filter lives in `_matching` — which this path does not use. Summing
+    # the subject's whole outflow instead of what went to the named recipient gave 1,291,510 BTC for
+    # a sentence about 2,138.4, which is a total of the wrong thing.
+    considered = tuple(
+        movement
+        for movement in movements
+        if elements.recipient is None or movement.dst == elements.recipient
+    )
+    total = sum(movement.amount for movement in considered)
+    shared = ClaimEvidence(
+        provider=context.provider.name,
+        endpoint="get_address_transactions",
+        # Unset on purpose: see the docstring. `k` is unbound and no ratio is reported.
+        candidates_considered=None,
+        scan_complete=not truncated,
+        provenance=(read_provenance(context.provider.name, endpoint="address"),),
+    )
+    recorded = considered[: context.transfer_limit]
+    evidence = shared.model_copy(
+        update={
+            "txids": tuple(dict.fromkeys(movement.txid for movement in considered)),
+            "transfers": recorded,
+            "transfers_truncated": len(considered) > len(recorded),
+            "detail": {
+                "observed_total": total,
+                "movements_in_window": len(considered),
+                "claimed_nominal": elements.band.nominal if elements.band is not None else None,
+            },
+        }
+    )
+    if elements.band is not None and elements.band.contains(total):
+        return CheckOutcome(
+            verdict=ClaimVerdict.SUPPORTED,
+            method=METHOD,
+            evidence=evidence,
+            assumptions=(
+                f"the {len(considered)} movements the window holds were added together, which is "
+                "what the claim states",
+                "the walk was cut short at the scan limit, so the total is a lower bound"
+                if truncated
+                else "the subject's whole transaction history was walked",
+            ),
+            caveats=(
+                "a matching total is weaker evidence than a matching transfer: many combinations "
+                "of movements reach one figure, and this check cannot tell which the claim meant",
+                "no likelihood ratio is reported, because the coincidence this library prices is "
+                "a single movement and not a sum",
+            ),
+        )
+    if truncated:
+        return CheckOutcome(
+            verdict=ClaimVerdict.UNRESOLVED,
+            method=METHOD,
+            evidence=evidence,
+            gap=not_reachable(
+                f"the walk was cut short at the scan limit of {context.scan_limit} transactions, "
+                "so the total the window holds was not established"
+            ),
+        )
+    return CheckOutcome(
+        verdict=ClaimVerdict.CONTRADICTED,
+        method=METHOD,
+        evidence=evidence,
+        reason=(
+            f"the subject's {len(considered)} movements in the window total {total}, which is "
+            f"outside the claimed band around {elements.band.nominal}"
+            if elements.band is not None
+            else "the claim names a total but no amount, so there is nothing to compare"
+        ),
+        caveats=(
+            "a total is a sum over movements this library chose to add; a claim that meant one "
+            "payment, and was recorded as a total, is refuted here by its own arithmetic",
+        ),
+    )
 
 
 def _utxo_movements(
@@ -166,6 +269,17 @@ def _movements(
     apportioned: dict[str, int] = {}
 
     for transaction in transactions:
+        if elements.received:
+            # The subject is the **destination**, so the movements wanted are the ones reaching
+            # it. The payer is whoever funded them, which the claim usually does not name — and
+            # reading the subject's own spending instead, which is what this used to do for every
+            # claim, refutes a receipt with the wrong side of the transaction.
+            movements.extend(
+                transfer
+                for transfer in transfers_from_transaction(transaction)
+                if transfer.dst == sender
+            )
+            continue
         if transaction.chain_model is ChainModel.ACCOUNT:
             movements.extend(
                 transfer
@@ -256,13 +370,24 @@ async def check_transfer(context: CheckContext) -> CheckOutcome:
         if elements.window is None or elements.window.contains(transaction.block_time)
     )
     movements, apportioned = _movements(in_window, elements)
+    if elements.total:
+        return _outcome_for_a_total(context, movements, truncated=truncated)
     matches = _matching(movements, context)
 
     provenance = (read_provenance(provider.name, endpoint="address"),)
     shared = ClaimEvidence(
         provider=provider.name,
         endpoint="get_address_transactions",
-        candidates_considered=len(movements),
+        # **Not counted for a receipt, so no ratio is reported, and the reason is the null model's
+        # own name.** The coincidence rate this engine draws is defined *within sender* — the
+        # sample is the movements of the address the value went *from*, and
+        # :func:`~chainlens.verify.estimators._coincides` says so in its first line. A claim about
+        # value arriving has no sender to sample: the payer is whoever funded the transaction, and
+        # the claim usually does not name them. Counting the subject's *incoming* movements as
+        # opportunities would price a coincidence against a distribution nobody measured, so the
+        # verdict stands alone — which is the same outcome the engine already gives a claim whose
+        # count it does not have.
+        candidates_considered=None if elements.received else len(movements),
         scan_complete=not truncated,
         provenance=provenance,
         warnings=(

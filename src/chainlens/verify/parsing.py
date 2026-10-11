@@ -31,7 +31,7 @@ from decimal import Decimal, InvalidOperation
 from chainlens.codec import address_to_script, is_valid_address, normalize_address
 from chainlens.codec.btc_script import params_for
 from chainlens.keycard import SHIPPED
-from chainlens.models.enums import Chain
+from chainlens.models.enums import Chain, Direction
 from chainlens.models.primitives import AssetRef
 from chainlens.verify.claims import AmountBand, ClaimElements
 from chainlens.verify.schema import Claim, ClaimType
@@ -378,6 +378,11 @@ def parse_claim(claim: Claim, *, hedge_tolerance: float = HEDGE_TOLERANCE) -> Pa
             asset=asset,
             sender=resolved[0],
             recipient=resolved[1] if len(resolved) > 1 else None,
+            # **One address and a claim that value came in means the address is the destination**,
+            # not the sender. With two addresses the order decides, as it always has, and the
+            # direction — which says which way value moved *between* them — changes nothing here.
+            received=claim.direction is Direction.IN and len(resolved) == 1,
+            total=claim.total,
             band=reading.band if reading is not None else None,
             window=claim.window,
         )
