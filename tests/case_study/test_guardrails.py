@@ -308,8 +308,13 @@ def test_no_committed_quote_is_the_whole_capture() -> None:
         if capture not in entries:
             continue
         candidate = CORPUS / capture
-        if not candidate.exists():
-            candidate = CORPUS / f"{capture}.txt"
+        sidecar = CORPUS / f"{capture}.txt"
+        # **A PDF or an image is not readable as text, so the quote lives in its sidecar.** This
+        # used to prefer the capture itself and fall back only when it was missing — which for a
+        # PDF meant comparing a quote against the file's bytes and failing on every record. It is
+        # the loader's own rule (`verify/records.py::_post_text`), which is what this checks.
+        if candidate.suffix.lower() not in {".txt", ".md"} and sidecar.exists():
+            candidate = sidecar
         if not candidate.exists():
             continue
         full = candidate.read_text(encoding="utf-8", errors="replace")
@@ -342,8 +347,13 @@ def test_every_quote_is_verbatim_in_its_capture() -> None:
         if capture not in entries:
             continue
         candidate = CORPUS / capture
-        if not candidate.exists():
-            candidate = CORPUS / f"{capture}.txt"
+        sidecar = CORPUS / f"{capture}.txt"
+        # **A PDF or an image is not readable as text, so the quote lives in its sidecar.** This
+        # used to prefer the capture itself and fall back only when it was missing — which for a
+        # PDF meant comparing a quote against the file's bytes and failing on every record. It is
+        # the loader's own rule (`verify/records.py::_post_text`), which is what this checks.
+        if candidate.suffix.lower() not in {".txt", ".md"} and sidecar.exists():
+            candidate = sidecar
         if not candidate.exists():
             continue
         haystack = " ".join(candidate.read_text(encoding="utf-8", errors="replace").split())
@@ -396,8 +406,6 @@ def test_the_report_matches_the_records() -> None:
     spec.loader.exec_module(module)
 
     entries = yaml.safe_load((CASE_STUDY / "corpus.manifest.yaml").read_text(encoding="utf-8"))
-    rendered = module._render(
-        module._rows(), captures=len(entries["entries"]), images=module.IMAGES_READ
-    )
+    rendered = module._render(module._rows(), captures=len(entries["entries"]))
     committed = (CASE_STUDY / "results" / "report.md").read_text(encoding="utf-8")
     assert committed == rendered, "run `make case-study-report` and commit the result"

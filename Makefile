@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-from-notes case-study-report case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-from-filings case-study-from-notes case-study-report case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -126,6 +126,12 @@ verify:  ## Re-run every case-study claim record and check the verdicts reproduc
 	# corpus, which is gitignored. See case-study/README.md.
 	$(refuse_stray_goals)
 	uv run python case-study/tools/verify.py $(ARGS)
+
+case-study-from-filings:  ## Build the case-study records from the ingested filings
+	# Never part of `check`: it reaches the network for every verdict, and the corpus it reads is
+	# gitignored. See case-study/tools/from_filings.py for the readings it applies.
+	$(refuse_stray_goals)
+	uv run python case-study/tools/from_filings.py $(ARGS)
 
 case-study-from-notes:  ## Build the case-study corpus and records from a notes run
 	# Never part of `check`: it reads `notes-claims/` (gitignored) and reaches the network for

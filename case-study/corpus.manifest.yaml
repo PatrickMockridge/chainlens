@@ -27,254 +27,30 @@
 # everything before `entries:` when it rewrites the file, because yaml.safe_dump
 # cannot keep comments of its own.
 entries:
-  0026-text-20261007T172521Z.txt:
-    bytes: 322
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
+  0001-pdf-20261011T173446Z.pdf:
+    bytes: 3054436
+    captured_at: '2026-10-11T17:34:46.522968Z'
+    content_type: application/pdf
+    form: pdf
+    notes: printed to PDF and supplied by hand; the stored text is the page's own layer
+    pages: 68
     post_id: null
-    sha256: 24b9c2524c1797f18a35f787fbb0fc68977a298b5a36860e2d1d063bcb2cfcae
-    strength: screenshot
+    sha256: ad459fdd7e417dccc44a5c36efa64530fde43bcd3399c79e35b408ec6332ba01
+    strength: printout
+    text_chars: 110428
+    text_source: pdf
     url: null
-  0027-text-20261007T172521Z.txt:
-    bytes: 273
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
+  0002-pdf-20261011T173446Z.pdf:
+    bytes: 70684
+    captured_at: '2026-10-11T17:34:46.553476Z'
+    content_type: application/pdf
+    form: pdf
+    notes: printed to PDF and supplied by hand; the stored text is the page's own layer
+    pages: 3
     post_id: null
-    sha256: d832f04147c873c5c125e238a15e7cacf7831172fc5599455f1ecb96f20d875e
-    strength: screenshot
-    url: null
-  0028-text-20261007T172521Z.txt:
-    bytes: 4353
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 7dab0a598b161071b1214d1dc46cef8c30014f9a2579a06bae6e25fb11edff98
-    strength: screenshot
-    url: null
-  0029-text-20261007T172521Z.txt:
-    bytes: 1321
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 10d17423aefed81207309b232de31690e411a9a8f3a94e320089d1220836ca8b
-    strength: screenshot
-    url: null
-  0030-text-20261007T172521Z.txt:
-    bytes: 1924
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 947eff00f547e2591c4b118045d891fef85ef54fc73552beef339d96eb88d8aa
-    strength: screenshot
-    url: null
-  0031-text-20261007T172521Z.txt:
-    bytes: 7188
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: cb281f350a6851ad14d4828b8123763dc280f836ed20e74cfcf764a01940c678
-    strength: screenshot
-    url: null
-  0032-text-20261007T172521Z.txt:
-    bytes: 8235
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: a71269e64fda6f3a965ed9934a11e2680778c4764024e41970f9fa5ec8d16e43
-    strength: screenshot
-    url: null
-  0033-text-20261007T172521Z.txt:
-    bytes: 9499
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 37f115d05bce21e097fa96728128e7643674143348b0ef2030fa2206d696e1e2
-    strength: screenshot
-    url: null
-  0034-text-20261007T172521Z.txt:
-    bytes: 6337
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 36c3db79ecc401747861b68650e712531e49af0830b4a5cfd8610e759b989acd
-    strength: screenshot
-    url: null
-  0035-text-20261007T172521Z.txt:
-    bytes: 186
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: f87911c62c6231d8040fbc74edef1aafa661539ce6268c417a38743d29f85e3b
-    strength: screenshot
-    url: null
-  0036-text-20261007T172521Z.txt:
-    bytes: 875
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: ec29e1704fcf9c3225da4f4f627dab44e94f87d7b505439e9081dbbadb81b902
-    strength: screenshot
-    url: null
-  0037-text-20261007T172521Z.txt:
-    bytes: 604
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 4735599bd267d2b913cfdee3e73d7e1e950a699b38176136a086a5078cded9da
-    strength: screenshot
-    url: null
-  0038-text-20261007T172521Z.txt:
-    bytes: 860
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 4ecbf5b985731b8cc61a07b59847a05e4bd1385f0aeeaeac4b17b233b9eb88de
-    strength: screenshot
-    url: null
-  0039-text-20261007T172521Z.txt:
-    bytes: 564
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 148827ff94646246f06a4d62f6e6f245211e7a4b2ac17f85ba772d94076d4040
-    strength: screenshot
-    url: null
-  0040-text-20261007T172521Z.txt:
-    bytes: 583
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: a14b521ed15c52d4a5e963a39fcfa08cd7d88bfeecae17a91244f6ab936cb3a0
-    strength: screenshot
-    url: null
-  0041-text-20261007T172521Z.txt:
-    bytes: 1602
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 410a9c537f7a2aabe9d2a979606ce079757d0eda679e124fb4c7fe35b1e9f8c3
-    strength: screenshot
-    url: null
-  0042-text-20261007T172521Z.txt:
-    bytes: 6214
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: adf51b00ed7a5a1d80fa6ed35528dacbd74dc8ae21ff81890405ac10fb4e8790
-    strength: screenshot
-    url: null
-  0043-text-20261007T172521Z.txt:
-    bytes: 8235
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 32a4dc04aeab4431f41fbe01534ec69d4c33253a31e067b78de7e0fa03ae3fe0
-    strength: screenshot
-    url: null
-  0044-text-20261007T172521Z.txt:
-    bytes: 877
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 354fc9519c70f32744447e71ac70ec08d7031b29f60cf69c8aa00e91d5590cfd
-    strength: screenshot
-    url: null
-  0045-text-20261007T172521Z.txt:
-    bytes: 7039
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 4e98bcefce41dc7855e1ffeac590a2f2f863efb22f6c246dc0a5aa11d8d69043
-    strength: screenshot
-    url: null
-  0046-text-20261007T172521Z.txt:
-    bytes: 570
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 3c78c33e6b6556cf4fa3db09fd5291b479c104052e5a3e37356b9a627d3c0149
-    strength: screenshot
-    url: null
-  0047-text-20261007T172521Z.txt:
-    bytes: 528
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 862c2e4f4f3a5fef3cad9fe62628d2b40205d64908b0fbc7c22dc6bebbaa14ae
-    strength: screenshot
-    url: null
-  0048-text-20261007T172521Z.txt:
-    bytes: 2451
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 867bb4daa224a15a050e111309cc126d14cc0ff5635beadfac31529816836b74
-    strength: screenshot
-    url: null
-  0049-text-20261007T172521Z.txt:
-    bytes: 2020
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: 91e87a49507ea4a6c22f906efddd1428ff23849fa041d7e62440c988ba7a82e6
-    strength: screenshot
-    url: null
-  0050-text-20261007T172521Z.txt:
-    bytes: 1987
-    captured_at: '2026-10-07T17:25:21.138482Z'
-    content_type: null
-    form: text
-    notes: a screenshot's text, read locally by ollama:qwen2.5vl:7b
-    post_id: null
-    sha256: afe25f1feb37b1c216689bddfdd4ce6ab0a0394009739f38685976c7a85ec58f
-    strength: screenshot
+    sha256: a3bba00fb639b87f58f2d1e9c4e3a5a0eb047a3e1bc12adb498cc65b2b3940c3
+    strength: printout
+    text_chars: 4998
+    text_source: pdf
     url: null
 schema_version: 1

@@ -19,20 +19,23 @@ original record keeps its verdict and gains a note pointing at the amendment, so
 artifact shows both what was concluded and what is now known.
 
 ---
+## 2026-10-11 — the corpus is a forfeiture filing, and three verdicts moved
 
-## 2026-10-11 — two Ethereum claims were priced, and then could not be
+**The corpus changed.** It was a directory of collected screenshots and the claims a vision model
+read from them; it is now one public court filing, read from its own text layer. The change is
+recorded here because a reader comparing this artifact with an earlier one would find a different
+study under the same apparatus: the notes corpus is gone from `claims/`, and
+`case-study/tools/from_notes.py` is what reads that material if it is ever wanted back.
 
-The corpus was built once and its verdicts recorded. Re-running it did not reproduce two of them,
-so the records were rebuilt; this entry keeps what the first build said.
+**Three verdicts moved, and each was wrong before.** The verifier's `direction` field was filled by
+the extractor and read by nothing, so a sentence naming only a destination was checked against that
+address's **spending**; a claim stating a period's figure was measured against its own individual
+movements, so a sentence true of 262 movements was refuted by every one of them; and a balance claim
+was compared against a balance read today, so a schedule of what was held in March 2026 was
+contradicted by what the addresses hold in October.
 
-- **`0005`** and **`0026`** — claims naming an Ethereum address — were `contradicted` and
-  `supported`. Re-running reaches a keyless Ethereum index, which rate-limits a run of this size,
-  and both now report `unresolved` with the reason *the check did not complete: rate limited by
-  upstream*. The engine's caveat travels with them: *a failed lookup is not evidence for or against
-  the claim*.
-- The committed records hold the answer that reproduces — 92 of 92 under `make verify`.
-
-The first answer was not wrong; a verdict that depends on a third party's quota answering is simply
-not reproducible in the way the rest of this corpus is. So the priced column in `results/report.md`
-is a **floor**, not the whole of what the chain could settle, and it says which mechanism closed the
-two rather than treating the gap as a property of the claims.
+**None of that made the corpus price anything, and the artifact says so.** The library verifies a
+single payment between two named addresses — a sole-funded one asserted exactly returns `supported`
+with a likelihood ratio — and a court filing states holdings, cluster-level flows and period totals.
+The complaint's own sentence about the largest movement admits the path was *"both directly and
+circuitously"*, which is the difference in one phrase.

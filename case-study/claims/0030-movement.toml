@@ -1,0 +1,24 @@
+schema_version = 1
+id = "0030"
+assertion = "26,115.2 BTC at or from 364XjdP6Jbpm…"
+falsifier = "the movements the chain records do not support the stated figure"
+quote = "On or about and between July 2, 2019 and May 9, 2020, approximately 26,115.2 BTC was transferred from the 364 Wallet to the sole address"
+
+[source]
+capture = "0001-pdf-20261011T173446Z.pdf"
+strength = "printout"
+url = "https://www.courtlistener.com/docket/71639393/"
+
+[claim]
+type = "transfer"
+addresses = ["364XjdP6Jbpm945DW4M6EobXLEmJv964rC"]
+amount_text = "26,115.2 BTC"
+direction = "out"
+total = true
+
+[claim.window]
+start = 2019-07-02T00:00:00Z
+end = 2020-05-09T23:59:59Z
+
+[expected]
+verdict = "contradicted"
