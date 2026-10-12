@@ -1,0 +1,24 @@
+schema_version = 1
+id = "0025"
+assertion = "13,469 BTC at or from 3QLeXx1J9Tp3…"
+falsifier = "the movements the chain records do not support the stated figure"
+quote = "On or about and between May 31, 2019 and March 29, 2020, approximately 13,469 newly minted BTC were sent to address 3QLeXx1J9Tp3TBnQyHrhVxne9KqkAS9JSR (the “3QL Wallet”)."
+
+[source]
+capture = "0001-pdf-20261011T173446Z.pdf"
+strength = "printout"
+url = "https://www.courtlistener.com/docket/71639393/"
+
+[claim]
+type = "transfer"
+addresses = ["3QLeXx1J9Tp3TBnQyHrhVxne9KqkAS9JSR"]
+amount_text = "13,469 BTC"
+direction = "in"
+total = true
+
+[claim.window]
+start = 2019-05-31T00:00:00Z
+end = 2020-03-29T23:59:59Z
+
+[expected]
+verdict = "contradicted"

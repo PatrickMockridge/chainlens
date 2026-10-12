@@ -1,0 +1,25 @@
+schema_version = 1
+id = "0001"
+assertion = "20,452.85228 BTC at or from 3Pja5FPK1wFB…; the schedule states a past holding, and reading a present balance is not a statement that it is false"
+falsifier = "the movements the chain records do not support the stated figure"
+quote = "(a) 20,452.85228 BTC at address 3Pja5FPK1wFB9LkWWJai8XYL1qjbqqT9Ye"
+
+[source]
+capture = "0002-pdf-20261011T173446Z.pdf"
+strength = "printout"
+url = "https://www.courtlistener.com/docket/71639393/"
+
+[claim]
+type = "balance"
+addresses = ["3Pja5FPK1wFB9LkWWJai8XYL1qjbqqT9Ye"]
+amount_text = "20,452.85228 BTC"
+direction = "out"
+total = false
+
+[claim.window]
+start = 2026-03-30T00:00:00Z
+end = 2026-03-30T00:00:00Z
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

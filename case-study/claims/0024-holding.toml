@@ -1,0 +1,25 @@
+schema_version = 1
+id = "0024"
+assertion = "1,500.00 BTC at or from 339khCuymVi4…; the schedule states a past holding, and reading a present balance is not a statement that it is false"
+falsifier = "the movements the chain records do not support the stated figure"
+quote = "(y) 1,500.00 BTC at address 339khCuymVi4FKbW9hCHkH3CQwdopXiTvA"
+
+[source]
+capture = "0002-pdf-20261011T173446Z.pdf"
+strength = "printout"
+url = "https://www.courtlistener.com/docket/71639393/"
+
+[claim]
+type = "balance"
+addresses = ["339khCuymVi4FKbW9hCHkH3CQwdopXiTvA"]
+amount_text = "1,500.00 BTC"
+direction = "out"
+total = false
+
+[claim.window]
+start = 2026-03-30T00:00:00Z
+end = 2026-03-30T00:00:00Z
+
+[expected]
+verdict = "unresolved"
+kind = "no_data"

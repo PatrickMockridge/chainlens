@@ -4,20 +4,22 @@
     python case-study/tools/report.py              # write case-study/results/report.md
     python case-study/tools/report.py --check      # report staleness, write nothing
 
-**It reads the records and runs nothing.** That is deliberate, and it is a correction the build
-taught: a report that re-ran the engine would disagree with the records the moment a provider
-answered differently — and one did. The claims in this corpus that need an Ethereum index are
-answered by a keyless one that rate-limits, so a claim priced on one run is unresolved on the
-next, and a report generated from the second run would not match the verdicts the first one
-committed. The records are the artifact; this renders them.
+**It reads the records and runs nothing.** A report that re-ran the engine would disagree with the
+records the moment a provider answered differently — and one did, while this study was being built.
+The records are the artifact; this renders them.
 
-**Which is why an unresolved record carries its *kind*.** The verdict alone says a claim was not
-priced; it does not say whether that is terminal or fixable, and that difference is the finding.
-The kind is recorded when the record is built, so it survives here without a run.
+**The split is by what the filing *states*, not by claim type.** A court filing makes three kinds of
+on-chain claim, and each meets the pipeline differently:
 
-**There is no rate in the output, and that is a rule rather than a preference.** The corpus is a
-convenience sample; a proportion over it describes the sample. The guardrails forbid a percentage,
-a rate word and even "N of M", so the counts are stated as counts.
+- a **holding** — *"20,452.85228 BTC at address 3Pja5…"* — is a claim about a *past state*, and the
+  balance check reads the present;
+- a **movement** — *"the 3QL Wallet sent approximately 2,138.4 BTC to the 364 Wallet"* — is a figure
+  spanning a period, so it is a total over many movements and not one payment;
+- a **receipt** — *"13,469 newly minted BTC were sent to address 3QLeXx…"* — names a destination and
+  no payer, so it is read on the side that is named.
+
+**There is no rate in the output, and that is a rule rather than a preference.** The corpus is one
+document; a proportion over it would describe the document. The counts are stated as counts.
 """
 
 from __future__ import annotations
@@ -37,66 +39,99 @@ RESULTS = verify.CASE_STUDY / "results"
 REPORT = RESULTS / "report.md"
 CLAIMS = verify.CASE_STUDY / "claims"
 
-#: How many screenshots were read. A recorded fact about the collection rather than a count of
-#: something on disk: the images are gitignored, so a run that counted them would find none and a
-#: report generated in CI would disagree with the committed one.
-IMAGES_READ = 44
-
-#: What each unresolved kind means, in the words the case study's README uses. ``no method`` is
-#: terminal and ``no data`` is not, and a reader has to be able to tell them apart.
+#: What each unresolved kind means, in the engine's own terms. ``no_method`` is terminal and
+#: ``no_data`` is not, and a reader has to be able to tell them apart.
 _KINDS = {
-    "no_method": "no method here addresses this class of claim — terminal, and not a gap "
-    "anything configured differently would close",
+    "no_method": "no method here addresses this class of claim — terminal, and not a gap anything "
+    "configured differently would close",
     "no_data": "checkable in principle, and not with what was configured or reachable — actionable",
+}
+
+#: What each class of claim is, in the filing's own terms.
+_CLASSES = {
+    "holdings": "a schedule row: an address, and what it held when the schedule was filed",
+    "movements": "a dated sentence stating what one wallet sent another over a period",
+    "receipts": "a dated sentence stating what arrived at an address, with no payer named",
 }
 
 _HEADER = """\
 # Results
 
-**What this artifact is.** A pipeline run over a corpus of on-chain claims that somebody
-collected, each claim reported on its own. It is not a profile of an account and not a
-statement about a person: no handle appears anywhere in this tree, and the limitations in
-`STANDARD_LIMITATIONS` hold throughout.
+**What this artifact is.** A pipeline run over the on-chain claims one public document makes — a
+verified complaint for forfeiture and its schedule of property — each claim reported on its own. It
+is not a profile of any person, and no handle appears anywhere in this tree.
 
-**What it is not.** A rate. The corpus is a convenience sample — whatever was in the collected
-directory when it was read — so a proportion over it would describe the sample and not the
-account. The counts are therefore stated as counts.
+**What it is not.** A rate. One court filing is not a sample, and a proportion over it would
+describe the filing. The counts are stated as counts.
 
-Each record carries the verdict a re-run must reproduce, and `make verify` re-runs every one of
-them and fails if it does not. That is what makes these numbers checkable rather than merely
-published.
+**The subject is the pipeline.** The corpus is an adversarial input in the exact sense
+`case-study/README.md` means: real claims, pleaded the way a court pleads them, adjudicated the way
+this library adjudicates. What the run shows is where the two meet and where they do not.
+"""
+
+_MOVED = """
+## What the improvements changed
+
+Three verdicts in this run would have been **different, and wrong**, before the verifier changes
+this corpus motivated:
+
+| the filing says | before | now |
+|---|---|---|
+| a schedule row | contradicted — it holds nothing today | a **gap**: unobtainable |
+| a receipt | checked on that address's **spending** | checked on what **arrived** |
+| a period's figure | checked against each **movement** | **summed**, and reported |
+
+None of the three makes the corpus price anything, and the artifact does not dress them up as if it
+did. What a claim has to be for this library to say `supported` is below.
 """
 
 _CLOSING = """
 ## What a reader should conclude, and should not
 
-The pipeline prices what it has a method and a reachable provider for, and says which of the two
-is missing when it does not. Almost all of this corpus falls outside both, and that is a
-statement about the material rather than about the claims in it: a label attached to an address
-in somebody's table is an assertion by whoever made the table, and this library can weigh it only
-against a source it has.
+The library verifies **a single payment between two named addresses**: a transfer of a stated size
+from one address to another within a window. A sole-funded payment asserted exactly returns
+`supported` with a likelihood ratio, and that is the demonstration this pipeline exists to give.
 
-**Two claims were priced and then could not be.** Claims naming an Ethereum address are checked
-through a keyless index, and a run over a corpus of this size reaches its rate limit: `0005` and
-`0026` were `contradicted` and `supported` before the limit, and report `unresolved` now, with the
-engine's own caveat — *a failed lookup is not evidence for or against the claim*. The records hold
-the answer that reproduces and `AMENDMENTS.md` keeps the one that did not, so this column is a
-floor rather than the whole of what the chain could settle.
+A court filing states **holdings**, **cluster-level flows** and **period totals**, and *"the 3QL
+Wallet sent approximately 2,138.4 BTC to the 364 Wallet"* is none of the three things the check
+reads. The complaint's own next sentence says the proceeds passed to that wallet *"both directly and
+circuitously"* — the whole difference, in one phrase: the filing describes a path through the chain,
+and the check looks for a payment along it.
+
+So the honest reading of this artifact is a **reach** result. It reports what a real set of public
+claims does when a verifier that names its reasons meets it — including, and most usefully, the
+claims it cannot price and why.
 
 Three limits travel with every number above:
 
-- **The captures are transcriptions, not the screenshots.** A vision model read each image
-  locally; the corpus holds its text and the manifest names the model. A transcription is one
-  model's account of an image, and the account can be fluent and wrong — see `docs/notes/index.md`
-  for the case where an address was transcribed with two characters transposed.
-- **The images are not held.** The corpus is gitignored, so what is committed is a hash, a
-  redacted URL where there was one, and a quote.
-- **A claim that could not be priced is not a claim that is false.**
+- **The corpus is one document.** Every claim here comes from a single filing, chosen because it
+  states addresses with amounts. A second filing would move these counts.
+- **The captures are the pages' own text layer**, not a transcription, and the manifest names the
+  file each was read from. Where the layer split a figure across a line, the extraction rejoins it
+  and the quote does not.
+- **A claim that cannot be priced is not a claim that is false.** *"Sent through hosted wallets"* is
+  a sentence this library has no method for, and the split above says so rather than treating it as
+  a defect in the claim.
 """
 
 
+def _classification(raw: dict[str, Any]) -> str:
+    """Which of the filing's three claim forms this record is.
+
+    Read off the record rather than inferred from the verdict: the class is what the *filing* said,
+    and it is on the record precisely because the sentence alone does not distinguish a period total
+    from a single payment.
+    """
+    claim = raw.get("claim") or {}
+    if claim.get("type") == "balance":
+        return "holdings"
+    if claim.get("direction") == "in":
+        return "receipts"
+    return "movements"
+
+
 def _rows() -> list[dict[str, Any]]:
-    """One row per record, read from the record itself: verdict, kind, type, quote."""
+    """One row per record, read from the record itself."""
     rows: list[dict[str, Any]] = []
     for path in sorted(CLAIMS.glob("*.toml")):
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -104,7 +139,7 @@ def _rows() -> list[dict[str, Any]]:
         rows.append(
             {
                 "id": raw.get("id", path.stem),
-                "type": (raw.get("claim") or {}).get("type", "?"),
+                "class": _classification(raw),
                 "verdict": expected.get("verdict", "?"),
                 "kind": expected.get("kind"),
                 "quote": str(raw.get("quote", "")),
@@ -113,49 +148,45 @@ def _rows() -> list[dict[str, Any]]:
     return rows
 
 
-def _render(rows: list[dict[str, Any]], captures: int, images: int) -> str:
+def _render(rows: list[dict[str, Any]], captures: int) -> str:
     verdicts = Counter(row["verdict"] for row in rows)
     kinds = Counter(row["kind"] for row in rows if row["kind"])
-    types = Counter(row["type"] for row in rows)
-    priced = [row for row in rows if row["verdict"] != "unresolved"]
+    by_class = Counter(row["class"] for row in rows)
 
     lines = [_HEADER, "## The corpus\n"]
     lines.append(
-        f"{len(rows)} claims, read from {captures} transcriptions of {images} collected "
-        f"screenshots. Every claim the reading produced is a record.\n"
+        f"{len(rows)} claims, read from {captures} public filings. Every claim the filing's two "
+        "regular forms yield is a record; the paragraphs that match neither are named in the "
+        "build's output rather than dropped.\n"
     )
+
     lines.append("## The verdicts\n")
     lines.append("| verdict | claims |\n|---|---|")
     for verdict, count in sorted(verdicts.items()):
         lines.append(f"| `{verdict}` | {count} |")
     lines.append("")
 
-    lines.append("## What the unresolved claims are missing\n")
-    lines.append(
-        "Two kinds, and only one of them is worth acting on. They are different numbers because "
-        "they are different findings.\n"
+    lines.append("## What the filing states, and what it got\n")
+    lines.append("| what the filing says | claims | what it is |\n|---|---|---|")
+    for name, count in sorted(by_class.items()):
+        lines.append(f"| **{name}** | {count} | {_CLASSES.get(name, '—')} |")
+    lines.append("")
+
+    if kinds:
+        lines.append("## What the unpriced claims are missing\n")
+        lines.append("| kind | claims | what it means |\n|---|---|---|")
+        for kind, count in sorted(kinds.items()):
+            lines.append(f"| `{kind}` | {count} | {_KINDS.get(kind, '—')} |")
+        lines.append("")
+
+    lines.append("## Every claim\n")
+    lines.append("| record | what the filing says | verdict | quote |\n|---|---|---|---|")
+    lines.extend(
+        f"| {row['id']} | `{row['class']}` | `{row['verdict']}` | {row['quote'][:66]}… |"
+        for row in rows
     )
-    lines.append("| kind | claims | what it means |\n|---|---|---|")
-    for kind, count in sorted(kinds.items()):
-        lines.append(f"| `{kind}` | {count} | {_KINDS.get(kind, '—')} |")
     lines.append("")
-
-    lines.append("## The claims that were priced\n")
-    if priced:
-        lines.append("| record | claim | verdict | quote |\n|---|---|---|---|")
-        lines.extend(
-            f"| {row['id']} | `{row['type']}` | `{row['verdict']}` | {row['quote'][:70]}… |"
-            for row in priced
-        )
-    else:  # pragma: no cover - this corpus has priced claims
-        lines.append("None: no claim in this corpus reached a method that could report on it.")
-    lines.append("")
-
-    lines.append("## The claims by what they assert\n")
-    lines.append("| claim type | claims |\n|---|---|")
-    for claim_type, count in sorted(types.items()):
-        lines.append(f"| `{claim_type}` | {count} |")
-    lines.append("")
+    lines.append(_MOVED)
     lines.append(_CLOSING)
     return "\n".join(lines)
 
@@ -170,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     entries = yaml.safe_load(
         (verify.CASE_STUDY / "corpus.manifest.yaml").read_text(encoding="utf-8")
     ).get("entries", {})
-    rendered = _render(_rows(), captures=len(entries), images=IMAGES_READ)
+    rendered = _render(_rows(), captures=len(entries))
 
     if args.check:
         if not REPORT.exists() or REPORT.read_text(encoding="utf-8") != rendered:

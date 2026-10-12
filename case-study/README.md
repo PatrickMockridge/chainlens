@@ -84,6 +84,7 @@ no transcription for one, so a claim resting on a screenshot needs a hand-writte
 | `tools/capture.py` | yes | one post at a time, from the command line |
 | `tools/verify.py` | yes | re-runs the engine per record; fails if a committed verdict does not reproduce |
 | `tools/from_notes.py` | yes | builds the corpus and the records from a `chainlens notes --claims-out` directory |
+| `tools/from_filings.py` | yes | reads the ingested filing's two claim forms into records, and reports the paragraphs it could not read |
 | `tools/report.py` | yes | renders `results/report.md` from the records; reads nothing else and runs nothing |
 
 ## Why the post text is not here

@@ -1,0 +1,24 @@
+schema_version = 1
+id = "0027"
+assertion = "6,539 BTC at or from 3QLeXx1J9Tp3…"
+falsifier = "the movements the chain records do not support the stated figure"
+quote = "On or about and between October 15, 2019 and January 24, 2020, the 3QL Wallet sent approximately 6,539 BTC to a wallet at Exchange-3 controlled"
+
+[source]
+capture = "0001-pdf-20261011T173446Z.pdf"
+strength = "printout"
+url = "https://www.courtlistener.com/docket/71639393/"
+
+[claim]
+type = "transfer"
+addresses = ["3QLeXx1J9Tp3TBnQyHrhVxne9KqkAS9JSR"]
+amount_text = "6,539 BTC"
+direction = "out"
+total = true
+
+[claim.window]
+start = 2019-10-15T00:00:00Z
+end = 2020-01-24T23:59:59Z
+
+[expected]
+verdict = "contradicted"
