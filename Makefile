@@ -15,7 +15,7 @@ export PYTHONPATH :=
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-from-filings case-study-from-notes case-study-report case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
+.PHONY: help sync lint format typecheck test test-cov check contract ui ui-check docs docs-reference docs-serve labels-verify ingest verify case-study-from-filings case-study-from-notes case-study-report case-study-notebook case-study-check shipped-card vocabulary vocabulary-check lean lean-gate calculus build clean
 
 help:  ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -146,6 +146,15 @@ case-study-report:  ## Render case-study/results/report.md from the records
 	# moment a provider answered differently.
 	$(refuse_stray_goals)
 	uv run python case-study/tools/report.py $(ARGS)
+
+case-study-notebook:  ## Execute the case-study notebook in place
+	# Deliberately unguarded, and that is the one place in this repository where it is. Every
+	# other generated artefact here is committed with a test that fails on drift (see `shipped-card`
+	# and `vocabulary` above); this one is committed with its *outputs*, and its live cells run the
+	# engine against the chain, which `make check` cannot reproduce under --block-network. The
+	# notebook's own first cell says so to its reader. Run it, read the derivations, commit.
+	uv run --group notebooks jupyter nbconvert --to notebook --execute --inplace \
+		case-study/notebook.ipynb
 
 case-study-check:  ## The case study's static guardrails, no network needed
 	uv run pytest tests/case_study -q

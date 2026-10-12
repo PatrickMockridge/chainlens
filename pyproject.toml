@@ -179,6 +179,11 @@ ignore = [
 # table is `tests/vocabulary/test_the_table.py`, not the linter.
 "src/chainlens/vocabulary/_generated.py" = ["E501"]
 "src/chainlens/_shipped_card.py" = ["E501"]
+# The case-study notebook, and only for A004: `display` is IPython's own name for the call every
+# display cell makes, and the rule exists to stop someone shadowing a *Python* builtin -- renaming
+# it would make the notebook less idiomatic for nothing. Everything else the linter wants, the
+# notebook does, including the formatter's shape.
+"case-study/notebook.ipynb" = ["A004"]
 
 [tool.ruff.format]
 # Markdown code fences are hand-aligned for readability (comments line up with

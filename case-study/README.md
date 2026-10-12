@@ -80,6 +80,7 @@ no transcription for one, so a claim resting on a screenshot needs a hand-writte
 | `corpus/` | **no** | the captures and their extracted text. Gitignored — see below |
 | `claims/NNNN-*.toml` | yes | one claim each: the engine's inputs, the verdict, and a falsifier |
 | `results/report.md` | yes | the generated report and the coverage split, written by `tools/report.py` from the records. Counts, never a rate — a proportion over a convenience sample would describe the sample |
+| `notebook.ipynb` | yes | the display layer: the corpus as a table read from the records, and **why** each verdict came out as it did, rendered from `derive_finding`. Committed *with its outputs*, and its live cells run the engine against named provider `esplora-blockstream`. The one generated artefact here with no drift guard — see `make case-study-notebook` |
 | `tools/ingest.py` | yes | digests the inbox into the corpus |
 | `tools/capture.py` | yes | one post at a time, from the command line |
 | `tools/verify.py` | yes | re-runs the engine per record; fails if a committed verdict does not reproduce |

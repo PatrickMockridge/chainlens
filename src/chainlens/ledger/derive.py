@@ -359,12 +359,22 @@ def _evidence_node(
             as_node_ref(address_node_key(chain, address)) for address in endpoints if address
         )
 
+    # **A total is summed, not matched, and the label has to say which.** A claim stating a
+    # *period's* figure is checked by adding the window's movements up, and the evidence it leaves
+    # carries `observed_total` — so wording it "N matching transfer(s)" would tell a reader that
+    # each of them matched, which is the one thing the check did not establish. Found by reading a
+    # case-study derivation, where a receipt's evidence read "50 matching transfer(s)" for a sum.
+    summed = evidence.detail.get("movements_in_window")
+    if "observed_total" in evidence.detail and summed:
+        label = f"{summed} movement(s), summed"
+    elif evidence.transfers:
+        label = f"{len(evidence.transfers)} matching transfer(s)"
+    else:
+        label = "the chain data"
     return _node(
         identifier,
         DerivationKind.EVIDENCE,
-        f"{len(evidence.transfers)} matching transfer(s)"
-        if evidence.transfers
-        else "the chain data",
+        label,
         summary="every fact the finding rests on, each checkable on its own",
         detail={"txids": list(evidence.txids), **dict(evidence.detail)},
         refs=tuple(summary_refs),

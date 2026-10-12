@@ -95,9 +95,13 @@ def _post() -> Post:
     )
 
 
-def _claim(amount_text: str = "~40k BTC") -> Claim:
+def _claim(amount_text: str = "~40k BTC", *, total: bool = False) -> Claim:
     return Claim(
-        type=ClaimType.TRANSFER, quote="the post", addresses=(ALICE, BOB), amount_text=amount_text
+        type=ClaimType.TRANSFER,
+        quote="the post",
+        addresses=(ALICE, BOB),
+        amount_text=amount_text,
+        total=total,
     )
 
 
@@ -106,9 +110,12 @@ async def _finding(
     estimator: object | None = None,
     transactions: int = 3,
     amount_text: str = "~40k BTC",
+    total: bool = False,
 ) -> VerificationFinding:
     engine = VerificationEngine(_provider(transactions=transactions), estimator=estimator)  # type: ignore[arg-type]
-    report = await engine.verify_post(_post(), Extraction(claims=(_claim(amount_text),)))
+    report = await engine.verify_post(
+        _post(), Extraction(claims=(_claim(amount_text, total=total),))
+    )
     return report.findings[0]
 
 
@@ -301,6 +308,23 @@ async def test_an_amount_is_carried_exactly_and_not_as_a_float() -> None:
     detail = {entry.key: entry.value for entry in transfer.detail}
     assert detail["amount"] == str(finding.evidence.transfers[0].amount)
     assert transfer.value is None
+
+
+@pytest.mark.anyio
+async def test_a_summed_total_says_summed_and_not_matched() -> None:
+    """A period's figure is added up, and the label must not say each movement matched.
+
+    "three matching transfers" and "three movements, summed" are different claims: the first says
+    every movement satisfied the claim on its own, the second says none of them did. The summed
+    path writes a detail the matching path never does — ``observed_total`` — so the label is taken
+    from that rather than from a transfer count the two paths share. A case-study derivation is
+    where this was read wrong: a receipt's evidence said "50 matching transfer(s)" for a sum.
+    """
+    finding = await _finding(total=True, amount_text="~120k BTC")
+    assert finding.evidence.detail["movements_in_window"] == 3
+
+    evidence = _kinds(derive_finding(finding))[DerivationKind.EVIDENCE][0]
+    assert evidence.label == "3 movement(s), summed"
 
 
 @pytest.mark.anyio

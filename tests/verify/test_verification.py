@@ -210,6 +210,12 @@ async def test_a_claim_about_a_total_is_supported_by_the_sum() -> None:
     assert finding.verdict is ClaimVerdict.SUPPORTED
     assert finding.evidence.detail["observed_total"] == 30 * BTC
     assert finding.evidence.detail["movements_in_window"] == 3
+    # The assumption names the set that was added up, in the same terms the reason does: no
+    # recipient is named here, so it is the subject's movements and not "movements to X".
+    assert any(
+        "the subject's 3 movements in the window were added together" in assumption
+        for assumption in finding.assumptions
+    )
 
 
 @pytest.mark.anyio
@@ -243,6 +249,22 @@ async def test_a_total_outside_the_band_is_contradicted_by_the_sum() -> None:
     finding = await _finding(provider, _claim(addresses=(A,), amount_text="99 BTC", total=True))
     assert finding.verdict is ClaimVerdict.CONTRADICTED
     assert "30" in (finding.reason or "") or "total" in (finding.reason or "")
+
+
+@pytest.mark.anyio
+async def test_a_total_says_which_movements_it_summed() -> None:
+    """**"Moved nothing" and "moved nothing to the address named" are different findings.**
+
+    The sum is taken over the movements going to the recipient *a claim names*, and only those — so
+    a wallet with a long history of its own is refuted with "the subject's 0 movements in the window
+    total 0", which is true of the filtered set and false of the wallet. A case-study claim against
+    an address with 1,578 movements in its window read exactly that, and the reason has to say
+    which set the zero is a count of.
+    """
+    provider = _provider(_tx(1, sender=A, recipient=B, sats=10 * BTC))
+    finding = await _finding(provider, _claim(addresses=(A, C), amount_text="10 BTC", total=True))
+    assert finding.verdict is ClaimVerdict.CONTRADICTED
+    assert f"to {C}" in (finding.reason or "")
 
 
 @pytest.mark.anyio
