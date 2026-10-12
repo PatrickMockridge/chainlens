@@ -113,6 +113,17 @@ def _outcome_for_a_total(
         if elements.recipient is None or movement.dst == elements.recipient
     )
     total = sum(movement.amount for movement in considered)
+    # **What was added up, in the words of the claim that was checked.** The recipient filter above
+    # is the difference between "the subject moved nothing" and "the subject moved nothing *to the
+    # address the claim names*", and a finding reads as the first while stating the second. A
+    # case-study claim against a wallet with 1,578 movements in its window was refuted with "the
+    # subject's 0 movements in the window total 0", which is true of the filtered set and false of
+    # the wallet. Found by reading a notebook's rendering of it.
+    summed = (
+        f"the subject's {len(considered)} movements in the window"
+        if elements.recipient is None
+        else f"the subject's {len(considered)} movements to {elements.recipient} in the window"
+    )
     shared = ClaimEvidence(
         provider=context.provider.name,
         endpoint="get_address_transactions",
@@ -140,8 +151,7 @@ def _outcome_for_a_total(
             method=METHOD,
             evidence=evidence,
             assumptions=(
-                f"the {len(considered)} movements the window holds were added together, which is "
-                "what the claim states",
+                f"{summed} were added together, which is what the claim states",
                 "the walk was cut short at the scan limit, so the total is a lower bound"
                 if truncated
                 else "the subject's whole transaction history was walked",
@@ -160,7 +170,7 @@ def _outcome_for_a_total(
             evidence=evidence,
             gap=not_reachable(
                 f"the walk was cut short at the scan limit of {context.scan_limit} transactions, "
-                "so the total the window holds was not established"
+                "so the total was not established"
             ),
         )
     return CheckOutcome(
@@ -168,8 +178,8 @@ def _outcome_for_a_total(
         method=METHOD,
         evidence=evidence,
         reason=(
-            f"the subject's {len(considered)} movements in the window total {total}, which is "
-            f"outside the claimed band around {elements.band.nominal}"
+            f"{summed} total {total}, which is outside the claimed band around "
+            f"{elements.band.nominal}"
             if elements.band is not None
             else "the claim names a total but no amount, so there is nothing to compare"
         ),
